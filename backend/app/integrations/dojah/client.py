@@ -1,0 +1,75 @@
+import structlog
+import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+from app.core.config import settings
+from app.integrations.dojah.schemas import DojahBvnEntity, DojahBvnResponse, DojahError
+
+logger = structlog.get_logger()
+
+SANDBOX_BVN = "22222222222"
+
+MOCK_ENTITY = DojahBvnEntity(
+    bvn=SANDBOX_BVN,
+    first_name="ADAEZE",
+    last_name="OKAFOR",
+    middle_name="CHINWE",
+    gender="Female",
+    date_of_birth="1995-03-15",
+    phone_number1="08035794364",
+    phone_number2="08134709697",
+    email="adaeze.okafor@email.com",
+    enrollment_bank="GTB",
+    enrollment_branch="OGBA",
+    level_of_account="LEVEL 2",
+    lga_of_origin="ONITSHA NORTH",
+    lga_of_residence="IKEJA",
+    marital_status="SINGLE",
+    name_on_card="ADAEZE C OKAFOR",
+    nationality="NIGERIAN",
+    registration_date="15-MAR-2018",
+    residential_address="52 Ijaye Road, Ogba, Lagos",
+    state_of_origin="ANAMBRA",
+    state_of_residence="LAGOS",
+    title="MISS",
+    watch_listed="NO",
+    image=None,
+)
+
+
+class DojahClient:
+    """
+    Dojah BVN Advanced lookup.
+    Docs: https://docs.dojah.io/docs/nigeria/lookup-bvn#bvn-advanced
+    """
+
+    def __init__(self):
+        self.base_url = settings.dojah_base_url.rstrip("/")
+        self.app_id = settings.dojah_app_id
+        self.secret_key = settings.dojah_secret_key
+
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+    async def lookup_bvn_advanced(self, bvn: str) -> DojahBvnEntity:
+        if settings.dojah_mock or not settings.dojah_enabled:
+            logger.info("dojah_mock_lookup", bvn=bvn[:3] + "****")
+            entity = MOCK_ENTITY.model_copy(update={"bvn": bvn})
+            return entity
+
+        url = f"{self.base_url}/api/v1/kyc/bvn/advance"
+        headers = {
+            "AppId": self.app_id,
+            "Authorization": self.secret_key,
+        }
+        params = {"bvn": bvn}
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+
+        if response.status_code == 404:
+            raise DojahError("BVN not found or invalid", status_code=404)
+        if response.status_code >= 400:
+            logger.error("dojah_api_error", status=response.status_code, body=response.text[:200])
+            raise DojahError("BVN verification failed. Please try again.", status_code=502)
+
+        data = DojahBvnResponse.model_validate(response.json())
+        return data.entity

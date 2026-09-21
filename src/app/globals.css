@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --navy: #1B2F6B;
+  --cyan: #2FA4D7;
+  --bg-light: #E9F8F9;
+  --surface: #F4F7FB;
+  --surface-sidebar: #EEF2F9;
+  --white: #FFFFFF;
+  --success: #00A86B;
+  --warning: #E5AF59;
+  --error: #CF2E2E;
+  --gold: #B58838;
+  --background: #F4F7FB;
+  --foreground: #1B2F6B;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Montserrat', 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .shadow-card {
+    box-shadow: 0 1px 3px rgba(27, 47, 107, 0.06), 0 8px 24px rgba(27, 47, 107, 0.06);
+  }
+  .shadow-card-hover {
+    box-shadow: 0 4px 12px rgba(27, 47, 107, 0.1), 0 12px 32px rgba(27, 47, 107, 0.08);
+  }
+  .gradient-navy {
+    background: linear-gradient(135deg, #1B2F6B 0%, #243d8a 50%, #2FA4D7 100%);
+  }
+  .gradient-soft {
+    background: linear-gradient(135deg, #EEF2F9 0%, #E9F8F9 100%);
+  }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #EEF2F9; }
+::-webkit-scrollbar-thumb { background: #2FA4D7; border-radius: 3px; }

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GH Trust MFB — Bank Partner API Requirements (Wallet)</title>
+  <style>
+    @page { margin: 18mm 16mm; size: A4; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      color: #1a2332;
+      line-height: 1.45;
+      font-size: 10pt;
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 20px 28px 36px;
+    }
+    .cover {
+      text-align: center;
+      padding: 40px 20px 44px;
+      border-bottom: 3px solid #1e3a5f;
+      margin-bottom: 28px;
+    }
+    .cover h1 { font-size: 22pt; color: #1e3a5f; margin: 0 0 10px; line-height: 1.2; }
+    .cover .sub { font-size: 12pt; color: #4a5568; margin: 0 0 20px; }
+    .badge {
+      display: inline-block;
+      background: #eef2ff;
+      color: #1e3a5f;
+      font-weight: 600;
+      font-size: 9.5pt;
+      padding: 7px 16px;
+      border-radius: 999px;
+    }
+    h2 {
+      font-size: 13pt;
+      color: #1e3a5f;
+      margin: 26px 0 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    h3 { font-size: 10.5pt; color: #2d3748; margin: 18px 0 6px; }
+    p { margin: 0 0 10px; }
+    .lead { font-size: 10.5pt; color: #2d3748; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 16px;
+      font-size: 9pt;
+    }
+    th, td {
+      border: 1px solid #e2e8f0;
+      padding: 7px 9px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f7fafc; font-weight: 600; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .p1 { background: #dcfce7; color: #166534; font-weight: 700; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+    .p2 { background: #fef9c3; color: #854d0e; font-weight: 700; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+    .p3 { background: #f1f5f9; color: #475569; font-weight: 700; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+    .box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #1e3a5f;
+      padding: 12px 14px;
+      margin: 12px 0;
+      border-radius: 0 6px 6px 0;
+      font-size: 9.5pt;
+    }
+    code, .mono { font-family: ui-monospace, monospace; font-size: 8.5pt; background: #f1f5f9; padding: 1px 4px; border-radius: 3px; }
+    ul { margin: 6px 0 12px; padding-left: 20px; }
+    li { margin-bottom: 4px; }
+    .page-break { page-break-before: always; }
+    .footer {
+      margin-top: 32px;
+      padding-top: 12px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 8.5pt;
+      color: #718096;
+      text-align: center;
+    }
+    .api-block { margin-bottom: 14px; }
+    .api-block h3 { margin-bottom: 4px; }
+    .api-meta { font-size: 9pt; color: #64748b; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>GH Trust MFB</h1>
+  <p class="sub">Bank Partner API Requirements — Wallet &amp; Payments</p>
+  <span class="badge">For bank integration team · August 2026 · Confidential</span>
+</div>
+
+<p class="lead">
+  GH Trust MFB is building a digital wallet for customers on mobile and web. We are seeking a <strong>bank partner</strong> to provide the payment APIs below so we can fund wallets, pay out to customers, disburse loans, and collect repayments — all under CBN MFB regulations.
+</p>
+
+<div class="box">
+  <strong>What we need from you:</strong> REST APIs (JSON), sandbox environment, webhooks for real-time events, and production credentials. Our platform already integrates similar rails (Monnify, Paystack, Zest); we will build a dedicated adapter for your bank’s API specification.
+</div>
+
+<h2>1. Wallet features we are building</h2>
+<p>Every feature below maps to one or more bank APIs in Section 3.</p>
+
+<table>
+  <tr><th>Feature</th><th>User</th><th>Description</th><th>Priority</th></tr>
+  <tr>
+    <td><strong>Permanent wallet account</strong></td>
+    <td>Customer</td>
+    <td>Each customer gets a dedicated NUBAN at signup to receive bank transfers anytime.</td>
+    <td><span class="p1">Phase 1</span></td>
+  </tr>
+  <tr>
+    <td><strong>Wallet balance</strong></td>
+    <td>Customer</td>
+    <td>Available balance and locked (pending withdrawal) balance in the app.</td>
+    <td><span class="p1">Phase 1</span></td>
+  </tr>
+  <tr>
+    <td><strong>Fund wallet (bank transfer)</strong></td>
+    <td>Customer</td>
+    <td>Customer transfers from any bank to their wallet NUBAN; balance updates automatically.</td>
+    <td><span class="p1">Phase 1</span></td>
+  </tr>
+  <tr>
+    <td><strong>On-demand top-up account</strong></td>
+    <td>Customer</td>
+    <td>Optional: temporary NUBAN for a specific amount, expiring in ~5–15 minutes (fallback / alternative channel).</td>
+    <td><span class="p2">Phase 2</span></td>
+  </tr>
+  <tr>
+    <td><strong>Withdraw to bank</strong></td>
+    <td>Customer</td>
+    <td>Customer sends wallet balance to their linked payout bank account.</td>
+    <td><span class="p1">Phase 1</span></td>
+  </tr>
+  <tr>
+    <td><strong>Save payout bank account</strong></td>
+    <td>Customer</td>
+    <td>Customer registers withdrawal account; system validates account name via NIP name enquiry.</td>
+    <td><span class="p1">Phase 1</span></td>
+  </tr>
+  <tr>
+    <td><strong>Transaction history</strong></td>
+    <td>Customer</td>
+    <td>List of credits, debits, withdrawals, and loan-related movements.</td>
+    <td><span class="p1">Phase 1</span></td>
+  </tr>
+  <tr>
+    <td><strong>Loan disbursement</strong></td>
+    <td>Admin / Ops</td>
+    <td>Send approved loan amount from MFB settlement wallet to customer’s (or school’s) bank account.</td>
+    <td><span class="p1">Phase 1</span></td>
+  </tr>
+  <tr>
+    <td><strong>Loan processing fee</strong></td>
+    <td>Customer</td>
+    <td>Deduct one-off fee from wallet or collect via transfer before loan proceeds.</td>
+    <td><span class="p2">Phase 2</span></td>
+  </tr>
+  <tr>
+    <td><strong>Loan repayment collection</strong></td>
+    <td>Customer / System</td>
+    <td>Collect installments via wallet debit, bank transfer to loan account, or salary direct debit.</td>
+    <td><span class="p2">Phase 2</span></td>
+  </tr>
+  <tr>
+    <td><strong>Payday / salary direct debit</strong></td>
+    <td>System</td>
+    <td>Mandate on salary account (Remita or bank-native) for automatic repayment on pay day.</td>
+    <td><span class="p2">Phase 2</span></td>
+  </tr>
+  <tr>
+    <td><strong>Savings &amp; investment debit</strong></td>
+    <td>Customer</td>
+    <td>Fund savings plans, investments, and group contributions from wallet balance.</td>
+    <td><span class="p2">Phase 2</span></td>
+  </tr>
+  <tr>
+    <td><strong>Card / USSD checkout</strong></td>
+    <td>Customer</td>
+    <td>Alternative top-up without bank transfer (card, USSD, QR).</td>
+    <td><span class="p3">Phase 3</span></td>
+  </tr>
+  <tr>
+    <td><strong>Bulk disbursement</strong></td>
+    <td>Admin</td>
+    <td>Batch payout (e.g. multiple study loans to schools in one run).</td>
+    <td><span class="p3">Phase 3</span></td>
+  </tr>
+  <tr>
+    <td><strong>Settlement wallet balance</strong></td>
+    <td>Treasury / Admin</td>
+    <td>MFB operations view of prefunded settlement account for outbound transfers.</td>
+    <td><span class="p1">Phase 1</span></td>
+  </tr>
+</table>
+
+<h2>2. End-to-end flows (what your APIs must support)</h2>
+
+<h3>2.1 Customer signup → wallet ready</h3>
+<ol>
+  <li>Customer completes registration (BVN, name, phone verified).</li>
+  <li>We call your API to create a <strong>reserved / dedicated NUBAN</strong> linked to the customer.</li>
+  <li>Customer sees account number and bank name in the app.</li>
+  <li>Webhook confirms account is active (if async provisioning).</li>
+</ol>
+
+<h3>2.2 Fund wallet</h3>
+<ol>
+  <li>Customer transfers NGN from any bank to their wallet NUBAN.</li>
+  <li>Your system sends <strong>inbound payment webhook</strong> with amount, reference, payer details.</li>
+  <li>We credit customer wallet (idempotent on your transaction reference).</li>
+  <li>Optional: requery API if webhook is delayed.</li>
+</ol>
+
+<h3>2.3 Withdraw to bank</h3>
+<ol>
+  <li>Customer requests withdrawal; we lock the amount internally.</li>
+  <li>We call your <strong>single transfer / NIP disbursement</strong> API with bank code, account, amount, unique reference.</li>
+  <li>Webhook reports success, failure, or reversal.</li>
+  <li>We settle or release the locked balance accordingly.</li>
+</ol>
+
+<h3>2.4 Loan disbursement (admin)</h3>
+<ol>
+  <li>Loan approved in admin portal with amount and customer bank details.</li>
+  <li>Ops initiates disbursement — same transfer API as withdrawal, different narration/metadata.</li>
+  <li>Success webhook → loan marked disbursed in our system.</li>
+</ol>
+
+<h3>2.5 Loan repayment (Phase 2)</h3>
+<ol>
+  <li><strong>Option A:</strong> Customer pays into wallet NUBAN; we allocate to loan balance internally.</li>
+  <li><strong>Option B:</strong> Customer pays into loan-specific collection account; webhook credits loan.</li>
+  <li><strong>Option C:</strong> Direct debit mandate debits salary account on due date.</li>
+</ol>
+
+<div class="page-break"></div>
+
+<h2>3. Required bank APIs — complete list</h2>
+<p>Priority key: <span class="p1">P1</span> = required for wallet go-live · <span class="p2">P2</span> = loan collections &amp; fees · <span class="p3">P3</span> = nice to have</p>
+
+<h3>A. Authentication &amp; environment</h3>
+
+<div class="api-block">
+  <h3>A1. API authentication</h3>
+  <div class="api-meta"><span class="p1">P1</span> · OAuth2 client credentials or API key + secret with short-lived bearer token</div>
+  <ul>
+    <li>Token endpoint returning <code>access_token</code> and <code>expires_in</code></li>
+    <li>Sandbox and production base URLs</li>
+    <li>IP allowlisting option for webhooks and API calls</li>
+  </ul>
+</div>
+
+<div class="api-block">
+  <h3>A2. Merchant / MFB settlement account setup</h3>
+  <div class="api-meta"><span class="p1">P1</span> · One prefunded settlement wallet for outbound transfers</div>
+  <ul>
+    <li>Settlement account number provided at onboarding</li>
+    <li>Contract / merchant ID we pass on all collection and disbursement calls</li>
+  </ul>
+</div>
+
+<h3>B. Customer wallet accounts (inbound collections)</h3>
+
+<div class="api-block">
+  <h3>B1. Create reserved / dedicated virtual account</h3>
+  <div class="api-meta"><span class="p1">P1</span> · Permanent NUBAN per customer</div>
+  <p><strong>We send:</strong></p>
+  <ul>
+    <li><code>account_reference</code> — our unique customer ID (immutable)</li>
+    <li><code>account_name</code> — e.g. "GH Trust / {Customer Name}"</li>
+    <li><code>customer_email</code>, <code>customer_name</code>, <code>phone</code></li>
+    <li><code>bvn</code> — where regulation requires BVN-linked accounts</li>
+    <li><code>currency</code> — NGN</li>
+  </ul>
+  <p><strong>You return:</strong></p>
+  <ul>
+    <li><code>account_number</code> (10-digit NUBAN)</li>
+    <li><code>bank_name</code>, <code>bank_code</code></li>
+    <li><code>account_reference</code> (echo or your ID)</li>
+    <li><code>status</code> — active / pending</li>
+  </ul>
+</div>
+
+<div class="api-block">
+  <h3>B2. Get reserved account details</h3>
+  <div class="api-meta"><span class="p1">P1</span> · Lookup by <code>account_reference</code></div>
+  <p>Same fields as B1. Used for reconciliation and support.</p>
+</div>
+
+<div class="api-block">
+  <h3>B3. Create dynamic virtual account (optional)</h3>
+  <div class="api-meta"><span class="p2">P2</span> · Temporary NUBAN for specific amount + expiry</div>
+  <p><strong>We send:</strong> <code>amount</code>, <code>currency</code>, <code>customer_email</code>, <code>transaction_reference</code>, <code>expiry_minutes</code></p>
+  <p><strong>You return:</strong> NUBAN, bank name, amount, expiry timestamp, tracking reference</p>
+</div>
+
+<div class="api-block">
+  <h3>B4. Deactivate / suspend virtual account</h3>
+  <div class="api-meta"><span class="p2">P2</span> · Fraud, account closure, KYC failure</div>
+</div>
+
+<h3>C. Inbound payment notifications &amp; verification</h3>
+
+<div class="api-block">
+  <h3>C1. Webhook — inbound transfer received</h3>
+  <div class="api-meta"><span class="p1">P1</span> · Real-time; HMAC-signed payload</div>
+  <p><strong>Minimum payload fields:</strong></p>
+  <ul>
+    <li><code>event_type</code> — e.g. <code>payment.success</code></li>
+    <li><code>transaction_reference</code> — your unique ID (idempotency key)</li>
+    <li><code>payment_reference</code> / session reference</li>
+    <li><code>amount</code>, <code>currency</code>, <code>payment_status</code> (PAID / FAILED)</li>
+    <li><code>account_reference</code> and/or <code>destination_account_number</code></li>
+    <li><code>paid_at</code> timestamp</li>
+    <li>Optional: payer bank, payer account (masked), narration</li>
+  </ul>
+  <p>We respond HTTP 200; retries with exponential backoff on non-2xx.</p>
+</div>
+
+<div class="api-block">
+  <h3>C2. Verify / requery inbound transaction</h3>
+  <div class="api-meta"><span class="p1">P1</span> · GET by <code>transaction_reference</code> or <code>payment_reference</code></div>
+  <p>Returns amount, status, account reference, timestamps. Used when webhook is missed (we poll every 2 hours).</p>
+</div>
+
+<div class="api-block">
+  <h3>C3. Requery virtual account payments</h3>
+  <div class="api-meta"><span class="p2">P2</span> · By account number + date range</div>
+  <p>Recovery of missed credits for a customer NUBAN.</p>
+</div>
+
+<h3>D. Outbound transfers (withdrawals &amp; loan disbursement)</h3>
+
+<div class="api-block">
+  <h3>D1. Bank account name enquiry (NIP validation)</h3>
+  <div class="api-meta"><span class="p1">P1</span> · Before saving payout account or disbursing</div>
+  <p><strong>We send:</strong> <code>account_number</code> (10 digits), <code>bank_code</code> (NIP code)</p>
+  <p><strong>You return:</strong> <code>account_name</code>, <code>account_number</code>, <code>bank_code</code></p>
+</div>
+
+<div class="api-block">
+  <h3>D2. List supported banks</h3>
+  <div class="api-meta"><span class="p1">P1</span> · For bank picker in app</div>
+  <p>Returns bank name, NIP bank code, slug. Updated list or static file acceptable.</p>
+</div>
+
+<div class="api-block">
+  <h3>D3. Initiate single bank transfer</h3>
+  <div class="api-meta"><span class="p1">P1</span> · Withdrawals + loan disbursement</div>
+  <p><strong>We send:</strong></p>
+  <ul>
+    <li><code>reference</code> — our unique idempotency key (required, max 64 chars)</li>
+    <li><code>amount</code> (NGN, 2 decimal places)</li>
+    <li><code>bank_code</code>, <code>account_number</code>, <code>account_name</code></li>
+    <li><code>narration</code> — e.g. "GH Trust wallet withdrawal" / "Loan disbursement LOAN-1234"</li>
+    <li><code>currency</code> — NGN</li>
+  </ul>
+  <p><strong>You return:</strong> <code>reference</code>, <code>status</code> (pending / processing / success / failed), <code>transaction_id</code></p>
+</div>
+
+<div class="api-block">
+  <h3>D4. Verify outbound transfer status</h3>
+  <div class="api-meta"><span class="p1">P1</span> · GET by <code>reference</code></div>
+  <p>Returns final status, failure reason, session ID, completion time.</p>
+</div>
+
+<div class="api-block">
+  <h3>D5. Webhook — outbound transfer result</h3>
+  <div class="api-meta"><span class="p1">P1</span> · Required events:</div>
+  <ul>
+    <li><code>transfer.success</code> — completed</li>
+    <li><code>transfer.failed</code> — failed with reason</li>
+    <li><code>transfer.reversed</code> — reversed after success</li>
+  </ul>
+  <p>Payload must include our <code>reference</code>, <code>amount</code>, <code>status</code>, <code>transaction_id</code>.</p>
+</div>
+
+<div class="api-block">
+  <h3>D6. Bulk bank transfer</h3>
+  <div class="api-meta"><span class="p3">P3</span> · Batch loan / school payouts</div>
+  <p>Submit array of transfers; batch reference; per-item status in response/webhook.</p>
+</div>
+
+<div class="api-block">
+  <h3>D7. Transfer recipient registration (optional)</h3>
+  <div class="api-meta"><span class="p2">P2</span> · Pre-register beneficiary for faster repeat payouts</div>
+  <p>If your platform requires beneficiary tokens, provide create + fetch recipient APIs.</p>
+</div>
+
+<h3>E. Treasury &amp; settlement</h3>
+
+<div class="api-block">
+  <h3>E1. Settlement wallet balance</h3>
+  <div class="api-meta"><span class="p1">P1</span> · Available balance for disbursements</div>
+  <p>Returns <code>available_balance</code>, <code>ledger_balance</code>, <code>currency</code>. Used before large disbursement runs and daily treasury checks.</p>
+</div>
+
+<div class="api-block">
+  <h3>E2. Settlement account statement</h3>
+  <div class="api-meta"><span class="p2">P2</span> · Date-range transaction list for reconciliation</div>
+</div>
+
+<div class="page-break"></div>
+
+<h3>F. Direct debit &amp; mandates (loan repayments — Phase 2)</h3>
+
+<div class="api-block">
+  <h3>F1. Create payment mandate</h3>
+  <div class="api-meta"><span class="p2">P2</span> · Salary account direct debit (Payday product)</div>
+  <p><strong>We send:</strong> customer identity, bank account, max amount, frequency (monthly / on salary date), start/end date, mandate reference</p>
+  <p><strong>You return:</strong> mandate ID, status (pending / active), authorization URL or USSD step if customer consent required</p>
+</div>
+
+<div class="api-block">
+  <h3>F2. Webhook — mandate activated / failed</h3>
+  <div class="api-meta"><span class="p2">P2</span></div>
+</div>
+
+<div class="api-block">
+  <h3>F3. Initiate direct debit collection</h3>
+  <div class="api-meta"><span class="p2">P2</span> · Debit mandate on due date</div>
+  <p><strong>We send:</strong> mandate ID, amount, collection reference (idempotent)</p>
+  <p><strong>You return / webhook:</strong> success, insufficient funds, mandate cancelled</p>
+</div>
+
+<div class="api-block">
+  <h3>F4. Cancel / suspend mandate</h3>
+  <div class="api-meta"><span class="p2">P2</span></div>
+</div>
+
+<p><em>If your bank routes mandates via Remita or NIBSS rather than a native API, provide integration guide and webhook mapping — we will adapt.</em></p>
+
+<h3>G. Alternative funding channels (Phase 3)</h3>
+
+<div class="api-block">
+  <h3>G1. Initialize card / USSD / QR payment</h3>
+  <div class="api-meta"><span class="p3">P3</span></div>
+  <p>Returns payment URL or USSD code; amount, reference, customer email.</p>
+</div>
+
+<div class="api-block">
+  <h3>G2. Webhook — card/USSD payment success</h3>
+  <div class="api-meta"><span class="p3">P3</span> · Same fields as C1 inbound webhook</div>
+</div>
+
+<h3>H. KYC &amp; compliance</h3>
+
+<div class="api-block">
+  <h3>H1. BVN-linked account provisioning</h3>
+  <div class="api-meta"><span class="p1">P1</span> · If required by CBN for dedicated accounts</div>
+  <p>Accept BVN on account creation; return verification status.</p>
+</div>
+
+<div class="api-block">
+  <h3>H2. Customer identity validation (optional)</h3>
+  <div class="api-meta"><span class="p2">P2</span> · BVN/NIN match before DVA activation</div>
+</div>
+
+<h2>4. Webhook specification (summary)</h2>
+
+<table>
+  <tr><th>Event</th><th>When</th><th>Priority</th></tr>
+  <tr><td>Inbound payment success</td><td>Customer funds wallet NUBAN</td><td><span class="p1">P1</span></td></tr>
+  <tr><td>Reserved account activated</td><td>DVA provisioning complete</td><td><span class="p1">P1</span></td></tr>
+  <tr><td>Reserved account failed</td><td>Provisioning rejected</td><td><span class="p1">P1</span></td></tr>
+  <tr><td>Outbound transfer success</td><td>Withdrawal or loan disbursement paid</td><td><span class="p1">P1</span></td></tr>
+  <tr><td>Outbound transfer failed</td><td>Transfer rejected</td><td><span class="p1">P1</span></td></tr>
+  <tr><td>Outbound transfer reversed</td><td>Bank reversal after success</td><td><span class="p1">P1</span></td></tr>
+  <tr><td>Mandate activated / failed</td><td>Direct debit setup</td><td><span class="p2">P2</span></td></tr>
+  <tr><td>Direct debit collected / failed</td><td>Repayment attempt</td><td><span class="p2">P2</span></td></tr>
+  <tr><td>Card/USSD payment success</td><td>Alternative top-up</td><td><span class="p3">P3</span></td></tr>
+</table>
+
+<h3>Webhook requirements</h3>
+<ul>
+  <li>HTTPS POST to our endpoint (we provide URL per environment)</li>
+  <li>HMAC signature header (SHA-256 or SHA-512) over raw body</li>
+  <li>Unique event / transaction ID for idempotency</li>
+  <li>Retry policy: at least 24 hours with backoff</li>
+  <li>Static IP list for firewall allowlisting (optional)</li>
+</ul>
+
+<h2>5. Non-functional requirements</h2>
+
+<table>
+  <tr><th>Requirement</th><th>Expectation</th></tr>
+  <tr><td>Idempotency</td><td>Same <code>reference</code> on transfer/debit must not double-pay</td></tr>
+  <tr><td>Amount precision</td><td>NGN to 2 decimal places; kobo handling documented</td></tr>
+  <tr><td>Latency</td><td>Name enquiry &lt; 5s; transfer initiation &lt; 10s (async completion OK)</td></tr>
+  <tr><td>Availability</td><td>99.5%+ production SLA; maintenance windows communicated</td></tr>
+  <tr><td>Sandbox</td><td>Full API parity with test accounts, simulated webhooks, test bank codes</td></tr>
+  <tr><td>Documentation</td><td>OpenAPI/Swagger or PDF; error code catalogue; sample requests</td></tr>
+  <tr><td>Support</td><td>Technical contact for integration; dispute / failed transfer escalation path</td></tr>
+  <tr><td>Limits</td><td>Document per-transaction and daily limits; process to increase limits</td></tr>
+</table>
+
+<h2>6. Phase 1 minimum — what we need to go live</h2>
+<p>If you can only prioritise a subset, these <strong>10 APIs + webhooks</strong> unblock wallet and loan disbursement:</p>
+
+<ol>
+  <li>Authentication (A1)</li>
+  <li>Create reserved account (B1)</li>
+  <li>Get reserved account (B2)</li>
+  <li>Inbound payment webhook (C1)</li>
+  <li>Verify inbound transaction (C2)</li>
+  <li>Bank account name enquiry (D1)</li>
+  <li>List banks (D2)</li>
+  <li>Initiate single transfer (D3)</li>
+  <li>Verify outbound transfer (D4)</li>
+  <li>Outbound transfer webhooks (D5)</li>
+  <li>Settlement wallet balance (E1)</li>
+</ol>
+
+<div class="box">
+  <strong>With Phase 1 only,</strong> GH Trust can: open customer wallets, accept bank transfers, process withdrawals, disburse loans to any Nigerian bank account, and reconcile automatically via webhooks and polling.
+</div>
+
+<h2>7. Phase 2 — loan collections &amp; product debits</h2>
+<ul>
+  <li>Direct debit mandates (F1–F4) for Payday / salary products</li>
+  <li>Processing fee collection from wallet or dedicated invoice</li>
+  <li>Internal wallet debit for savings, investments, contributions (no external API — we debit ledger; bank API only needed if fee leaves settlement wallet)</li>
+  <li>Settlement statement (E2) for finance reconciliation</li>
+</ul>
+
+<h2>8. What we build on our side (not required from bank)</h2>
+<ul>
+  <li>Customer wallet balance and double-entry ledger</li>
+  <li>Withdrawal hold / release / settle logic</li>
+  <li>Loan application and approval workflows</li>
+  <li>Admin portal and customer mobile app</li>
+  <li>Webhook ingestion, signature verification, idempotency store</li>
+  <li>Repayment allocation across loan schedules (Phase 2)</li>
+</ul>
+
+<h2>9. Submission checklist for bank partner</h2>
+<p>Please provide:</p>
+<ul>
+  <li>☐ API documentation (OpenAPI preferred)</li>
+  <li>☐ Sandbox credentials and base URL</li>
+  <li>☐ Webhook signing method and sample payloads</li>
+  <li>☐ List of NIP bank codes supported for transfers</li>
+  <li>☐ Settlement account onboarding process and prefunding instructions</li>
+  <li>☐ Transaction and daily limit table</li>
+  <li>☐ Error code reference</li>
+  <li>☐ Direct debit / mandate availability (native or via Remita/NIBSS)</li>
+  <li>☐ Legal/compliance requirements for BVN-linked DVAs</li>
+  <li>☐ Integration timeline and dedicated technical contact</li>
+</ul>
+
+<h2>10. Contact &amp; next steps</h2>
+<p>
+  GH Trust will implement a bank-specific adapter against your API specification. We request a technical discovery session to walk through Phase 1 endpoints, sandbox access, and webhook setup. Once sandbox is validated, we target production wallet go-live within your onboarding timeline.
+</p>
+
+<div class="footer">
+  GH Trust MFB · Bank Partner API Requirements · Wallet &amp; Payments · Confidential · August 2026
+</div>
+
+</body>
+</html>
