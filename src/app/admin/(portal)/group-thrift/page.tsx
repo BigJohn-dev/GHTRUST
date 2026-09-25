@@ -1,76 +1,80 @@
 "use client";
 
-import { Users } from "lucide-react";
-import { Card, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { DataTable } from "@/components/ui/DataTable";
-import { StatusBadge } from "@/components/ui/Badge";
-import { groupThrifts } from "@/lib/mock-data";
-import { formatNaira, formatDate } from "@/lib/utils";
-import { useAppStore } from "@/lib/store";
+import { UsersRound } from "lucide-react";
+import { Card } from "@/components/ui/Card";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
+import { PageHeader } from "@/components/admin/Page";
+import { Empty, ErrorState, NotLiveYet, Skeleton } from "@/components/admin/States";
+import { catalogApi } from "@/lib/admin/endpoints";
+import { useResource } from "@/lib/admin/hooks";
+import { date, money } from "@/lib/admin/format";
 
-export default function AdminGroupThriftPage() {
-  const addToast = useAppStore((s) => s.addToast);
+export default function GroupThriftPage() {
+  const groups = useResource(() => catalogApi.contributionGroups());
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-navy">Group Thrift</h1>
-          <p className="text-gray-500 text-sm">Manage cooperative savings groups</p>
-        </div>
-        <Button onClick={() => addToast("New group creation form opened", "info")}>Create Group</Button>
-      </div>
+    <>
+      <PageHeader title="Group thrift (Ajo)" description="Cooperative savings groups." meta={<Badge variant="muted">Not live</Badge>} />
 
-      <div className="grid sm:grid-cols-3 gap-4">
-        <Card className="text-center py-4"><p className="text-2xl font-bold text-navy">{groupThrifts.length}</p><p className="text-xs text-gray-500">Total Groups</p></Card>
-        <Card className="text-center py-4"><p className="text-2xl font-bold text-success">{groupThrifts.filter((g) => g.status === "active").length}</p><p className="text-xs text-gray-500">Active</p></Card>
-        <Card className="text-center py-4"><p className="text-2xl font-bold text-cyan">{formatNaira(groupThrifts.reduce((s, g) => s + g.collectedAmount, 0))}</p><p className="text-xs text-gray-500">Total Collected</p></Card>
-      </div>
+      <NotLiveYet
+        title="Contributions are not live yet"
+        detail="Groups can be listed, but recording contributions, payouts and service fees is not built in the backend yet. Creating groups from the portal is also not available."
+      />
 
-      <div className="grid md:grid-cols-2 gap-6">
-        {groupThrifts.map((group) => {
-          const progress = Math.round((group.collectedAmount / group.targetAmount) * 100);
-          return (
-            <Card key={group.id}>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-cyan/10 rounded-lg"><Users className="w-5 h-5 text-cyan" /></div>
-                  <div>
-                    <h3 className="font-bold text-navy">{group.name}</h3>
-                    <p className="text-xs text-gray-500">Leader: {group.leader} &middot; {group.members} members</p>
+      <div className="mt-6">
+        {groups.loading && !groups.data ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-44 rounded-xl" />
+            ))}
+          </div>
+        ) : groups.error ? (
+          <ErrorState message={groups.error} onRetry={groups.reload} />
+        ) : (groups.data ?? []).length === 0 ? (
+          <Card>
+            <Empty title="No groups yet" icon={UsersRound} />
+          </Card>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2 3xl:grid-cols-3">
+            {groups.data!.map((g) => {
+              const target = Number(g.target_amount);
+              const progress = target > 0 ? Math.round((Number(g.collected_amount) / target) * 100) : 0;
+              return (
+                <Card key={g.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                        <UsersRound className="h-[18px] w-[18px] text-ink-3" />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="truncate font-semibold text-ink">{g.name}</h3>
+                        <p className="text-xs text-ink-3">
+                          Leader: {g.leader_name} · {g.member_count} members
+                        </p>
+                      </div>
+                    </div>
+                    <StatusBadge status={g.status} />
                   </div>
-                </div>
-                <StatusBadge status={group.status} />
-              </div>
-              <div className="mt-4">
-                <div className="flex justify-between text-sm mb-1"><span className="text-gray-500">Progress</span><span className="font-bold">{progress}%</span></div>
-                <div className="w-full bg-gray-100 rounded-full h-2"><div className="bg-cyan h-2 rounded-full" style={{ width: `${progress}%` }} /></div>
-                <p className="text-xs text-gray-500 mt-1">{formatNaira(group.collectedAmount)} / {formatNaira(group.targetAmount)}</p>
-              </div>
-              <p className="text-xs text-gray-400 mt-3">Cycle #{group.cycle} &middot; Next meeting: {formatDate(group.nextMeeting)} &middot; {group.branch}</p>
-            </Card>
-          );
-        })}
+                  <div className="mt-4">
+                    <div className="mb-1.5 flex justify-between text-[13px]">
+                      <span className="num text-ink-2">
+                        {money(g.collected_amount)} <span className="text-ink-3">of {money(g.target_amount)}</span>
+                      </span>
+                      <span className="num font-semibold text-ink">{progress}%</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                      <div className="h-full rounded-full bg-navy" style={{ width: `${Math.min(100, progress)}%` }} />
+                    </div>
+                  </div>
+                  <p className="mt-4 border-t border-line pt-3 text-xs text-ink-3">
+                    Cycle #{g.cycle} · Next meeting {date(g.next_meeting)} · {g.branch} · {Number(g.service_fee_percent)}% fee
+                  </p>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
-
-      <Card>
-        <CardTitle>Group Registry</CardTitle>
-        <DataTable
-          data={groupThrifts}
-          searchKey="name"
-          searchPlaceholder="Search groups..."
-          columns={[
-            { key: "name", header: "Group Name" },
-            { key: "leader", header: "Leader" },
-            { key: "members", header: "Members" },
-            { key: "collectedAmount", header: "Collected", render: (g) => formatNaira(g.collectedAmount) },
-            { key: "targetAmount", header: "Target", render: (g) => formatNaira(g.targetAmount) },
-            { key: "branch", header: "Branch" },
-            { key: "status", header: "Status", render: (g) => <StatusBadge status={g.status} /> },
-          ]}
-        />
-      </Card>
-    </div>
+    </>
   );
 }

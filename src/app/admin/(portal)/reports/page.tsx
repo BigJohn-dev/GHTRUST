@@ -1,117 +1,141 @@
 "use client";
 
-import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
-} from "recharts";
-import { Card, CardTitle } from "@/components/ui/Card";
-import { dashboardChartData, loans, customers } from "@/lib/mock-data";
-import { formatNaira } from "@/lib/utils";
+import { Download } from "lucide-react";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { ShareBars } from "@/components/admin/ShareBars";
+import { PageHeader, StatTile, TableShell } from "@/components/admin/Page";
+import { Empty, ErrorState, InlineError, PageSkeleton, TableSkeleton } from "@/components/admin/States";
+import { dashboardApi, loansApi, settingsApi } from "@/lib/admin/endpoints";
+import { useAction, useResource } from "@/lib/admin/hooks";
+import { money, moneyCompact } from "@/lib/admin/format";
+import { statusLabel } from "@/components/ui/Badge";
+import type { DemographicBucket } from "@/lib/admin/types";
 
-export default function AdminReportsPage() {
-  const branchData = [
-    { branch: "Lagos Main", deposits: 18500000, loans: 3200000, customers: 45 },
-    { branch: "Lagos Ikeja", deposits: 12200000, loans: 1800000, customers: 32 },
-    { branch: "Akure Central", deposits: 8900000, loans: 1500000, customers: 28 },
-    { branch: "Akure Oba Road", deposits: 6200000, loans: 730000, customers: 19 },
-  ];
+export default function ReportsPage() {
+  const dashboard = useResource(() => dashboardApi.get());
+  const branches = useResource(() => settingsApi.branches());
+  const overdue = useResource(() => loansApi.list({ status: "overdue", limit: 1 }));
+  const active = useResource(() => loansApi.list({ status: "active", limit: 1 }));
+  const exporter = useAction();
 
-  const productPerformance = [
-    { product: "Yearly Thrift", accounts: 120, volume: 15000000 },
-    { product: "Regular Savings", accounts: 85, volume: 8500000 },
-    { product: "Fixed Savings", accounts: 42, volume: 12000000 },
-    { product: "Business Loan", accounts: loans.filter((l) => l.product === "Business Loan").length, volume: 5500000 },
-    { product: "Payday Loan", accounts: loans.filter((l) => l.product === "Payday Loan").length, volume: 230000 },
-  ];
+  if (dashboard.loading && !dashboard.data) return <PageSkeleton />;
+  if (dashboard.error) return <ErrorState message={dashboard.error} onRetry={dashboard.reload} />;
+  const d = dashboard.data!;
+
+  const byStatus = [...d.status_counts].sort((a, b) => b.count - a.count).map((s) => ({ key: s.status, label: statusLabel(s.status), value: s.count }));
+  const openLoans = (active.data?.total ?? 0) + (overdue.data?.total ?? 0);
+  const overdueShare = openLoans ? ((overdue.data?.total ?? 0) / openLoans) * 100 : 0;
+  const branchMax = Math.max(1, ...(branches.data ?? []).map((b) => b.customer_count));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-navy">Reports</h1>
-        <p className="text-gray-500 text-sm">Portfolio analytics and branch performance</p>
-      </div>
+    <>
+      <PageHeader
+        title="Reports"
+        description="Lending pipeline, portfolio health and applicant demographics."
+        actions={
+          <Button variant="outline" loading={exporter.busy} onClick={() => exporter.run(() => dashboardApi.exportDemographics())}>
+            {!exporter.busy && <Download className="h-4 w-4" />} Export demographics (CSV)
+          </Button>
+        }
+      />
+      {exporter.error && (
+        <div className="mb-4">
+          <InlineError message={exporter.error} />
+        </div>
+      )}
 
-      <div className="grid sm:grid-cols-4 gap-4">
-        <Card className="py-4 px-6"><p className="text-xs text-gray-500">Total Customers</p><p className="text-2xl font-bold text-navy">{customers.length}</p></Card>
-        <Card className="py-4 px-6"><p className="text-xs text-gray-500">Loan Book</p><p className="text-2xl font-bold text-navy">{formatNaira(loans.reduce((s, l) => s + l.outstanding, 0))}</p></Card>
-        <Card className="py-4 px-6"><p className="text-xs text-gray-500">Total Deposits</p><p className="text-2xl font-bold text-cyan">{formatNaira(dashboardChartData.adminKPIs.totalDeposits)}</p></Card>
-        <Card className="py-4 px-6"><p className="text-xs text-gray-500">PAR (Overdue)</p><p className="text-2xl font-bold text-error">1.4%</p></Card>
-      </div>
+      <section aria-label="Headline figures" className="stagger mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Applications" value={d.total_applications} hint={`${d.demographics.total_applicants} unique applicants`} />
+        <StatTile label="Total disbursed" value={d.total_disbursed_amount} format={moneyCompact} hint={money(d.total_disbursed_amount)} />
+        <StatTile label="Open loans" value={openLoans} loading={active.loading && !active.data} hint="Active and overdue" />
+        <StatTile
+          label="Loans overdue (by count)"
+          value={`${overdueShare.toFixed(1)}%`}
+          loading={overdue.loading && !overdue.data}
+          tone={overdueShare > 0 ? "error" : "success"}
+          hint={`${overdue.data?.total ?? 0} of ${openLoans} open loans overdue`}
+        />
+      </section>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid items-start gap-6 xl:grid-cols-2">
         <Card>
-          <CardTitle>Monthly Disbursements vs Deposits</CardTitle>
-          <div className="h-72 mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dashboardChartData.adminMonthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E9F8F9" />
-                <XAxis dataKey="month" />
-                <YAxis tickFormatter={(v) => `₦${(v / 1000000).toFixed(0)}M`} />
-                <Tooltip formatter={(v) => formatNaira(Number(v))} />
-                <Bar dataKey="disbursed" fill="#1B2F6B" name="Disbursed" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="deposits" fill="#2FA4D7" name="Deposits" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <CardHeader title="Applications by status" description="Every application, including drafts" />
+          {byStatus.length === 0 ? <Empty title="No applications yet" compact /> : <ShareBars items={byStatus} />}
         </Card>
-
         <Card>
-          <CardTitle>Repayment Trend</CardTitle>
-          <div className="h-72 mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={dashboardChartData.adminMonthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E9F8F9" />
-                <XAxis dataKey="month" />
-                <YAxis tickFormatter={(v) => `₦${(v / 1000000).toFixed(1)}M`} />
-                <Tooltip formatter={(v) => formatNaira(Number(v))} />
-                <Line type="monotone" dataKey="repayments" stroke="#00A86B" strokeWidth={3} dot={{ fill: "#00A86B" }} name="Repayments" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <CardHeader title="Product mix" description="Share of all applications" />
+          {d.product_mix.length === 0 ? (
+            <Empty title="No applications yet" compact />
+          ) : (
+            <ShareBars
+              max={100}
+              valueFormat={(v) => `${v}%`}
+              items={d.product_mix.map((p) => ({ key: p.product_code, label: p.product_name, value: p.percentage, sub: `${p.count}` }))}
+            />
+          )}
         </Card>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card>
-          <CardTitle>Branch Performance</CardTitle>
-          <div className="overflow-x-auto mt-4">
-            <table className="w-full text-sm">
-              <thead><tr className="bg-bg-light text-left"><th className="px-4 py-3 font-semibold text-navy">Branch</th><th className="px-4 py-3 font-semibold text-navy">Deposits</th><th className="px-4 py-3 font-semibold text-navy">Loans</th><th className="px-4 py-3 font-semibold text-navy">Customers</th></tr></thead>
-              <tbody>
-                {branchData.map((b) => (
-                  <tr key={b.branch} className="border-t border-gray-50">
-                    <td className="px-4 py-3 font-medium text-navy">{b.branch}</td>
-                    <td className="px-4 py-3">{formatNaira(b.deposits)}</td>
-                    <td className="px-4 py-3">{formatNaira(b.loans)}</td>
-                    <td className="px-4 py-3">{b.customers}</td>
+      <h2 className="mb-3 mt-8 text-2xs font-semibold uppercase tracking-wider text-ink-3">Applicant demographics</h2>
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <BucketCard title="Gender" buckets={d.demographics.gender} />
+        <BucketCard title="Age" buckets={d.demographics.age_buckets} />
+        <BucketCard title="State of residence" buckets={d.demographics.state_of_residence.slice(0, 8)} more={d.demographics.state_of_residence.length - 8} />
+      </div>
+
+      <Card flush className="mt-6">
+        <div className="px-5 pt-5">
+          <CardHeader title="Customers by branch" />
+        </div>
+        {branches.loading && !branches.data ? (
+          <TableSkeleton cols={3} rows={3} />
+        ) : (branches.data ?? []).length === 0 ? (
+          <Empty title="No customers yet" compact />
+        ) : (
+          <TableShell>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Branch</th>
+                  <th className="w-1/2">Share</th>
+                  <th className="num">Customers</th>
+                </tr>
+              </thead>
+              <tbody className="stagger-rows">
+                {branches.data!.map((b) => (
+                  <tr key={b.name}>
+                    <td className="font-medium text-ink">{b.name}</td>
+                    <td>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100" aria-hidden>
+                        <div className="h-full rounded-full bg-navy" style={{ width: `${(b.customer_count / branchMax) * 100}%` }} />
+                      </div>
+                    </td>
+                    <td className="num font-semibold text-ink">{b.customer_count}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        </Card>
+          </TableShell>
+        )}
+      </Card>
+    </>
+  );
+}
 
-        <Card>
-          <CardTitle>Product Performance</CardTitle>
-          <div className="h-48 mt-4 flex items-center">
-            <ResponsiveContainer width="50%" height="100%">
-              <PieChart>
-                <Pie data={dashboardChartData.adminLoanDistribution} dataKey="value" cx="50%" cy="50%" outerRadius={70}>
-                  {dashboardChartData.adminLoanDistribution.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-2 flex-1">
-              {productPerformance.map((p) => (
-                <div key={p.product} className="flex justify-between text-sm">
-                  <span className="text-gray-600">{p.product}</span>
-                  <span className="font-medium text-navy">{p.accounts} accts</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      </div>
-    </div>
+function BucketCard({ title, buckets, more = 0 }: { title: string; buckets: DemographicBucket[]; more?: number }) {
+  return (
+    <Card>
+      <CardHeader title={title} description={more > 0 ? `Top 8 · ${more} more in the CSV export` : undefined} />
+      {buckets.length === 0 ? (
+        <Empty title="No data yet" compact />
+      ) : (
+        <ShareBars
+          max={100}
+          valueFormat={(v) => `${v}%`}
+          items={buckets.map((b) => ({ key: b.label, label: b.label, value: b.percentage, sub: `${b.count}` }))}
+        />
+      )}
+    </Card>
   );
 }

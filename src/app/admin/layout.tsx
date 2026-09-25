@@ -1,5 +1,7 @@
-import { AdminLayout } from "@/components/layouts/AdminLayout";
+"use client";
+
+import { StaffAuthProvider } from "@/lib/admin/auth";
 
 export default function AdminRootLayout({ children }: { children: React.ReactNode }) {
-  return <AdminLayout>{children}</AdminLayout>;
+  return <StaffAuthProvider>{children}</StaffAuthProvider>;
 }

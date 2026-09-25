@@ -2,46 +2,212 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap');
-
 :root {
-  --navy: #1B2F6B;
-  --cyan: #2FA4D7;
-  --bg-light: #E9F8F9;
-  --surface: #F4F7FB;
-  --surface-sidebar: #EEF2F9;
-  --white: #FFFFFF;
-  --success: #00A86B;
-  --warning: #E5AF59;
-  --error: #CF2E2E;
-  --gold: #B58838;
-  --background: #F4F7FB;
-  --foreground: #1B2F6B;
+  --background: #f5f7fa;
+  --foreground: #0f1b3d;
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: 'Montserrat', 'Inter', sans-serif;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  h1, h2, h3, h4 {
+    @apply tracking-tight;
+  }
+  /* One visible, consistent focus style for keyboard users; none for mouse clicks. */
+  :focus-visible {
+    outline: 2px solid #0a74a6;
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: rgba(47, 164, 215, 0.25);
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+@layer components {
+  /* Form controls */
+  .input {
+    @apply block w-full rounded-lg border border-line-strong bg-white px-3 py-2 text-sm text-ink shadow-xs
+      transition-[border-color,box-shadow] duration-150 placeholder:text-gray-300
+      hover:border-gray-300 focus:border-cyan focus:shadow-ring focus:outline-none
+      disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400;
+  }
+  .input:focus-visible {
+    outline: none;
+  }
+  select.input {
+    @apply cursor-pointer appearance-none bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.625rem center;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-ink-2;
+  }
+
+  /* Data tables: compact rows, sticky header, right-aligned tabular numbers. */
+  .tbl {
+    @apply w-full border-separate border-spacing-0 text-sm;
+    font-variant-numeric: tabular-nums;
+  }
+  .tbl thead th {
+    @apply sticky top-0 z-[1] whitespace-nowrap border-b border-line bg-bg-light px-4 py-2.5 text-left text-2xs font-semibold uppercase tracking-wider text-ink-3;
+  }
+  .tbl tbody td {
+    @apply whitespace-nowrap border-b border-line/70 px-4 py-3 align-middle text-ink-2;
+  }
+  .tbl tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .tbl tbody tr {
+    @apply transition-colors duration-100;
+  }
+  .tbl tbody tr:hover td {
+    @apply bg-[#F7F9FC];
+  }
+  .tbl th.num,
+  .tbl td.num {
+    @apply text-right;
+  }
+  .tbl-compact tbody td {
+    @apply py-2;
+  }
+
+  /* Loading placeholders */
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-gray-100;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  .link {
+    @apply font-medium text-cyan underline-offset-2 transition-colors hover:text-navy hover:underline;
+  }
 }
 
 @layer utilities {
   .text-balance { text-wrap: balance; }
-  .shadow-card {
-    box-shadow: 0 1px 3px rgba(27, 47, 107, 0.06), 0 8px 24px rgba(27, 47, 107, 0.06);
-  }
-  .shadow-card-hover {
-    box-shadow: 0 4px 12px rgba(27, 47, 107, 0.1), 0 12px 32px rgba(27, 47, 107, 0.08);
-  }
   .gradient-navy {
-    background: linear-gradient(135deg, #1B2F6B 0%, #243d8a 50%, #2FA4D7 100%);
+    background: linear-gradient(135deg, #0f1b3d 0%, #1b2f6b 55%, #22397f 100%);
   }
   .gradient-soft {
-    background: linear-gradient(135deg, #EEF2F9 0%, #E9F8F9 100%);
+    background: linear-gradient(135deg, #f2f4f7 0%, #e6f4fa 100%);
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #d0d5dd transparent;
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #EEF2F9; }
-::-webkit-scrollbar-thumb { background: #2FA4D7; border-radius: 3px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: #98a2b3; border: 3px solid transparent; background-clip: content-box; }
+
+/* ── Motion system ─────────────────────────────────────────────────────────── */
+
+/* Children enter one after another (cards, KPI tiles, table rows). */
+@layer utilities {
+  .stagger > * {
+    animation: gh-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger > *:nth-child(2) { animation-delay: 40ms; }
+  .stagger > *:nth-child(3) { animation-delay: 80ms; }
+  .stagger > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger > *:nth-child(7) { animation-delay: 240ms; }
+  .stagger > *:nth-child(8) { animation-delay: 280ms; }
+  .stagger > *:nth-child(n + 9) { animation-delay: 300ms; }
+
+  /* Table rows: quicker, subtler (no blur on dense data). */
+  .stagger-rows > tr {
+    animation: gh-row 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger-rows > tr:nth-child(2) { animation-delay: 25ms; }
+  .stagger-rows > tr:nth-child(3) { animation-delay: 50ms; }
+  .stagger-rows > tr:nth-child(4) { animation-delay: 75ms; }
+  .stagger-rows > tr:nth-child(5) { animation-delay: 100ms; }
+  .stagger-rows > tr:nth-child(6) { animation-delay: 125ms; }
+  .stagger-rows > tr:nth-child(7) { animation-delay: 150ms; }
+  .stagger-rows > tr:nth-child(8) { animation-delay: 175ms; }
+  .stagger-rows > tr:nth-child(n + 9) { animation-delay: 200ms; }
+}
+
+@keyframes gh-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes gh-row {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Route transitions (View Transitions API): only the content area moves —
+   the old page fades out and sinks, the new one rises in, sharpening from a blur.
+   The sidebar and header stay perfectly still. */
+.page-surface {
+  view-transition-name: page;
+}
+/* The cross-fade already animates this change; skip the fallback entrance. */
+.vt-active .page-enter {
+  animation: none;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-old(page) {
+  animation: vt-out 160ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+::view-transition-new(page) {
+  animation: vt-in 360ms cubic-bezier(0.16, 1, 0.3, 1) 60ms both;
+}
+@keyframes vt-out {
+  to { opacity: 0; transform: translateY(-6px) scale(0.992); filter: blur(2px); }
+}
+@keyframes vt-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.99); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(page),
+  ::view-transition-new(page) {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

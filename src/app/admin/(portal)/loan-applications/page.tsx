@@ -1,100 +1,183 @@
 "use client";
 
-import { useState } from "react";
-import { Check, X } from "lucide-react";
-import { Card, CardTitle } from "@/components/ui/Card";
-import { DataTable } from "@/components/ui/DataTable";
-import { StatusBadge } from "@/components/ui/Badge";
-import { ConfirmModal } from "@/components/ui/Modal";
-import { useAppStore } from "@/lib/store";
-import { formatNaira, formatDate } from "@/lib/utils";
+import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { ChevronRight, Download } from "lucide-react";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { StatusBadge, statusLabel } from "@/components/ui/Badge";
+import { FilterTabs, PageHeader, SearchInput, TableShell } from "@/components/admin/Page";
+import { Empty, ErrorState, PageSkeleton, Pager, TableSkeleton } from "@/components/admin/States";
+import { applicationsApi, dashboardApi } from "@/lib/admin/endpoints";
+import { useDebouncedValue, useResource } from "@/lib/admin/hooks";
+import { date, money, relativeTime } from "@/lib/admin/format";
+import { downloadCsv } from "@/lib/admin/csv";
+import type { ApplicationSummary } from "@/lib/admin/types";
+import { useTransitionRouter } from "@/lib/admin/motion";
 
-export default function LoanApplicationsPage() {
-  const applications = useAppStore((s) => s.loanApplications);
-  const approveApplication = useAppStore((s) => s.approveApplication);
-  const rejectApplication = useAppStore((s) => s.rejectApplication);
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [confirmAction, setConfirmAction] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
+const PAGE = 50;
+const FILTERS = [
+  { value: "all", label: "All" },
+  { value: "under_review", label: "Under review" },
+  { value: "submitted", label: "Submitted" },
+  { value: "approved", label: "Approved" },
+  { value: "ready_to_disburse", label: "Disbursing" },
+  { value: "disbursed", label: "Disbursed" },
+  { value: "rejected", label: "Rejected" },
+  { value: "draft", label: "Drafts" },
+];
 
-  const filtered = statusFilter === "all" ? applications : applications.filter((a) => a.status === statusFilter);
+function ApplicationsQueue() {
+  const router = useTransitionRouter();
+  const params = useSearchParams();
+  const status = params.get("status") ?? "all";
+  const [offset, setOffset] = useState(0);
+  const [filter, setFilter] = useState("");
+  const search = useDebouncedValue(filter.trim(), 300);
+  useEffect(() => setOffset(0), [search]);
+
+  const counts = useResource(() => dashboardApi.get(), []);
+  const list = useResource(
+    () => applicationsApi.list({ status, search: search || undefined, limit: PAGE, offset }),
+    [status, search, offset],
+  );
+
+  const setStatus = (value: string) => {
+    setOffset(0);
+    router.replace(value === "all" ? "/admin/loan-applications" : `/admin/loan-applications?status=${value}`, { scroll: false });
+  };
+  const countFor = (value: string) =>
+    value === "all" ? counts.data?.total_applications : counts.data?.status_counts.find((s) => s.status === value)?.count ?? 0;
+
+  const rows = list.data?.items ?? [];
+
+  function exportRows() {
+    downloadCsv<ApplicationSummary>(`applications-${status}`, rows, [
+      { header: "Applicant", value: (a) => a.applicant_name },
+      { header: "Account", value: (a) => a.account_number },
+      { header: "Branch", value: (a) => a.branch },
+      { header: "Product", value: (a) => a.product_name },
+      { header: "Requested (NGN)", value: (a) => a.requested_amount },
+      { header: "Approved (NGN)", value: (a) => a.approved_amount },
+      { header: "Stage", value: (a) => a.current_stage_name },
+      { header: "Approver", value: (a) => a.approver_role_name },
+      { header: "Submitted", value: (a) => a.submitted_at ?? a.created_at },
+      { header: "Status", value: (a) => statusLabel(a.status) },
+    ]);
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-navy">Loan Applications</h1>
-          <p className="text-gray-500 text-sm">{applications.filter((a) => a.status === "pending" || a.status === "under_review").length} awaiting action</p>
-        </div>
-      </div>
-
-      <div className="grid sm:grid-cols-4 gap-4">
-        {[
-          { label: "Pending", status: "pending", color: "text-warning" },
-          { label: "Under Review", status: "under_review", color: "text-cyan" },
-          { label: "Approved", status: "approved", color: "text-success" },
-          { label: "Rejected", status: "rejected", color: "text-error" },
-        ].map((s) => (
-          <Card key={s.status} className="text-center py-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter(s.status)}>
-            <p className={`text-2xl font-bold ${s.color}`}>{applications.filter((a) => a.status === s.status).length}</p>
-            <p className="text-xs text-gray-500">{s.label}</p>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <CardTitle>Application Queue</CardTitle>
-        <DataTable
-          data={filtered}
-          searchKey="customerName"
-          searchPlaceholder="Search applicants..."
-          filters={
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-cyan/30">
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="under_review">Under Review</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          }
-          columns={[
-            { key: "customerName", header: "Applicant", render: (a) => (
-              <div>
-                <p className="font-medium text-navy">{a.customerName}</p>
-                <p className="text-xs text-gray-400">{a.branch}</p>
-              </div>
-            )},
-            { key: "product", header: "Product" },
-            { key: "amount", header: "Amount", render: (a) => <span className="font-semibold">{formatNaira(a.amount)}</span> },
-            { key: "tenure", header: "Tenure", render: (a) => `${a.tenure} months` },
-            { key: "monthlyIncome", header: "Income", render: (a) => formatNaira(a.monthlyIncome) },
-            { key: "purpose", header: "Purpose", className: "max-w-[200px]", render: (a) => <span className="truncate block max-w-[200px]">{a.purpose}</span> },
-            { key: "submittedDate", header: "Submitted", render: (a) => formatDate(a.submittedDate) },
-            { key: "status", header: "Status", render: (a) => <StatusBadge status={a.status} /> },
-            { key: "actions", header: "Actions", render: (a) => (
-              (a.status === "pending" || a.status === "under_review") ? (
-                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => setConfirmAction({ id: a.id, action: "approve" })} className="p-1.5 bg-success/10 text-success rounded-lg hover:bg-success/20"><Check className="w-4 h-4" /></button>
-                  <button onClick={() => setConfirmAction({ id: a.id, action: "reject" })} className="p-1.5 bg-error/10 text-error rounded-lg hover:bg-error/20"><X className="w-4 h-4" /></button>
-                </div>
-              ) : <span className="text-xs text-gray-400">—</span>
-            )},
-          ]}
-        />
-      </Card>
-
-      <ConfirmModal
-        isOpen={!!confirmAction}
-        onClose={() => setConfirmAction(null)}
-        onConfirm={() => {
-          if (!confirmAction) return;
-          if (confirmAction.action === "approve") approveApplication(confirmAction.id);
-          else rejectApplication(confirmAction.id);
-        }}
-        title={confirmAction?.action === "approve" ? "Approve Application" : "Reject Application"}
-        message={confirmAction?.action === "approve" ? "Are you sure you want to approve this loan application?" : "Are you sure you want to reject this loan application?"}
-        confirmLabel={confirmAction?.action === "approve" ? "Approve" : "Reject"}
-        variant={confirmAction?.action === "reject" ? "danger" : "primary"}
+    <>
+      <PageHeader
+        title="Loan applications"
+        description="Open an application to verify documents, act on your workflow stage and disburse."
+        actions={
+          <Button variant="outline" onClick={exportRows} disabled={rows.length === 0}>
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+        }
       />
-    </div>
+
+      <Card flush>
+        <div className="border-b border-line px-4 pt-1">
+          <FilterTabs
+            label="Application status"
+            value={status}
+            onChange={setStatus}
+            options={FILTERS.map((f) => ({ ...f, count: countFor(f.value) }))}
+          />
+        </div>
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+          <SearchInput
+            value={filter}
+            onChange={setFilter}
+            placeholder="Search applicant name, phone or account"
+            aria-label="Search applications"
+            containerClassName="w-full sm:max-w-xs"
+          />
+        </div>
+
+        {list.loading && !list.data ? (
+          <TableSkeleton cols={7} />
+        ) : list.error ? (
+          <div className="p-5">
+            <ErrorState message={list.error} onRetry={list.reload} />
+          </div>
+        ) : rows.length === 0 ? (
+          <Empty
+            title={search ? `No applications match “${search}”` : "No applications"}
+            hint={search ? "Try a phone number, account number or part of the name." : status === "all" ? undefined : `Nothing is ${statusLabel(status).toLowerCase()} right now.`}
+          />
+        ) : (
+          <>
+            <TableShell>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Applicant</th>
+                    <th>Product</th>
+                    <th className="num">Requested</th>
+                    <th className="num">Approved</th>
+                    <th>Current stage</th>
+                    <th>Submitted</th>
+                    <th>Status</th>
+                    <th className="w-8" aria-label="Open" />
+                  </tr>
+                </thead>
+                <tbody className="stagger-rows">
+                  {rows.map((a) => {
+                    const href = `/admin/loan-applications/${a.id}`;
+                    return (
+                      <tr key={a.id} className="group cursor-pointer" onClick={() => router.push(href)} onMouseEnter={() => router.prefetch(href)}>
+                        <td>
+                          <Link href={href} className="font-medium text-ink group-hover:text-cyan" onClick={(e) => e.stopPropagation()}>
+                            {a.applicant_name ?? "—"}
+                          </Link>
+                          <span className="num block text-xs text-ink-3">
+                            {a.account_number ?? "—"} · {a.branch ?? "—"}
+                          </span>
+                        </td>
+                        <td>{a.product_name}</td>
+                        <td className="num font-medium text-ink">{money(a.requested_amount)}</td>
+                        <td className="num">{money(a.approved_amount)}</td>
+                        <td>
+                          {a.current_stage_name ? (
+                            <>
+                              <span className="text-ink">{a.current_stage_name}</span>
+                              <span className="block text-xs text-ink-3">{a.approver_role_name}</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <span title={date(a.submitted_at ?? a.created_at)}>{relativeTime(a.submitted_at ?? a.created_at)}</span>
+                        </td>
+                        <td>
+                          <StatusBadge status={a.status} />
+                        </td>
+                        <td className="text-right">
+                          <ChevronRight className="h-4 w-4 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-ink-3" aria-hidden />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableShell>
+            <Pager total={list.data?.total} limit={PAGE} offset={offset} onChange={setOffset} />
+          </>
+        )}
+      </Card>
+    </>
+  );
+}
+
+export default function LoanApplicationsPage() {
+  return (
+    <Suspense fallback={<PageSkeleton stats={false} />}>
+      <ApplicationsQueue />
+    </Suspense>
   );
 }
