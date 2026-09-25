@@ -1,15 +1,25 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
+
+from app.integrations.payments.schemas import PaymentRailError
+from app.integrations.retry import TransientError
 
 
-class PaystackError(Exception):
+class PaystackError(PaymentRailError):
+    """
+    Paystack failure. Subclasses PaymentRailError — previously it derived from
+    Exception, so no ``except PaymentRailError`` handler caught Paystack errors.
+    """
+
     def __init__(self, message: str, status_code: int = 400, paystack_message: str | None = None):
-        self.message = message
-        self.status_code = status_code
+        super().__init__(message, status_code=status_code, provider_code=paystack_message)
         self.paystack_message = paystack_message
-        super().__init__(message)
+
+
+class TransientPaystackError(PaystackError, TransientError):
+    """Transport failure or Paystack 5xx — retried, and outcome unknown."""
 
 
 class PaystackEnvelope(BaseModel):

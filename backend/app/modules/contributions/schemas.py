@@ -29,7 +29,7 @@ class ContributionGroupResponse(BaseModel):
 
 
 class ContributionCreate(BaseModel):
-    group_id: str
+    group_id: str = Field(..., max_length=36)
     amount: Decimal = Field(gt=0)
     cycle: int | None = None
 
@@ -38,7 +38,7 @@ class ContributionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    group_id: str
+    group_id: str = Field(..., max_length=36)
     member_id: str
     member_name: str
     amount: Decimal

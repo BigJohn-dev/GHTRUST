@@ -132,7 +132,9 @@ class TestLoanApplicationFlow:
             headers=headers,
         )
         assert submit.status_code == 422
-        assert "Missing document" in str(submit.json()["detail"])
+        body = submit.json()
+        assert body["code"] == "APPLICATION_INCOMPLETE"
+        assert any("Missing document" in e for e in body["errors"])
 
     async def test_upload_document(self, api_client, db_session, tmp_path, monkeypatch):
         monkeypatch.setenv("UPLOAD_DIR", str(tmp_path))

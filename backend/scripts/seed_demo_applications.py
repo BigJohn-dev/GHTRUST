@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select
 
-from app.core.database import AsyncSessionLocal, engine
-from app.models import Base
+from app.core.config import get_settings
+from app.core.database import AsyncSessionLocal
 from app.modules.loans.constants import PRODUCT_DOCUMENTS
 from app.modules.loans.schemas import (
     ApplicationChannel,
@@ -24,8 +24,7 @@ from app.modules.loans.service import LoanService, seed_loan_products
 from app.modules.loans.workflow_seed import seed_default_workflows
 from app.modules.users.models import Customer, CustomerStatus
 from app.modules.admin.service import seed_super_admin
-from app.core.config import settings
-from scripts.sync_schema import sync_loan_workflow_schema
+from scripts.seed import SeedError, ensure_migrated, super_admin_config
 
 DEMO_APPLICANTS = [
     {"name": "Emeka Nwosu", "bvn": "22222222222", "phone": "08011111111", "product": "business_loan", "amount": "1500000", "gender": "Male", "dob": date(1992, 3, 14), "state_res": "LAGOS", "state_origin": "ANAMBRA"},
@@ -64,7 +63,7 @@ async def _ensure_customer(session, *, name: str, bvn: str, phone: str, gender: 
     last = parts[1] if len(parts) > 1 else "Demo"
     customer = Customer(
         account_number=f"GH{ bvn[-8:] }",
-        branch=settings.default_branch,
+        branch=get_settings().default_branch,
         status=CustomerStatus.ACTIVE,
         bvn=bvn,
         first_name=first,
@@ -148,17 +147,11 @@ async def _seed_one(session, applicant: dict) -> str:
 
 
 async def seed() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await sync_loan_workflow_schema(conn)
+    await ensure_migrated()
+    name, email, phone = super_admin_config()
 
     async with AsyncSessionLocal() as session:
-        await seed_super_admin(
-            session,
-            full_name=settings.seed_super_admin_name,
-            email=settings.seed_super_admin_email,
-            phone=settings.seed_super_admin_phone,
-        )
+        await seed_super_admin(session, full_name=name, email=email, phone=phone)
         await seed_loan_products(session)
         await seed_default_workflows(session)
 
@@ -173,4 +166,8 @@ async def seed() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    try:
+        asyncio.run(seed())
+    except SeedError as exc:
+        print(f"Seed aborted: {exc}", file=sys.stderr)
+        sys.exit(1)

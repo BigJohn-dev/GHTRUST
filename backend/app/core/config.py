@@ -5,6 +5,15 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+_INSECURE_SECRETS = frozenset(
+    {
+        "dev-secret-change-in-production",
+        "change-me-in-production-use-openssl-rand-hex-32",
+        "",
+    }
+)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -20,9 +29,50 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="dev-secret-change-in-production")
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
 
-    # JWT
+    # Auth tokens. Access tokens are short-lived JWTs; sessions are extended by
+    # rotating opaque refresh tokens stored hashed in auth_sessions.
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 60 * 24  # 24 hours
+    customer_access_token_minutes: int = 15
+    customer_refresh_token_days: int = 30
+    staff_access_token_minutes: int = 10
+    staff_refresh_token_hours: int = 12
+    # A staff session unused (no token refresh) for this long can't be refreshed:
+    # the next launch or wake-up goes to the sign-in screen.
+    staff_session_idle_minutes: int = 20
+    # Web portal: refresh token travels only in this httpOnly cookie (never readable by JS).
+    staff_refresh_cookie_name: str = "ghtrust_staff_rt"
+    # Seconds during which presenting the just-rotated refresh token is treated
+    # as a benign client race (two requests refreshing at once) rather than theft.
+    refresh_token_reuse_grace_seconds: int = 30
+
+    # Serve /docs, /redoc and /openapi.json. Independent of DEBUG so staging can
+    # publish the contract for the mobile team without enabling debug behaviour.
+    enable_api_docs: bool = False
+
+    # Number of reverse proxies in front of the API that append to
+    # X-Forwarded-For. 0 = trust nothing and use the socket peer address.
+    # Set to 1 behind a single load balancer. Getting this wrong lets clients
+    # spoof their IP and evade per-IP rate limits.
+    trusted_proxy_count: int = 0
+
+    # SMS OTP delivery: "" (none), "termii" or "africastalking". With
+    # SMS_MOCK=false and no provider, OTP sends fail loudly instead of silently.
+    sms_provider: str = ""
+
+    # Mobile app remote config (GET /api/v1/app/config) and version gate.
+    app_min_version_ios: str = "1.0.0"
+    app_min_version_android: str = "1.0.0"
+    app_latest_version_ios: str = ""
+    app_latest_version_android: str = ""
+    maintenance_mode: bool = False
+    maintenance_message: str = (
+        "GH Trust is undergoing scheduled maintenance. Please try again shortly."
+    )
+    support_phone: str = ""
+    support_email: str = ""
+    # Comma-separated optional modules shown in the app: wallet, savings,
+    # investments, contributions, food_basket. Loans are always on.
+    feature_flags: str = ""
 
     # Dojah KYC
     dojah_base_url: str = "https://api.dojah.io"
@@ -30,7 +80,7 @@ class Settings(BaseSettings):
     dojah_secret_key: str = ""
     dojah_mock: bool = True  # Use sandbox mock when keys missing or mock=true
 
-    # Payment rail: monnify (default), paystack, or zest
+    # Payment rail: monnify (default), stanbic, paystack, or zest
     payment_provider: str = "monnify"
 
     # Zest Payments (https://www.zestpayment.com/developers)
@@ -54,6 +104,17 @@ class Settings(BaseSettings):
     monnify_mock: bool = True
     monnify_webhook_ip_check: bool = False
 
+    # Stanbic IBTC bank partner (https://developer.stanbicibtc.com/sandbox/)
+    # Contract unconfirmed — see app/integrations/stanbic/constants.py
+    stanbic_base_url: str = "https://api.sandbox.stanbicibtc.com"
+    stanbic_token_url: str = ""  # set for OAuth2 client-credentials; blank = IBM key pair
+    stanbic_client_id: str = ""
+    stanbic_client_secret: str = ""
+    stanbic_merchant_id: str = ""
+    stanbic_settlement_account_number: str = ""
+    stanbic_webhook_secret: str = ""
+    stanbic_mock: bool = True
+
     # Paystack (legacy / optional — https://paystack.com/docs/api/)
     paystack_base_url: str = "https://api.paystack.co"
     paystack_secret_key: str = ""
@@ -75,6 +136,8 @@ class Settings(BaseSettings):
     rate_limit_otp_send_per_ip_hour: int = 10
     rate_limit_otp_verify_per_ip_hour: int = 20
     rate_limit_login_request_per_phone_15min: int = 5
+    # Every API request, per client IP (webhooks and health checks exempt).
+    rate_limit_api_per_ip_minute: int = 300
 
     postgres_host: str = "localhost"
     postgres_port: int = 5432
@@ -82,6 +145,11 @@ class Settings(BaseSettings):
     postgres_password: str = "ghtrust_secret"
     postgres_db: str = "ghtrust_mfb"
     database_url: str | None = None
+    # Connection pool per API process: total connections ≈ workers × (size + overflow).
+    db_pool_size: int = 10
+    db_max_overflow: int = 10
+    db_pool_recycle_seconds: int = 1800  # drop connections before proxies/idle timeouts kill them
+    db_statement_timeout_ms: int = 15000  # no single query may hold a connection longer than this
 
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
@@ -92,11 +160,64 @@ class Settings(BaseSettings):
 
     upload_dir: str = "uploads"
     max_upload_size_mb: int = 10
+    # JSON bodies above this are refused before parsing (uploads use max_upload_size_mb).
+    max_json_body_kb: int = 256
 
-    # Seeded super admin (first staff)
-    seed_super_admin_name: str = "Divine Obinali"
-    seed_super_admin_email: str = "admin@ghtrust.com"
-    seed_super_admin_phone: str = "08107891549"
+    # Error tracking. Empty = disabled. Events carry no request bodies or PII.
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.0
+
+    # Seeded super admin (first staff). No defaults: scripts/seed.py refuses to
+    # run until these are set, so no real person's details live in source.
+    seed_super_admin_name: str = ""
+    seed_super_admin_email: str = ""
+    seed_super_admin_phone: str = ""
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.lower() in {"production", "prod"}
+
+    def production_config_errors(self) -> list[str]:
+        """Misconfigurations that must block a production boot."""
+        errors: list[str] = []
+        if not self.is_production:
+            return errors
+        if self.secret_key in _INSECURE_SECRETS or len(self.secret_key) < 32:
+            errors.append("SECRET_KEY is a default/placeholder or shorter than 32 characters")
+        if self.debug:
+            errors.append("DEBUG must be false")
+        if self.sms_mock:
+            errors.append("SMS_MOCK must be false (customers would never receive OTPs)")
+        elif not self.sms_provider:
+            errors.append("SMS_PROVIDER must be set when SMS_MOCK=false")
+        if self.dojah_mock or not self.dojah_enabled:
+            errors.append("Dojah must be live: set DOJAH_APP_ID, DOJAH_SECRET_KEY and DOJAH_MOCK=false")
+        if not self.payment_rail_enabled:
+            errors.append(
+                f"Payment provider '{self.active_payment_provider}' is in mock mode or missing credentials"
+            )
+        if not self.active_webhook_secret:
+            errors.append(
+                f"Webhook signing secret for '{self.active_payment_provider}' is not configured"
+            )
+        if any("localhost" in o or "127.0.0.1" in o for o in self.cors_origin_list):
+            errors.append("CORS_ORIGINS contains localhost")
+        if any(not o.startswith("https://") for o in self.cors_origin_list):
+            errors.append("CORS_ORIGINS must all be https:// (the staff refresh cookie is Secure)")
+        if self.enable_api_docs:
+            errors.append("ENABLE_API_DOCS must be false (publishes the full API surface)")
+        return errors
+
+    @property
+    def active_webhook_secret(self) -> str:
+        provider = self.active_payment_provider
+        if provider == "paystack":
+            return self.paystack_secret_key
+        if provider == "zest":
+            return self.zest_secret_key
+        if provider == "stanbic":
+            return self.stanbic_webhook_secret
+        return self.monnify_secret_key
 
     @property
     def rate_limits_active(self) -> bool:
@@ -139,6 +260,10 @@ class Settings(BaseSettings):
         )
 
     @property
+    def stanbic_enabled(self) -> bool:
+        return bool(self.stanbic_client_id and self.stanbic_client_secret) and not self.stanbic_mock
+
+    @property
     def zest_enabled(self) -> bool:
         return bool(self.zest_public_key and self.zest_secret_key) and not self.zest_mock
 
@@ -153,6 +278,8 @@ class Settings(BaseSettings):
             return self.paystack_enabled
         if provider == "zest":
             return self.zest_enabled
+        if provider == "stanbic":
+            return self.stanbic_enabled
         return self.monnify_enabled
 
 

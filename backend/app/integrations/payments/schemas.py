@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.integrations.retry import TransientError
+
 
 class PaymentRailError(Exception):
     def __init__(self, message: str, status_code: int = 502, provider_code: str | None = None):
@@ -10,6 +12,15 @@ class PaymentRailError(Exception):
         self.status_code = status_code
         self.provider_code = provider_code
         super().__init__(message)
+
+    @property
+    def outcome_unknown(self) -> bool:
+        """True when a state-changing call may have succeeded provider-side."""
+        return isinstance(self, TransientError)
+
+
+class TransientRailError(PaymentRailError, TransientError):
+    """Transport failure or provider 5xx — retried, and outcome unknown."""
 
 
 class ReservedAccountResult(BaseModel):

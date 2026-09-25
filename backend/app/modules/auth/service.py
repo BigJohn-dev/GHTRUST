@@ -10,17 +10,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.rate_limit import OtpService, RateLimiter
-from app.core.security import create_access_token
+from app.core.errors import AppError, ErrorCode
 from app.integrations.dojah.client import DojahClient
 from app.integrations.dojah.schemas import DojahError
+from app.modules.auth.models import SubjectType
 from app.modules.auth.schemas import (
     AuthTokenResponse,
-    BvnRegisterRequest,
     CustomerProfileResponse,
+    DeviceInfo,
     OtpSentResponse,
-    PhoneLoginRequest,
-    VerifyOtpRequest,
+    SessionResponse,
+    TokenPair,
 )
+from app.modules.auth.session_service import RequestMeta, SessionService
 from app.modules.users.models import Customer, CustomerStatus
 
 logger = structlog.get_logger()
@@ -61,14 +63,15 @@ class AuthService:
         existing = await self.db.execute(select(Customer).where(Customer.bvn == bvn))
         customer = existing.scalar_one_or_none()
         if customer and customer.status == CustomerStatus.ACTIVE:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this BVN already exists. Please login.")
+            raise AppError(status.HTTP_409_CONFLICT, ErrorCode.ACCOUNT_EXISTS, "An account with this BVN already exists. Please login.")
         if customer and customer.phone_verified:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Account already verified. Please login with your phone number.")
+            raise AppError(status.HTTP_409_CONFLICT, ErrorCode.ACCOUNT_EXISTS, "Account already verified. Please login with your phone number.")
 
         try:
             entity = await self.dojah.lookup_bvn_advanced(bvn)
         except DojahError as e:
-            raise HTTPException(status_code=e.status_code, detail=e.message) from e
+            code = ErrorCode.BVN_NOT_FOUND if e.status_code == 404 else ErrorCode.KYC_UNAVAILABLE
+            raise AppError(e.status_code, code, e.message) from e
 
         phone = Customer.normalize_phone(entity.phone_number1)
 
@@ -124,9 +127,16 @@ class AuthService:
             purpose="registration",
         )
 
-    async def verify_registration_otp(self, bvn: str, otp: str, *, ip: str) -> AuthTokenResponse:
+    async def verify_registration_otp(
+        self,
+        bvn: str,
+        otp: str,
+        *,
+        meta: RequestMeta,
+        device: DeviceInfo | None = None,
+    ) -> AuthTokenResponse:
         bvn = _validate_bvn(bvn)
-        await RateLimiter(self.redis).check_otp_verify(ip)
+        await RateLimiter(self.redis).check_otp_verify(meta.ip or "unknown")
         await self.otp.verify("register", bvn, otp)
 
         result = await self.db.execute(select(Customer).where(Customer.bvn == bvn))
@@ -135,7 +145,7 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found. Start again with your BVN.")
 
         if customer.watch_listed and customer.watch_listed.upper() == "YES":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account cannot be opened at this time. Please visit a branch.")
+            raise AppError(status.HTTP_403_FORBIDDEN, ErrorCode.ACCOUNT_RESTRICTED, "Account cannot be opened at this time. Please visit a branch.")
 
         customer.status = CustomerStatus.ACTIVE
         customer.phone_verified = True
@@ -146,12 +156,7 @@ class AuthService:
 
         await WalletService(self.db).provision_paystack(customer)
 
-        token = create_access_token(customer.id, customer.phone_primary)
-        return AuthTokenResponse(
-            access_token=token,
-            token_type="bearer",
-            customer=CustomerProfileResponse.from_customer(customer),
-        )
+        return await self._issue_tokens(customer, meta=meta, device=device)
 
     async def resend_registration_otp(self, bvn: str, *, ip: str) -> OtpSentResponse:
         bvn = _validate_bvn(bvn)
@@ -201,9 +206,16 @@ class AuthService:
             purpose="login",
         )
 
-    async def verify_login_otp(self, phone: str, otp: str, *, ip: str) -> AuthTokenResponse:
+    async def verify_login_otp(
+        self,
+        phone: str,
+        otp: str,
+        *,
+        meta: RequestMeta,
+        device: DeviceInfo | None = None,
+    ) -> AuthTokenResponse:
         normalized = Customer.normalize_phone(phone)
-        await RateLimiter(self.redis).check_otp_verify(ip)
+        await RateLimiter(self.redis).check_otp_verify(meta.ip or "unknown")
         await self.otp.verify("login", normalized, otp)
 
         result = await self.db.execute(
@@ -214,17 +226,83 @@ class AuthService:
         )
         customer = result.scalar_one_or_none()
         if not customer:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
+            raise AppError(status.HTTP_401_UNAUTHORIZED, "UNAUTHENTICATED", "Invalid credentials.")
 
         customer.last_login_at = datetime.now(timezone.utc)
         await self.db.flush()
-
-        token = create_access_token(customer.id, customer.phone_primary)
-        return AuthTokenResponse(
-            access_token=token,
-            token_type="bearer",
-            customer=CustomerProfileResponse.from_customer(customer),
-        )
+        return await self._issue_tokens(customer, meta=meta, device=device)
 
     async def resend_login_otp(self, phone: str, *, ip: str) -> OtpSentResponse:
         return await self.request_login_otp(phone, ip=ip)
+
+    # -- Sessions -------------------------------------------------------------
+
+    async def _issue_tokens(
+        self, customer: Customer, *, meta: RequestMeta, device: DeviceInfo | None
+    ) -> AuthTokenResponse:
+        pair = await SessionService(self.db).issue(
+            subject_type=SubjectType.CUSTOMER,
+            subject_id=customer.id,
+            phone=customer.phone_primary,
+            device=device,
+            meta=meta,
+        )
+        return AuthTokenResponse(
+            **pair.model_dump(), customer=CustomerProfileResponse.from_customer(customer)
+        )
+
+    async def refresh(self, refresh_token: str, *, meta: RequestMeta) -> TokenPair:
+        await RateLimiter(self.redis).check_refresh(meta.ip or "unknown")
+        sessions = SessionService(self.db)
+        session, new_refresh = await sessions.rotate(
+            refresh_token, subject_type=SubjectType.CUSTOMER, meta=meta
+        )
+        customer = await self.db.get(Customer, session.subject_id)
+        if not customer or customer.status != CustomerStatus.ACTIVE:
+            await sessions.revoke(session, reason="account_inactive")
+            await self.db.commit()
+            raise AppError(
+                status.HTTP_401_UNAUTHORIZED,
+                ErrorCode.ACCOUNT_INACTIVE,
+                "Account not found or inactive",
+            )
+        return sessions.pair_for(session, new_refresh, phone=customer.phone_primary)
+
+    async def logout(self, customer: Customer, session_id: str, *, everywhere: bool = False) -> None:
+        sessions = SessionService(self.db)
+        if everywhere:
+            await sessions.revoke_all(
+                subject_type=SubjectType.CUSTOMER, subject_id=customer.id, reason="logout_all"
+            )
+            return
+        session = await sessions.get_owned(
+            session_id, subject_type=SubjectType.CUSTOMER, subject_id=customer.id
+        )
+        await sessions.revoke(session, reason="logout")
+
+    async def list_sessions(self, customer: Customer, current_session_id: str) -> list[SessionResponse]:
+        active = await SessionService(self.db).list_active(
+            subject_type=SubjectType.CUSTOMER, subject_id=customer.id
+        )
+        return [
+            SessionResponse(
+                id=s.id,
+                device_id=s.device_id,
+                device_name=s.device_name,
+                platform=s.platform,
+                app_version=s.app_version,
+                ip_address=s.ip_address,
+                created_at=s.created_at,
+                last_used_at=s.last_used_at,
+                expires_at=s.expires_at,
+                current=s.id == current_session_id,
+            )
+            for s in active
+        ]
+
+    async def revoke_session(self, customer: Customer, session_id: str) -> None:
+        sessions = SessionService(self.db)
+        session = await sessions.get_owned(
+            session_id, subject_type=SubjectType.CUSTOMER, subject_id=customer.id
+        )
+        await sessions.revoke(session, reason="revoked_by_user")

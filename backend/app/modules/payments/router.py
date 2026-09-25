@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header
 
 from app.core.deps import CurrentCustomer, DbSession
 from app.modules.payments.ledger_service import LedgerError, raise_ledger_http
@@ -52,11 +52,19 @@ async def update_payout_account(
     }
 
 
-@router.post("/withdraw", response_model=WithdrawalResponse)
+@router.post(
+    "/withdraw",
+    response_model=WithdrawalResponse,
+    description=(
+        "Requires an `Idempotency-Key` header: a retried request with the same key "
+        "returns the original withdrawal instead of creating a second one."
+    ),
+)
 async def request_withdrawal(
     payload: WithdrawRequest,
     customer: CurrentCustomer,
     db: DbSession,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=64),
 ) -> WithdrawalResponse:
     try:
         withdrawal = await WalletService(db).request_withdrawal(customer, payload.amount)

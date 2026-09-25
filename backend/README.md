@@ -1,192 +1,122 @@
 # GH Trust MFB — Backend API
 
-FastAPI **modular monolith** for GH Trust International Ltd microfinance platform.
-
-## Architecture recommendation
-
-| Approach | Verdict |
-|----------|---------|
-| **Modular monolith** (this scaffold) | **Recommended for Phase 1–2** — one deployable API, domain modules, shared Postgres |
-| Microservices | Defer until you hit scale/regulatory isolation needs (payments, core banking) |
-| BullMQ | **Node.js only** — this stack uses **Celery + Redis** (Python equivalent) |
+FastAPI modular monolith. Each domain module under `app/modules/` follows
+`models → schemas → service → router`; external providers live under
+`app/integrations/`.
 
 ```
-┌─────────────┐     ┌──────────────────────────────────────────┐
-│  Next.js    │────▶│  FastAPI (modular monolith)              │
-│  Frontend   │     │  ┌────────┐ ┌──────┐ ┌──────────────┐  │
-└─────────────┘     │  │ Savings│ │ Loans│ │ Investments  │  │
-                    │  └────────┘ └──────┘ └──────────────┘  │
-                    │  ┌─────────────┐ ┌─────────────────┐  │
-                    │  │Contributions│ │ Food Basket     │  │
-                    │  └─────────────┘ └─────────────────┘  │
-                    └───────┬─────────────────┬────────────┘
-                            │                 │
-                    ┌───────▼──────┐   ┌──────▼──────┐
-                    │  PostgreSQL  │   │    Redis    │
-                    │  (primary)   │   │ cache+queue │
-                    └──────────────┘   └──────┬──────┘
-                                              │
-                                    ┌─────────▼─────────┐
-                                    │ Celery Worker/Beat │
-                                    │ (background jobs)  │
-                                    └───────────────────┘
+app/
+  main.py              app factory, middleware, production config guard
+  core/                config, db, redis, security (JWT), errors, middleware,
+                       idempotency, rate limiting + OTP, celery
+  integrations/        dojah, monnify, paystack, zest, stanbic, sms, retry policy
+  modules/
+    auth/              customer auth, device sessions, refresh-token rotation
+    admin/             staff auth, roles & permissions, settings
+    users/             customers
+    loans/             products, applications, workflows, servicing (schedules, repayments)
+    payments/          wallet, ledger, disbursement, webhooks, worker jobs
+    app_config/        mobile remote config
+    savings/ investments/ contributions/ food_basket/   (read-only for now)
+  workers/tasks.py     Celery entry points
+alembic/versions/      migrations — the only source of schema
+tests/                 unit + integration (SQLite + fakeredis)
 ```
 
-### Why Redis + Celery?
-
-| Job | Queue | Schedule |
-|-----|-------|----------|
-| Savings interest accrual | `scheduled` | Daily 00:30 WAT |
-| Loan payment reminders | `notifications` | Daily 08:00 |
-| Pending withdrawals | `transactions` | Every 15 min |
-| Payment reconciliation | `reconciliation` | Every 2 hours |
-| Food basket fulfillment | `scheduled` | Daily 09:00 |
-
-Redis DB allocation: `0` cache, `1` Celery broker, `2` Celery results.
-
-## Project structure
-
-```
-backend/
-├── app/
-│   ├── main.py                 # FastAPI entry
-│   ├── core/                   # config, db, redis, celery
-│   ├── api/v1/                 # route aggregation
-│   ├── modules/
-│   │   ├── savings/            # Yearly Thrift, Regular, Fixed
-│   │   ├── loans/              # Business, Payday, drafts, schedules
-│   │   ├── investments/        # Plans, calculator, portfolios
-│   │   ├── contributions/      # Group thrift / Ajo
-│   │   ├── food_basket/        # Subscription plans & deliveries
-│   │   └── users/              # Customer model (auth TBD)
-│   └── workers/                # Celery tasks
-├── alembic/                    # DB migrations
-├── scripts/seed.py             # Default products
-├── docker-compose.yml
-└── Dockerfile
-```
-
-Each module follows: `models.py` → `schemas.py` → `service.py` → `router.py`
-
-## Quick start (Docker)
+## Run locally
 
 ```bash
-cd backend
-cp .env.example .env
-docker compose up -d --build
+cp .env.example .env    # set SEED_SUPER_ADMIN_NAME / _EMAIL / _PHONE
+make bootstrap          # docker Postgres + Redis, alembic upgrade head, seed
+make dev                # uvicorn --reload on :8000
+make seed-demo          # optional: 10 submitted applications for the admin queue
+make worker / make beat # Celery (separate terminals)
 ```
 
-Services:
-- **API:** http://localhost:8000
-- **Swagger:** http://localhost:8000/docs
-- **Health:** http://localhost:8000/api/v1/health
-- **Postgres:** localhost:5432
-- **Redis:** localhost:6379
+Docs: http://localhost:8000/docs (`ENABLE_API_DOCS=true`). Sandbox BVN
+`22222222222` with `DOJAH_MOCK=true`; OTPs are logged with `SMS_MOCK=true`.
 
-### Seed default products
+## Schema changes
+
+Alembic owns the schema; nothing calls `create_all`.
 
 ```bash
-docker compose exec api python scripts/seed.py
+make migration msg="describe change"   # autogenerate, then REVIEW the file
+make migrate-local                     # apply
+make migration-check                   # fails if models and migrations disagree (CI runs this)
 ```
 
-### Migrations
+Autogenerate does not detect new enum *values* or type conversions — add those
+by hand (see `011_loan_servicing.py` for the pattern).
+
+## Tests
 
 ```bash
-docker compose exec api alembic revision --autogenerate -m "initial schema"
-docker compose exec api alembic upgrade head
+make test        # or: pytest -q
+make test-cov
+ruff check app scripts tests alembic
 ```
 
-## Local development (without Docker)
+## Auth
+
+Passwordless. Customers: BVN (Dojah BVN Advanced) + SMS OTP to register, phone +
+OTP to sign in. Staff: phone + OTP.
+
+- **Access token**: 15 min (customers) / 30 min (staff) HS256 JWT with `typ`
+  (customer|staff — each rejects the other) and `sid` (session id).
+- **Refresh token**: opaque, stored hashed in `auth_sessions`, rotated on every
+  use; replaying a used one revokes the session. One session per device.
+- Every request checks the session is live, so logout, "sign out other devices"
+  and staff deactivation take effect immediately.
+- RBAC: permissions on roles (`app/modules/admin/permissions.py`); workflow
+  stages additionally bind to a role.
+
+## Money safety
+
+- **Ledger** (`payments/ledger_service.py`): double-entry, every journal
+  balanced, idempotency key per journal (race-safe via savepoint).
+- **Provider calls**: only transient failures (network, 5xx) are retried, and
+  the provider's own error type always surfaces (`integrations/retry.py`).
+- **Disbursement / withdrawal**: the attempt is committed *before* the bank is
+  called. A rejection marks it failed (retryable); a timeout leaves it pending
+  for reconciliation — never a second payout.
+- **Webhooks**: signature required outside dev; handler failure → rollback +
+  500 so the provider retries; events de-duplicated.
+- **Reconciliation** (every 20 min) resolves pending transfers through the same
+  code paths as the webhooks.
+- **Idempotency-Key** header replays the original response for retried
+  mutations (required on withdrawals and wallet repayments).
+
+## Background jobs (Celery beat, Africa/Lagos)
+
+| Job | Schedule | State |
+|---|---|---|
+| `refresh_loan_statuses` | 00:15 daily | overdue marking, next due date |
+| `process_pending_withdrawals` | every 15 min | live |
+| `reconcile_payments` | every 20 min | live |
+| `send_loan_reminders` | 08:00 | blocked on SMS/push provider |
+| `accrue_savings_interest`, `food_basket_fulfillment_check` | daily | modules not live |
+
+Each job opens its own DB engine (Celery runs each task on a new event loop).
+
+## Deploy
 
 ```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env: POSTGRES_HOST=localhost, REDIS_URL=redis://localhost:6379/0
-
-uvicorn app.main:app --reload --port 8000
-
-# Separate terminals:
-celery -A app.core.celery_app.celery_app worker -l info -Q scheduled,notifications,transactions,reconciliation,celery
-celery -A app.core.celery_app.celery_app beat -l info
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 ```
 
-## Authentication (BVN + OTP)
+Runs migrations once, then API + worker + beat; non-root image with healthcheck;
+uploads on a named volume. With `APP_ENV=production` the API **refuses to start**
+on insecure config (default secret, `DEBUG`, mock SMS/KYC/rail, missing webhook
+secret, localhost CORS) and lists every problem. Behind a load balancer set
+`TRUSTED_PROXY_COUNT=1` so per-IP rate limits see real client IPs.
 
-Passwordless onboarding via **Dojah BVN Advanced** + phone OTP.
+## Provider status
 
-### Flow
-
-```
-Registration                          Login
-───────────                          ─────
-POST /auth/register/bvn              POST /auth/login/request-otp
-  (BVN only)                           (phone number)
-       │                                    │
-       ▼                                    ▼
-  Dojah BVN Advanced                   Send OTP via SMS
-  Create profile (pending)                  │
-       │                                    ▼
-       ▼                              POST /auth/login/verify-otp
-  OTP → BVN phone                           │
-       │                                    ▼
-       ▼                              JWT access token
-POST /auth/register/verify-otp
-       │
-       ▼
-  Account active + JWT
-```
-
-### Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/auth/register/bvn` | Verify BVN via Dojah, create profile, send OTP |
-| POST | `/api/v1/auth/register/verify-otp` | Verify OTP → activate account |
-| POST | `/api/v1/auth/register/resend-otp` | Resend registration OTP |
-| POST | `/api/v1/auth/login/request-otp` | Send login OTP to phone |
-| POST | `/api/v1/auth/login/verify-otp` | Verify OTP → JWT |
-| POST | `/api/v1/auth/login/resend-otp` | Resend login OTP |
-| GET | `/api/v1/auth/me` | Current profile (Bearer token) |
-
-### Sandbox test BVN
-
-Use `22222222222` with `DOJAH_MOCK=true` (default). OTP is logged to console when `SMS_MOCK=true`.
-
-### Rate limits (Redis)
-
-| Action | Limit |
-|--------|-------|
-| BVN lookup | 5/hour per IP, 3/day per BVN |
-| OTP send | 3/15min per phone, 10/hour per IP |
-| OTP verify | 5 attempts per code, 20/hour per IP |
-| Login OTP request | 5/15min per phone |
-
-## API routes (scaffold)
-
-| Module | Prefix | Key endpoints |
-|--------|--------|---------------|
-| Savings | `/api/v1/savings` | `GET /products`, `POST /customers/{id}/accounts` |
-| Loans | `/api/v1/loans` | `GET /applications`, `POST /customers/{id}/applications` |
-| Investments | `/api/v1/investments` | `GET /plans`, `POST /calculator` |
-| Contributions | `/api/v1/contributions` | `GET /groups`, `POST /customers/{id}/contribute` |
-| Food Basket | `/api/v1/food-basket` | `GET /plans`, `POST /customers/{id}/subscribe` |
-
-Write endpoints return `501` until ledger/payment integration is implemented.
-
-## Next phase
-
-- [ ] Auth (JWT + RBAC for admin/customer)
-- [ ] Double-entry ledger module
-- [ ] Wallet & transactions module
-- [ ] Paystack/NIBSS webhook handlers
-- [ ] Connect Next.js frontend to API (replace Zustand mock)
-
-## Monorepo layout
-
-```
-gh-trust-mfb/
-├── src/          # Next.js frontend (dummy data demo)
-└── backend/      # FastAPI API (this project)
-```
+| Provider | Purpose | State |
+|---|---|---|
+| Dojah | BVN Advanced | Integrated; mock until credentials |
+| SMS (Termii / Africa's Talking) | OTP | **Not integrated** — `app/integrations/sms` |
+| Monnify | Default rail | Integrated; mock until credentials |
+| Stanbic IBTC | Bank partner | Adapter scaffolded against our requirements doc; every unconfirmed field marked `TODO(stanbic-spec)` |
+| Paystack / Zest | Alternative rails | Integrated (Zest inbound only) |

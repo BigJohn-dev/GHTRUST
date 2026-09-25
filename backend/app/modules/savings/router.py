@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.core.deps import DbSession
+from app.core.deps import CurrentCustomer, DbSession
 from app.modules.savings.schemas import (
     OpenSavingsAccountRequest,
     SavingsAccountResponse,
@@ -17,20 +17,20 @@ async def list_savings_products(db: DbSession):
     return await SavingsService(db).list_products()
 
 
-@router.get("/customers/{customer_id}/summary", response_model=SavingsSummaryResponse)
-async def get_savings_summary(customer_id: str, db: DbSession):
-    return await SavingsService(db).get_customer_summary(customer_id)
+@router.get("/me", response_model=SavingsSummaryResponse)
+async def get_my_savings(db: DbSession, customer: CurrentCustomer):
+    return await SavingsService(db).get_customer_summary(customer.id)
 
 
 @router.post(
-    "/customers/{customer_id}/accounts",
+    "/me/accounts",
     response_model=SavingsAccountResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def open_savings_account(
-    customer_id: str, payload: OpenSavingsAccountRequest, db: DbSession
+async def open_my_savings_account(
+    payload: OpenSavingsAccountRequest, db: DbSession, customer: CurrentCustomer
 ):
     try:
-        return await SavingsService(db).open_account(customer_id, payload)
+        return await SavingsService(db).open_account(customer.id, payload)
     except NotImplementedError as e:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(e))

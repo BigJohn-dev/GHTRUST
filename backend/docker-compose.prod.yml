@@ -1,0 +1,108 @@
+# Production-shaped stack: no hot reload, no source bind-mounts, database and
+# Redis not published to the host, persistent volume for uploaded documents,
+# migrations run once before the API starts.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+#
+# .env must be a real production config: APP_ENV=production refuses to boot
+# with a default SECRET_KEY, DEBUG=true, mock providers, or missing webhook
+# secrets (see Settings.production_config_errors).
+#
+# For a managed database/Redis, drop the postgres/redis services and point
+# DATABASE_URL / REDIS_URL / CELERY_* at them.
+
+x-app: &app
+  image: ghtrust-backend:latest
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    <<: *app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+
+  api:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads:/app/uploads
+    # Ready = database and Redis reachable (not just "process is up").
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  celery-worker:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info",
+              "-Q", "scheduled,notifications,transactions,reconciliation,celery"]
+    # Tasks are acked late: give a running job time to finish on deploy/restart
+    # (longer than task_time_limit) instead of killing it mid-flight.
+    stop_grace_period: 330s
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_app.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10 | grep -q pong"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+
+  celery-beat:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # Exactly one beat instance, or scheduled jobs run multiple times.
+    command: ["celery", "-A", "app.core.celery_app.celery_app", "beat", "--loglevel=info",
+              "--schedule", "/tmp/celerybeat-schedule"]
+    healthcheck:
+      disable: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:

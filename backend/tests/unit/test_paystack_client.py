@@ -5,9 +5,10 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from tenacity import RetryError
+
 
 from app.integrations.paystack.client import PaystackClient
+from app.integrations.payments.schemas import PaymentRailError
 from app.integrations.paystack.schemas import (
     CreateCustomerRequest,
     CreateTransferRecipientRequest,
@@ -91,10 +92,11 @@ class TestPaystackClient:
 
         with patch("app.integrations.paystack.client.httpx.AsyncClient", return_value=mock_client):
             client = PaystackClient()
-            with pytest.raises(RetryError) as exc:
+            with pytest.raises(PaystackError) as exc:
                 await client.create_customer(CreateCustomerRequest(email="bad"))
-            err = exc.value.last_attempt.exception()
-            assert isinstance(err, PaystackError)
+            # Now also a PaymentRailError, so rail-agnostic handlers catch it.
+            assert isinstance(exc.value, PaymentRailError)
+            assert mock_client.request.await_count == 1
 
     async def test_live_create_recipient(self, monkeypatch):
         monkeypatch.setenv("PAYSTACK_MOCK", "false")

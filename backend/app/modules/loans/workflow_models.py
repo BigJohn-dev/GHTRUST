@@ -2,11 +2,13 @@
 
 import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
@@ -18,6 +20,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.base import StrEnum, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from app.modules.admin.models import Role, Staff
+    from app.modules.loans.models import LoanApplication, LoanProduct
 
 
 class StageDecisionAction(str, enum.Enum):
@@ -119,6 +125,12 @@ class ApplicationStageDecision(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 class ApplicationAuditLog(Base, UUIDPrimaryKeyMixin):
     __tablename__ = "application_audit_logs"
+    __table_args__ = (
+        # Global feed: WHERE actor_type = ? [AND event_type = ?] ORDER BY created_at DESC.
+        Index("ix_audit_logs_actor_type_created_at", "actor_type", "created_at"),
+        # One-view-per-window check: application + event + actor within a time range.
+        Index("ix_audit_logs_app_event_actor_created", "application_id", "event_type", "actor_id", "created_at"),
+    )
 
     application_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("loan_applications.id", ondelete="CASCADE"), index=True

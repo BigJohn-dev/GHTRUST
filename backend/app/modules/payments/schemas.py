@@ -34,7 +34,7 @@ class UpdatePayoutAccountRequest(BaseModel):
     bank_code: str = Field(min_length=3, max_length=10)
     account_number: str = Field(min_length=10, max_length=10)
     account_name: str | None = Field(default=None, max_length=200)
-    bank_name: str | None = None
+    bank_name: str | None = Field(None, max_length=100)
 
     @field_validator("account_number")
     @classmethod

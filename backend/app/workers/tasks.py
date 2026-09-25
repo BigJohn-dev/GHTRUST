@@ -1,45 +1,107 @@
 import asyncio
+import functools
 
+import redis as sync_redis
 import structlog
-from celery.utils.log import get_task_logger
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 from app.core.celery_app import celery_app
-from app.modules.payments.worker_service import run_process_pending_withdrawals, run_reconcile_payments
+from app.core.config import get_settings
+from app.modules.payments.worker_service import (
+    run_process_pending_withdrawals,
+    run_reconcile_payments,
+    run_refresh_loan_statuses,
+)
 
-logger = get_task_logger(__name__)
+logger = structlog.get_logger()
+
+# Transient failures worth retrying (database/cache blips, rail timeouts).
+TRANSIENT = (OperationalError, DBAPIError, ConnectionError, TimeoutError, sync_redis.exceptions.ConnectionError)
+RETRY = {"autoretry_for": TRANSIENT, "retry_backoff": 30, "retry_backoff_max": 600, "retry_jitter": True, "max_retries": 3}
+
+
+def single_flight(name: str, ttl_seconds: int):
+    """Skip a scheduled run while a previous one is still going (Redis lock).
+
+    Beat can fire again before a slow run finishes, and a re-queued task
+    (acks_late) can overlap the original; money-moving jobs must never run twice
+    concurrently. If Redis is unreachable the run is skipped, not risked.
+    """
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            key = f"lock:task:{name}"
+            try:
+                client = sync_redis.Redis.from_url(get_settings().redis_url)
+                acquired = client.set(key, "1", nx=True, ex=ttl_seconds)
+            except sync_redis.exceptions.RedisError:
+                logger.warning("task_skipped", task=name, reason="lock unavailable")
+                return {"status": "skipped", "reason": "lock unavailable"}
+            if not acquired:
+                logger.info("task_skipped", task=name, reason="previous run still in progress")
+                return {"status": "skipped", "reason": "already running"}
+            try:
+                result = fn(*args, **kwargs)
+                client.incr("cache:generation")  # data changed: invalidate cached reads
+                return result
+            finally:
+                try:
+                    client.delete(key)
+                except sync_redis.exceptions.RedisError:
+                    pass  # the TTL releases it
+
+        return wrapper
+
+    return decorator
 
 
 @celery_app.task(name="app.workers.tasks.accrue_savings_interest", bind=True)
 def accrue_savings_interest(self):
-    """Daily interest accrual for savings accounts — runs at 00:30 WAT."""
-    structlog.get_logger().info("task_started", task="accrue_savings_interest")
-    # TODO: iterate active savings accounts, post ledger entries
-    return {"status": "ok", "accounts_processed": 0}
+    """Daily savings interest accrual (00:30 WAT).
+
+    Not implemented: savings accounts cannot be opened yet (POST /savings/me/accounts
+    returns 501), so there is nothing to accrue.
+    """
+    logger.info("task_skipped", task="accrue_savings_interest", reason="savings module not live")
+    return {"status": "skipped", "accounts_processed": 0}
 
 
 @celery_app.task(name="app.workers.tasks.send_loan_reminders", bind=True)
 def send_loan_reminders(self):
-    """SMS/push reminders for loans due in 3 days and overdue."""
-    structlog.get_logger().info("task_started", task="send_loan_reminders")
-    return {"status": "ok", "reminders_sent": 0}
+    """Due-soon / overdue loan reminders.
+
+    Blocked on an SMS or push provider (see app/integrations/sms). The data it
+    needs — loans.next_due_date and overdue installments — is maintained daily
+    by ``refresh_loan_statuses``.
+    """
+    logger.info("task_skipped", task="send_loan_reminders", reason="no SMS/push provider")
+    return {"status": "skipped", "reminders_sent": 0}
 
 
-@celery_app.task(name="app.workers.tasks.process_pending_withdrawals", bind=True)
+@celery_app.task(name="app.workers.tasks.refresh_loan_statuses", bind=True, **RETRY)
+@single_flight("refresh_loan_statuses", ttl_seconds=600)
+def refresh_loan_statuses(self):
+    """Mark overdue installments and roll next_due_date forward for every open loan."""
+    return asyncio.run(run_refresh_loan_statuses())
+
+
+@celery_app.task(name="app.workers.tasks.process_pending_withdrawals", bind=True, **RETRY)
+@single_flight("process_pending_withdrawals", ttl_seconds=600)
 def process_pending_withdrawals(self):
-    """Process queued wallet withdrawals via Paystack transfer."""
-    structlog.get_logger().info("task_started", task="process_pending_withdrawals")
+    """Send held wallet withdrawals to the payment rail."""
     return asyncio.run(run_process_pending_withdrawals())
 
 
-@celery_app.task(name="app.workers.tasks.reconcile_payments", bind=True)
+@celery_app.task(name="app.workers.tasks.reconcile_payments", bind=True, **RETRY)
+@single_flight("reconcile_payments", ttl_seconds=600)
 def reconcile_payments(self):
-    """Match gateway webhooks to internal transactions and requery DVAs."""
-    structlog.get_logger().info("task_started", task="reconcile_payments")
+    """Resolve PENDING transfers/collections by querying the rail (missed webhooks, timeouts)."""
     return asyncio.run(run_reconcile_payments())
 
 
 @celery_app.task(name="app.workers.tasks.food_basket_fulfillment_check", bind=True)
 def food_basket_fulfillment_check(self):
-    """Check upcoming food basket deliveries and notify fulfillment partner."""
-    structlog.get_logger().info("task_started", task="food_basket_fulfillment_check")
-    return {"status": "ok", "deliveries_checked": 0}
+    """Upcoming food basket deliveries. Not implemented: subscriptions return 501."""
+    logger.info("task_skipped", task="food_basket_fulfillment_check", reason="module not live")
+    return {"status": "skipped", "deliveries_checked": 0}

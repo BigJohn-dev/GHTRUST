@@ -8,7 +8,6 @@ from app.modules.savings.schemas import (
     OpenSavingsAccountRequest,
     SavingsAccountResponse,
     SavingsProductResponse,
-    SavingsProductType,
     SavingsSummaryResponse,
 )
 

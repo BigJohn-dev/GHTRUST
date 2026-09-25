@@ -1,4 +1,4 @@
-import enum
+from typing import TYPE_CHECKING
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -7,11 +7,13 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -23,9 +25,21 @@ from app.modules.loans.schemas import (
     ApplicationStatus,
     CollateralCustody,
     DocumentStatus,
+    InstallmentStatus,
+    InterestMethod,
     LoanProductCode,
     LoanStatus,
+    RepaymentChannel,
 )
+
+if TYPE_CHECKING:
+    from app.modules.loans.workflow_models import (
+        ApplicationAuditLog,
+        ApplicationStageDecision,
+        LoanWorkflow,
+        LoanWorkflowStage,
+    )
+
 
 
 class LoanProduct(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -37,6 +51,9 @@ class LoanProduct(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     processing_fee_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("3.00"))
     interest_rate_pct_monthly: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("8.00"))
+    interest_method: Mapped[InterestMethod] = mapped_column(
+        StrEnum(InterestMethod), default=InterestMethod.FLAT, server_default=InterestMethod.FLAT.value
+    )
     max_tenure_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     default_penalty_pct_daily: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     repayment_cadence_options: Mapped[list] = mapped_column(JSON, default=list)
@@ -50,6 +67,11 @@ class LoanProduct(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 class LoanApplication(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "loan_applications"
+    __table_args__ = (
+        # Staff queue: WHERE status = ? ORDER BY created_at DESC, and the unfiltered newest-first list.
+        Index("ix_loan_applications_status_created_at", "status", "created_at"),
+        Index("ix_loan_applications_created_at", "created_at"),
+    )
 
     customer_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("customers.id"), index=True)
     product_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("loan_products.id"), index=True)
@@ -70,6 +92,8 @@ class LoanApplication(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     requested_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     approved_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     repayment_cadence: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Set by staff when confirming terms; falls back to what the customer entered.
+    approved_tenure_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     assigned_officer_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("staff.id"), nullable=True, index=True
@@ -199,30 +223,100 @@ class LoanDraft(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 
 class Loan(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """
+    A booked (disbursed) loan.
+
+    Money fields:
+      principal            amount lent
+      total_interest       interest over the whole schedule
+      total_repayable      principal + total_interest
+      amount_paid          sum of repayments received
+      outstanding          total_repayable - amount_paid (what the customer still owes)
+      principal_outstanding  principal not yet repaid (the ledger receivable)
+      monthly_payment      the regular installment amount (per cadence period;
+                           name kept for API compatibility)
+    """
+
     __tablename__ = "loans"
+    __table_args__ = (Index("ix_loans_status_created_at", "status", "created_at"),)
 
     customer_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("customers.id"), index=True)
-    application_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("loan_applications.id"))
+    application_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("loan_applications.id"), unique=True, nullable=True
+    )
     product_type: Mapped[LoanProductCode] = mapped_column(StrEnum(LoanProductCode))
     principal: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     disbursed_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     outstanding: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    principal_outstanding: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), server_default="0")
+    total_interest: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), server_default="0")
+    total_repayable: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), server_default="0")
+    amount_paid: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), server_default="0")
     interest_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    interest_method: Mapped[InterestMethod] = mapped_column(
+        StrEnum(InterestMethod), default=InterestMethod.FLAT, server_default=InterestMethod.FLAT.value
+    )
+    repayment_cadence: Mapped[str] = mapped_column(String(30), default="monthly", server_default="monthly")
+    installments_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     tenure_months: Mapped[int] = mapped_column(Integer)
     monthly_payment: Mapped[Decimal] = mapped_column(Numeric(18, 2))
-    status: Mapped[LoanStatus] = mapped_column(StrEnum(LoanStatus), default=LoanStatus.ACTIVE)
+    status: Mapped[LoanStatus] = mapped_column(StrEnum(LoanStatus), default=LoanStatus.ACTIVE, index=True)
     disbursement_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    next_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    next_due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     branch: Mapped[str] = mapped_column(String(100))
+
+    schedule: Mapped[list["RepaymentSchedule"]] = relationship(
+        "RepaymentSchedule",
+        order_by="RepaymentSchedule.installment",
+        cascade="all, delete-orphan",
+        lazy="raise",
+    )
 
 
 class RepaymentSchedule(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "repayment_schedules"
+    __table_args__ = (UniqueConstraint("loan_id", "installment", name="uq_repayment_schedule_installment"),)
 
     loan_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("loans.id"), index=True)
     installment: Mapped[int] = mapped_column(Integer)
-    due_date: Mapped[date] = mapped_column(Date)
+    due_date: Mapped[date] = mapped_column(Date, index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     principal: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     interest: Mapped[Decimal] = mapped_column(Numeric(18, 2))
-    status: Mapped[str] = mapped_column(String(20), default="pending")
+    principal_paid: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), server_default="0")
+    interest_paid: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), server_default="0")
+    status: Mapped[InstallmentStatus] = mapped_column(
+        StrEnum(InstallmentStatus), default=InstallmentStatus.PENDING, server_default=InstallmentStatus.PENDING.value
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    @property
+    def amount_due(self) -> Decimal:
+        return (self.principal - self.principal_paid) + (self.interest - self.interest_paid)
+
+
+class LoanRepayment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """A payment received against a loan, allocated across installments."""
+
+    __tablename__ = "loan_repayments"
+    __table_args__ = (UniqueConstraint("reference", name="uq_loan_repayments_reference"),)
+
+    loan_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("loans.id"), index=True)
+    customer_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("customers.id"), index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    principal_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    interest_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    channel: Mapped[RepaymentChannel] = mapped_column(StrEnum(RepaymentChannel))
+    # Idempotency key: bank/teller reference for staff-recorded payments, or a
+    # client Idempotency-Key for in-app wallet repayments.
+    reference: Mapped[str] = mapped_column(String(128))
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    recorded_by_staff_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("staff.id"), nullable=True
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    allocation: Mapped[list] = mapped_column(JSON, default=list)
+    journal_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("ledger_journals.id"), nullable=True
+    )

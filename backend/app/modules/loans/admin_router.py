@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import FileResponse
 
 from app.core.deps import DbSession
@@ -9,13 +9,20 @@ from app.modules.admin.permissions import (
     LOAN_CONFIGURE_WORKFLOW,
     LOAN_DISBURSE,
     LOAN_READ,
+    LOAN_RECORD_REPAYMENT,
     LOAN_REVIEW,
     LOAN_VERIFY_DOCS,
 )
-from app.modules.loans.audit_service import ApplicationAuditService
 from app.modules.loans.schemas import (
     ApplicationStatus,
     ApplicationStatusUpdate,
+    LoanDetailResponse,
+    LoanRepaymentResponse,
+    LoanResponse,
+    LoanStatus,
+    ManualDisbursementRequest,
+    Page,
+    RecordRepaymentRequest,
     LoanApplicationDetailResponse,
     LoanApplicationSummaryResponse,
     LoanProductResponse,
@@ -23,6 +30,12 @@ from app.modules.loans.schemas import (
     VerifyDocumentRequest,
 )
 from app.modules.loans.service import LoanService
+from app.modules.loans.servicing import (
+    LoanServicingService,
+    list_loans,
+    loan_detail,
+    loan_responses,
+)
 from app.modules.loans.workflow_schemas import (
     ApplicationWorkflowStateResponse,
     AuditLogResponse,
@@ -31,9 +44,7 @@ from app.modules.loans.workflow_schemas import (
     StageActionRequest,
     UpdateWorkflowStagesRequest,
     WorkflowResponse,
-    WorkflowStageResponse,
 )
-from app.modules.loans.workflow_service import WorkflowService
 
 router = APIRouter(prefix="/admin/loans", tags=["Admin — Loans"])
 
@@ -56,14 +67,26 @@ async def admin_toggle_product(
     return await LoanService(db).set_product_active(product_code, is_active=payload.is_active)
 
 
-@router.get("/applications", response_model=list[LoanApplicationSummaryResponse])
+@router.get(
+    "/applications",
+    response_model=list[LoanApplicationSummaryResponse],
+    description="Newest first. Total count is returned in the `X-Total-Count` header.",
+)
 async def admin_list_applications(
+    response: Response,
     db: DbSession,
-    status: ApplicationStatus | None = Query(default=None),
+    status_filter: ApplicationStatus | None = Query(default=None, alias="status"),
     product_code: str | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=100, description="Applicant name, phone, account or exact BVN"),
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     _: Staff = Depends(require_permission(LOAN_READ)),
 ):
-    return await LoanService(db).list_applications(status=status, product_code=product_code)
+    items, total = await LoanService(db).list_applications_page(
+        status=status_filter, product_code=product_code, search=search, limit=limit, offset=offset
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return items
 
 
 @router.get("/applications/{application_id}", response_model=LoanApplicationDetailResponse)
@@ -123,15 +146,97 @@ async def admin_disburse_application(
     return await LoanService(db).disburse_application(application_id, staff, payload, ip=ip)
 
 
+@router.post(
+    "/applications/{application_id}/disbursements/manual",
+    response_model=LoanApplicationDetailResponse,
+    summary="Record a manual disbursement",
+    description=(
+        "For funds sent outside the integrated payment rail (bank app, branch). "
+        "Marks the application disbursed, posts the ledger and books the loan with "
+        "its repayment schedule."
+    ),
+)
+async def admin_record_manual_disbursement(
+    application_id: str,
+    payload: ManualDisbursementRequest,
+    request: Request,
+    db: DbSession,
+    staff: CurrentStaff,
+    _: Staff = Depends(require_permission(LOAN_DISBURSE)),
+):
+    return await LoanService(db).record_manual_disbursement(
+        application_id, staff, payload, ip=get_client_ip(request)
+    )
+
+
+# ── Loan book ──
+
+
+@router.get("/loans", response_model=Page[LoanResponse], summary="Loan book")
+async def admin_list_loans(
+    db: DbSession,
+    status_filter: LoanStatus | None = Query(default=None, alias="status"),
+    customer_id: str | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=100, description="Borrower name, phone, account or exact BVN"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    _: Staff = Depends(require_permission(LOAN_READ)),
+):
+    rows, total = await list_loans(
+        db, customer_id=customer_id, status_filter=status_filter, search=search, limit=limit, offset=offset
+    )
+    return Page[LoanResponse](
+        items=await loan_responses(db, rows), total=total, limit=limit, offset=offset
+    )
+
+
+@router.get("/loans/{loan_id}", response_model=LoanDetailResponse, summary="Loan with schedule")
+async def admin_get_loan(
+    loan_id: str,
+    db: DbSession,
+    _: Staff = Depends(require_permission(LOAN_READ)),
+):
+    return await loan_detail(db, loan_id)
+
+
+@router.post(
+    "/loans/{loan_id}/repayments",
+    response_model=LoanRepaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a repayment received outside the app",
+    description="Re-sending the same `reference` returns the original repayment instead of posting twice.",
+)
+async def admin_record_repayment(
+    loan_id: str,
+    payload: RecordRepaymentRequest,
+    db: DbSession,
+    staff: CurrentStaff,
+    _: Staff = Depends(require_permission(LOAN_RECORD_REPAYMENT)),
+):
+    repayment = await LoanServicingService(db).record_repayment(
+        loan_id,
+        amount=payload.amount,
+        channel=payload.channel,
+        reference=f"staff_{payload.reference.strip()}",
+        paid_at=payload.paid_at,
+        staff_id=staff.id,
+        note=payload.note,
+    )
+    return LoanRepaymentResponse.model_validate(repayment)
+
+
 @router.patch("/applications/{application_id}/status", response_model=LoanApplicationDetailResponse)
 async def admin_update_application_status(
     application_id: str,
     payload: ApplicationStatusUpdate,
+    request: Request,
     db: DbSession,
     staff: CurrentStaff,
     __: Staff = Depends(require_permission(LOAN_REVIEW)),
 ):
-    return await LoanService(db).update_application_status(application_id, payload, staff_id=staff.id)
+    return await LoanService(db).update_application_status(
+        application_id, payload, staff=staff, ip=get_client_ip(request)
+    )
 
 
 @router.patch(

@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
+from app.integrations.retry import transient_retry
 
 from app.core.config import settings
 from app.integrations.payments.schemas import (
@@ -16,6 +16,7 @@ from app.integrations.payments.schemas import (
     ReservedAccountResult,
     ResolvedAccount,
     TransactionVerification,
+    TransientRailError,
     WalletBalanceResult,
 )
 from app.integrations.zest.constants import (
@@ -155,7 +156,7 @@ class ZestClient:
         if errors:
             raise PaymentRailError(str(errors[0]), status_code=502)
 
-    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+    @transient_retry()
     async def _request(
         self,
         method: str,
@@ -168,14 +169,18 @@ class ZestClient:
             raise PaymentRailError("Mock mode — use explicit mock handlers", status_code=502)
 
         url = f"{self.base_url}{path}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.request(
-                method,
-                url,
-                headers=self._headers(),
-                params=params,
-                json=json,
-            )
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.request(
+                    method,
+                    url,
+                    headers=self._headers(),
+                    params=params,
+                    json=json,
+                )
+        except httpx.HTTPError as exc:
+            logger.warning("zest_transport_error", method=method, path=path, error=str(exc))
+            raise TransientRailError("Zest unreachable. Please try again.", status_code=502) from exc
 
         if response.status_code >= 500:
             logger.error(
@@ -185,7 +190,7 @@ class ZestClient:
                 status=response.status_code,
                 body=response.text[:300],
             )
-            raise PaymentRailError("Zest service unavailable. Please try again.", status_code=502)
+            raise TransientRailError("Zest service unavailable. Please try again.", status_code=502)
 
         try:
             payload = response.json()

@@ -9,7 +9,7 @@ class WorkflowStageInput(BaseModel):
     name: str = Field(..., min_length=2, max_length=120)
     slug: str | None = Field(None, max_length=80)
     description: str | None = Field(None, max_length=255)
-    approver_role_id: str
+    approver_role_id: str = Field(..., max_length=36)
 
 
 class WorkflowStageResponse(BaseModel):

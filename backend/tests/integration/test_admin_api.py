@@ -1,6 +1,6 @@
 """Integration tests for admin staff auth and RBAC."""
 
-from app.modules.admin.permissions import ROLE_CREATE, STAFF_CREATE, STAFF_READ
+from app.modules.admin.permissions import ROLE_CREATE, STAFF_READ
 from tests.conftest import TEST_ADMIN_PHONE, TEST_OTP
 
 

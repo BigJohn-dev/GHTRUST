@@ -31,9 +31,9 @@ class FoodBasketPlanResponse(BaseModel):
 
 
 class SubscribeRequest(BaseModel):
-    plan_id: str
-    delivery_address: str = Field(min_length=10)
-    pickup_branch: str | None = None
+    plan_id: str = Field(..., max_length=36)
+    delivery_address: str = Field(min_length=10, max_length=500)
+    pickup_branch: str | None = Field(None, max_length=100)
 
 
 class FoodBasketSubscriptionResponse(BaseModel):

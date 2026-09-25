@@ -1,6 +1,7 @@
 import enum
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -58,6 +59,29 @@ class LoanStatus(str, enum.Enum):
     WRITTEN_OFF = "written_off"
 
 
+class InterestMethod(str, enum.Enum):
+    # Interest = principal x monthly rate x months, spread evenly. Common for
+    # MFB products quoted as "X% monthly". Default until GH Trust confirms.
+    FLAT = "flat"
+    # Amortising: interest charged on the declining principal balance.
+    REDUCING_BALANCE = "reducing_balance"
+
+
+class InstallmentStatus(str, enum.Enum):
+    PENDING = "pending"
+    PARTIAL = "partial"
+    PAID = "paid"
+    OVERDUE = "overdue"
+
+
+class RepaymentChannel(str, enum.Enum):
+    WALLET = "wallet"              # debited from the customer's GH Trust wallet
+    BANK_TRANSFER = "bank_transfer"  # paid into an MFB account, recorded by staff
+    CASH = "cash"                  # paid at a branch, recorded by staff
+    REMITA = "remita"              # salary deduction, recorded by staff
+    OTHER = "other"
+
+
 class RepaymentCadence(str, enum.Enum):
     DAILY = "daily"
     WEEKLY = "weekly"
@@ -87,8 +111,13 @@ class UniversalFormData(BaseModel):
     spouse_phone: str | None = Field(None, max_length=20)
     spouse_address: str | None = None
     bank_name: str | None = Field(None, max_length=100)
+    # NIP institution code of the payout bank (from the bank picker). Required to
+    # disburse: without it the transfer has no destination bank. It used to be
+    # absent from this schema, so it was silently dropped and no API-originated
+    # application could ever be disbursed.
+    bank_code: str | None = Field(None, pattern=r"^\d{3,6}$")
     bank_account_name: str | None = Field(None, max_length=200)
-    bank_account_number: str | None = Field(None, max_length=20)
+    bank_account_number: str | None = Field(None, pattern=r"^\d{10}$")
     next_of_kin_name: str | None = Field(None, max_length=200)
     next_of_kin_address: str | None = None
     next_of_kin_phone: str | None = Field(None, max_length=20)
@@ -111,12 +140,12 @@ class GuarantorInput(BaseModel):
     id_type: str | None = Field(None, max_length=50)
     id_number: str | None = Field(None, max_length=50)
     relationship: str | None = Field(None, max_length=100)
-    address: str | None = None
+    address: str | None = Field(None, max_length=500)
 
 
 class CollateralInput(BaseModel):
     collateral_type: str = Field(..., max_length=50)
-    description: str = Field(..., min_length=3)
+    description: str = Field(..., min_length=3, max_length=500)
     estimated_value: Decimal | None = Field(None, ge=0)
     affidavit_reference: str | None = Field(None, max_length=100)
 
@@ -178,10 +207,22 @@ class UpdateApplicationStepRequest(BaseModel):
 
 
 class ApplicationStatusUpdate(BaseModel):
-    status: ApplicationStatus
+    """
+    Manual staff override. Only two things are allowed here:
+
+    * edit loan terms (approved_amount, repayment_cadence) while the application
+      is in review or approved, before disbursement;
+    * reject the application (``status="rejected"`` with a ``note``).
+
+    Approval must go through workflow stage actions, and disbursement through the
+    disburse endpoint, so neither can be forced from here.
+    """
+
+    status: ApplicationStatus | None = None
     note: str | None = Field(None, max_length=500)
     approved_amount: Decimal | None = Field(None, gt=0)
     repayment_cadence: RepaymentCadence | None = None
+    tenure_months: int | None = Field(None, ge=1, le=60)
 
 
 class LoanProductToggleRequest(BaseModel):
@@ -268,6 +309,10 @@ class LoanApplicationDetailResponse(BaseModel):
     requested_amount: Decimal | None
     approved_amount: Decimal | None
     repayment_cadence: str | None
+    approved_tenure_months: int | None = None
+    tenure_months: int | None = Field(
+        None, description="Effective tenure: staff-approved, else what the customer entered"
+    )
     universal_form: dict
     product_data: dict
     submitted_at: datetime | None
@@ -306,27 +351,116 @@ class LoanApplicationSummaryResponse(BaseModel):
     created_at: datetime
 
 
+T = TypeVar("T")
+
+
+class Page(BaseModel, Generic[T]):
+    """Paginated list envelope used by customer-facing list endpoints."""
+
+    items: list[T]
+    total: int
+    limit: int
+    offset: int
+
+
 class LoanResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
     customer_id: str
+    customer_name: str | None = None
+    application_id: str | None = None
     product_type: LoanProductCode
     principal: Decimal
-    outstanding: Decimal
-    interest_rate: Decimal
-    monthly_payment: Decimal
+    total_interest: Decimal
+    total_repayable: Decimal
+    amount_paid: Decimal
+    outstanding: Decimal = Field(description="Total still owed (principal + interest)")
+    principal_outstanding: Decimal
+    interest_rate: Decimal = Field(description="Monthly interest rate, percent")
+    interest_method: InterestMethod
+    repayment_cadence: str
+    installments_count: int
+    tenure_months: int
+    monthly_payment: Decimal = Field(description="Regular installment amount per repayment period")
     status: LoanStatus
+    disbursement_date: date | None = None
     next_due_date: date | None = None
+    created_at: datetime
 
 
 class RepaymentScheduleItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     installment: int
     due_date: date
     amount: Decimal
     principal: Decimal
     interest: Decimal
-    status: str
+    principal_paid: Decimal
+    interest_paid: Decimal
+    amount_due: Decimal
+    status: InstallmentStatus
+    paid_at: datetime | None = None
+
+
+class LoanRepaymentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    loan_id: str
+    amount: Decimal
+    principal_amount: Decimal
+    interest_amount: Decimal
+    channel: RepaymentChannel
+    reference: str
+    paid_at: datetime
+    note: str | None = None
+
+
+class LoanDetailResponse(LoanResponse):
+    schedule: list[RepaymentScheduleItem]
+    repayments: list[LoanRepaymentResponse]
+
+
+class RecordRepaymentRequest(BaseModel):
+    """Staff-recorded payment received outside the app (transfer, cash, Remita)."""
+
+    amount: Decimal = Field(..., gt=0, decimal_places=2)
+    channel: RepaymentChannel
+    reference: str = Field(
+        ..., min_length=3, max_length=100, description="Bank/teller reference. Re-sending it is a no-op."
+    )
+    paid_at: datetime | None = None
+    note: str | None = Field(None, max_length=500)
+
+    @field_validator("channel")
+    @classmethod
+    def not_wallet(cls, v: RepaymentChannel) -> RepaymentChannel:
+        if v == RepaymentChannel.WALLET:
+            raise ValueError("Wallet repayments are made by the customer in the app")
+        return v
+
+
+class CustomerRepayRequest(BaseModel):
+    amount: Decimal = Field(..., gt=0, decimal_places=2)
+
+
+class ManualDisbursementRequest(BaseModel):
+    """Funds were sent outside the integrated payment rail (bank app, branch)."""
+
+    external_reference: str = Field(
+        ..., min_length=4, max_length=100, description="Bank transfer / session reference"
+    )
+    disbursed_on: date | None = Field(None, description="Defaults to today; cannot be in the future")
+    note: str | None = Field(None, max_length=500)
+
+    @field_validator("disbursed_on")
+    @classmethod
+    def not_future(cls, v: date | None) -> date | None:
+        if v and v > date.today():
+            raise ValueError("disbursed_on cannot be in the future")
+        return v
 
 
 # Legacy draft compatibility

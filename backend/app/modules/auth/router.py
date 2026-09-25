@@ -1,14 +1,17 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request, Response, status
 
-from app.core.deps import CurrentCustomer, DbSession, RedisClient
-from app.core.rate_limit import RateLimiter, get_client_ip
+from app.core.deps import CurrentCustomer, DbSession, RedisClient, request_meta
+from app.core.rate_limit import get_client_ip
 from app.modules.auth.schemas import (
     AuthTokenResponse,
     BvnRegisterRequest,
     CustomerProfileResponse,
     OtpSentResponse,
     PhoneLoginRequest,
+    RefreshTokenRequest,
     ResendRegistrationOtpRequest,
+    SessionResponse,
+    TokenPair,
     VerifyLoginOtpRequest,
     VerifyRegistrationOtpRequest,
 )
@@ -44,6 +47,7 @@ async def register_with_bvn(
     "/register/verify-otp",
     response_model=AuthTokenResponse,
     summary="Verify registration OTP",
+    description="Activates the account and signs the device in. Send `device` from mobile clients.",
 )
 async def verify_registration_otp(
     payload: VerifyRegistrationOtpRequest,
@@ -51,8 +55,9 @@ async def verify_registration_otp(
     db: DbSession,
     redis: RedisClient,
 ):
-    ip = get_client_ip(request)
-    return await _auth_service(db, redis).verify_registration_otp(payload.bvn, payload.otp, ip=ip)
+    return await _auth_service(db, redis).verify_registration_otp(
+        payload.bvn, payload.otp, meta=request_meta(request), device=payload.device
+    )
 
 
 @router.post(
@@ -96,8 +101,9 @@ async def verify_login_otp(
     db: DbSession,
     redis: RedisClient,
 ):
-    ip = get_client_ip(request)
-    return await _auth_service(db, redis).verify_login_otp(payload.phone, payload.otp, ip=ip)
+    return await _auth_service(db, redis).verify_login_otp(
+        payload.phone, payload.otp, meta=request_meta(request), device=payload.device
+    )
 
 
 @router.post(
@@ -113,6 +119,57 @@ async def resend_login_otp(
 ):
     ip = get_client_ip(request)
     return await _auth_service(db, redis).resend_login_otp(payload.phone, ip=ip)
+
+
+@router.post(
+    "/token/refresh",
+    response_model=TokenPair,
+    summary="Refresh access token",
+    description=(
+        "Exchange a refresh token for a new access + refresh pair. The refresh "
+        "token rotates: store the new one and discard the old. Presenting an "
+        "old refresh token again signs the session out (`REFRESH_TOKEN_REUSED`). "
+        "Clients should run at most one refresh at a time."
+    ),
+)
+async def refresh_token(
+    payload: RefreshTokenRequest,
+    request: Request,
+    db: DbSession,
+    redis: RedisClient,
+):
+    return await _auth_service(db, redis).refresh(payload.refresh_token, meta=request_meta(request))
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Sign out this device")
+async def logout(request: Request, customer: CurrentCustomer, db: DbSession, redis: RedisClient):
+    await _auth_service(db, redis).logout(customer, request.state.session_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/logout-all", status_code=status.HTTP_204_NO_CONTENT, summary="Sign out every device"
+)
+async def logout_all(request: Request, customer: CurrentCustomer, db: DbSession, redis: RedisClient):
+    await _auth_service(db, redis).logout(customer, request.state.session_id, everywhere=True)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/sessions", response_model=list[SessionResponse], summary="Signed-in devices")
+async def list_sessions(request: Request, customer: CurrentCustomer, db: DbSession, redis: RedisClient):
+    return await _auth_service(db, redis).list_sessions(customer, request.state.session_id)
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Sign out a specific device",
+)
+async def revoke_session(
+    session_id: str, customer: CurrentCustomer, db: DbSession, redis: RedisClient
+):
+    await _auth_service(db, redis).revoke_session(customer, session_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=CustomerProfileResponse, summary="Current customer profile")

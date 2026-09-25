@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 
 from app.core.deps import DbSession
 from app.modules.admin.deps import require_permission
@@ -11,8 +11,15 @@ from app.modules.users.service import CustomerAdminService
 router = APIRouter(prefix="/admin/customers", tags=["Admin — Customers"])
 
 
-@router.get("", response_model=list[CustomerSummaryResponse], summary="List customers")
+@router.get(
+    "",
+    response_model=list[CustomerSummaryResponse],
+    summary="List customers",
+    description="Newest first. Total count is returned in the `X-Total-Count` header. "
+    "`search` matches name words, email, account number, phone (any format) or an exact BVN.",
+)
 async def list_customers(
+    response: Response,
     db: DbSession,
     search: str | None = Query(None, min_length=1, max_length=100),
     status: CustomerStatus | None = None,
@@ -20,12 +27,14 @@ async def list_customers(
     offset: int = Query(0, ge=0),
     _: Staff = Depends(require_permission(LOAN_READ)),
 ):
-    return await CustomerAdminService(db).list_customers(
+    items, total = await CustomerAdminService(db).list_customers(
         search=search,
         status=status,
         limit=limit,
         offset=offset,
     )
+    response.headers["X-Total-Count"] = str(total)
+    return items
 
 
 @router.get("/{customer_id}", response_model=CustomerDetailResponse, summary="Get customer detail")

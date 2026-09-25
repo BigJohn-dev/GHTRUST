@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+if TYPE_CHECKING:
+    from app.modules.loans.workflow_schemas import WorkflowResponse
+
 from app.modules.admin.models import Role, Staff
 from app.modules.loans.audit_service import ApplicationAuditService
+from app.modules.loans.document_gate import ensure_documents_verified
 from app.modules.payments.disbursement_service import DisbursementService
 from app.modules.loans.models import LoanApplication, LoanProduct
 from app.modules.loans.schemas import ApplicationStatus
@@ -254,6 +259,8 @@ class WorkflowService:
             return application
 
         next_stage = await self._next_stage(application.workflow_id, stage.sort_order)
+        if next_stage is None:
+            ensure_documents_verified(application, action="final approval")
         stage_name = stage.name
         stage_id = stage.id
         if next_stage:

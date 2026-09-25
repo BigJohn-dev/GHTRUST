@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy import select
 
 from app.modules.auth.service import AuthService
+from app.modules.auth.session_service import RequestMeta
 from app.modules.users.models import Customer, CustomerStatus
 from tests.conftest import TEST_BVN, TEST_BVN_2, TEST_OTP, make_dojah_entity, refresh_settings
 
@@ -193,7 +194,9 @@ class TestAuthServiceUnit:
     async def test_verify_activates_customer(self, db_session, fake_redis, fixed_otp):
         service = AuthService(db_session, fake_redis)
         await service.register_with_bvn(TEST_BVN, ip="10.0.0.1")
-        result = await service.verify_registration_otp(TEST_BVN, TEST_OTP, ip="10.0.0.1")
+        result = await service.verify_registration_otp(
+            TEST_BVN, TEST_OTP, meta=RequestMeta(ip="10.0.0.1")
+        )
 
         assert result.access_token
         assert result.customer.status == "active"

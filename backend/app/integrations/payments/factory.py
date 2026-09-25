@@ -1,6 +1,7 @@
 from app.core.config import settings
 from app.integrations.monnify.client import MonnifyClient
 from app.integrations.paystack.client import PaystackClient
+from app.integrations.stanbic.client import StanbicClient
 from app.integrations.zest.client import ZestClient
 
 
@@ -11,4 +12,6 @@ def get_payment_client():
         return PaystackClient()
     if provider == "zest":
         return ZestClient()
+    if provider == "stanbic":
+        return StanbicClient()
     return MonnifyClient()
