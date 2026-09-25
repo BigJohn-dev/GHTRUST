@@ -100,7 +100,7 @@ export function LoginPage() {
     try {
       const res = await adminAuthApi.verifyOtp(phone.trim(), code)
       setStaffName(res.staff.full_name)
-      login(res.access_token, res.staff)
+      login(res.access_token, res.refresh_token, res.staff)
       setStep('success')
       setTimeout(() => navigate('/dashboard', { replace: true }), 1200)
     } catch (err) {

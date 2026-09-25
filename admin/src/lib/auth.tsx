@@ -7,16 +7,15 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { adminAuthApi, type StaffProfile } from './api'
+import { adminAuthApi, tokenStore, type StaffProfile } from './api'
 
-const TOKEN_KEY = 'ghtrust_admin_token'
 const STAFF_KEY = 'ghtrust_admin_staff'
 
 interface AuthContextValue {
   staff: StaffProfile | null
   token: string | null
   loading: boolean
-  login: (token: string, staff: StaffProfile) => void
+  login: (token: string, refreshToken: string, staff: StaffProfile) => void
   logout: () => void
   refreshProfile: () => Promise<void>
 }
@@ -24,25 +23,37 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
+  const [token, setToken] = useState<string | null>(() => tokenStore.access)
   const [staff, setStaff] = useState<StaffProfile | null>(() => {
     const raw = localStorage.getItem(STAFF_KEY)
     return raw ? (JSON.parse(raw) as StaffProfile) : null
   })
   const [loading, setLoading] = useState(!!token)
 
+  // Follow token changes made outside React (background refresh, forced sign-out).
+  useEffect(
+    () =>
+      tokenStore.subscribe((access) => {
+        setToken(access)
+        if (!access) {
+          localStorage.removeItem(STAFF_KEY)
+          setStaff(null)
+        }
+      }),
+    [],
+  )
+
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(STAFF_KEY)
-    setToken(null)
-    setStaff(null)
+    const current = tokenStore.access
+    // Revoke the server session (best effort), then clear locally regardless.
+    if (current) adminAuthApi.logout(current).catch(() => undefined)
+    tokenStore.clear()
   }, [])
 
-  const login = useCallback((newToken: string, profile: StaffProfile) => {
-    localStorage.setItem(TOKEN_KEY, newToken)
+  const login = useCallback((newToken: string, refreshToken: string, profile: StaffProfile) => {
     localStorage.setItem(STAFF_KEY, JSON.stringify(profile))
-    setToken(newToken)
     setStaff(profile)
+    tokenStore.set(newToken, refreshToken)
   }, [])
 
   const refreshProfile = useCallback(async () => {

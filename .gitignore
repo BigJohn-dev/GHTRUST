@@ -40,3 +40,19 @@ backend/.env
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python (backend/)
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# app build output / runtime data
+dist/
+node_modules/
+backend/uploads/
+!.env.example
+.next-*/
