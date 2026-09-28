@@ -2,6 +2,7 @@
   "expo": {
     "name": "GH Trust",
     "slug": "ghtrust",
+    "owner": "gh-trust",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
