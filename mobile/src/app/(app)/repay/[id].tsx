@@ -97,6 +97,11 @@ export default function Repay() {
   return (
     <Screen
       edges={['bottom']}
+      onRefresh={() => {
+        wallet.refetch();
+        loan.refetch();
+      }}
+      refreshing={wallet.isRefetching}
       footer={
         short ? (
           <Button

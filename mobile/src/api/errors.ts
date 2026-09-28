@@ -36,6 +36,7 @@ const COPY: Record<string, string> = {
   OTP_ATTEMPTS_EXCEEDED: 'Too many wrong codes. Request a new one.',
   SMS_UNAVAILABLE: "We couldn't send your code right now. Please try again in a few minutes.",
   ACCOUNT_EXISTS: 'You already have a GH Trust account. Sign in with your phone number instead.',
+  PHONE_IN_USE: 'The phone number on this BVN is already linked to another GH Trust account. Please visit a branch to open your account.',
   ACCOUNT_RESTRICTED: "We can't open an account for you in the app. Please visit a GH Trust branch.",
   ACCOUNT_INACTIVE: 'Your account is not active. Please contact GH Trust.',
   BVN_NOT_FOUND: "We couldn't find that BVN. Check the 11 digits and try again.",

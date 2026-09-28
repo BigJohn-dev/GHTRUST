@@ -15,11 +15,16 @@ import { useFeatures, useLoan } from '@/lib/queries';
 import { CADENCE, installmentStatus, loanStatus } from '@/lib/status';
 import { colors, font, radius, space } from '@/theme/tokens';
 
+const COLLAPSED = 6;
+const PAGE = 30;
+
 export default function LoanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const loan = useLoan(id);
   const { wallet, support } = useFeatures();
-  const [showAll, setShowAll] = useState(false);
+  // 0 = collapsed. Daily-cadence loans can have hundreds of installments, so the full
+  // schedule is revealed a page at a time instead of rendering every row at once.
+  const [limit, setLimit] = useState(0);
   const l = loan.data;
 
   if (loan.isPending) {
@@ -41,7 +46,12 @@ export default function LoanDetailScreen() {
   const s = loanStatus(l.status);
   const open = l.status === 'active' || l.status === 'overdue';
   const next = nextInstallment(l.schedule);
-  const schedule = showAll ? l.schedule : l.schedule.slice(0, 6);
+  // Collapsed, show the rows around what's due next (the last paid one, then upcoming).
+  const firstOpen = l.schedule.findIndex((item) => item.status !== 'paid');
+  const lastWindow = Math.max(0, l.schedule.length - COLLAPSED);
+  const from = limit ? 0 : firstOpen === -1 ? lastWindow : Math.min(Math.max(0, firstOpen - 1), lastWindow);
+  const schedule = l.schedule.slice(from, from + (limit || COLLAPSED));
+  const remaining = l.schedule.length - (from + schedule.length);
 
   return (
     <Screen
@@ -126,13 +136,13 @@ export default function LoanDetailScreen() {
             </View>
           );
         })}
-        {l.schedule.length > 6 ? (
-          <Pressable accessibilityRole="button" onPress={() => setShowAll((v) => !v)} style={styles.more}>
-            <Text variant="small" color={colors.cyanDeep} style={{ fontFamily: font.semibold }}>
-              {showAll ? 'Show less' : `Show all ${l.schedule.length} payments`}
-            </Text>
-          </Pressable>
+        {!limit && l.schedule.length > COLLAPSED ? (
+          <MoreButton label={`Show all ${l.schedule.length} payments`} onPress={() => setLimit(PAGE)} />
         ) : null}
+        {limit && remaining > 0 ? (
+          <MoreButton label={`Show ${Math.min(PAGE, remaining)} more`} onPress={() => setLimit(limit + PAGE)} />
+        ) : null}
+        {limit ? <MoreButton label="Show less" onPress={() => setLimit(0)} /> : null}
       </Card>
 
       {l.repayments.length ? (
@@ -177,6 +187,16 @@ function Term({ label, value, last }: { label: string; value: string; last?: boo
         {value}
       </Text>
     </View>
+  );
+}
+
+function MoreButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.more}>
+      <Text variant="small" color={colors.cyanDeep} style={{ fontFamily: font.semibold }}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 

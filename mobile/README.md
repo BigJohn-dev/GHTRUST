@@ -80,10 +80,31 @@ src/
 - BVNs and phone numbers are never put in routes or URLs.
 - Android backups are disabled (`allowBackup: false`).
 
+## Release builds (EAS)
+
+Builds run on Expo's servers (`npx eas-cli@latest login` first, then `eas init` once to link the project).
+`eas.json` has two profiles:
+
+| Profile | Output | Use |
+|---|---|---|
+| `preview` | Android `.apk`, iOS ad-hoc build | internal testers, pointed at staging |
+| `production` | Android `.aab`, iOS `.ipa` | Play Console / App Store Connect; build numbers auto-increment |
+
+Settings come from EAS environment variables (one set per profile), not committed files. See
+`.env.example` for the list. Only `EXPO_PUBLIC_*` values reach the app, and every one of them is
+readable by anyone with the app, so the app holds no API keys; provider credentials stay on the
+backend. A `preview` or `production` build **fails** if `EXPO_PUBLIC_API_URL` is missing, or isn't
+`https://` for production (`app.config.js`).
+
+```bash
+npx eas-cli@latest env:create --environment production --name EXPO_PUBLIC_API_URL --value https://<api host> --visibility plaintext
+npx eas-cli@latest build --profile preview --platform android     # installable APK
+npx eas-cli@latest build --profile production --platform all
+npx eas-cli@latest submit --profile production --platform all
+```
+
 ## Before the first store release
 
 - Replace the placeholder app icon and splash image in `assets/images/` with the brand logo.
-- Confirm the bundle/package ID in `app.json` (`ng.ghtrust.app`) — it can't change after publishing.
-- Set `EXPO_PUBLIC_API_URL` for staging/production builds, and the store URLs
-  (`EXPO_PUBLIC_IOS_STORE_URL`, `EXPO_PUBLIC_ANDROID_STORE_URL`) for the forced-update screen.
-- Build with EAS: `npx eas-cli@latest build` (no Mac needed for iOS).
+- Confirm the bundle/package ID in `app.json` (`ng.ghtrust.app`); it can't change after publishing.
+- Set the store URLs (`EXPO_PUBLIC_IOS_STORE_URL`, `EXPO_PUBLIC_ANDROID_STORE_URL`) for the forced-update screen.

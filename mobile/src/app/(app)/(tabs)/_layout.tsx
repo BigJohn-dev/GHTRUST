@@ -19,6 +19,7 @@ export default function TabsLayout() {
   // Size the bar ourselves: the default 49pt clips Montserrat's labels, and a fixed height
   // ignores the home indicator / Android gesture bar under edge-to-edge.
   const { bottom } = useSafeAreaInsets();
+  const padBottom = Math.max(bottom, 8);
   return (
     <Tabs
       screenOptions={{
@@ -29,9 +30,10 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
-          height: 58 + bottom,
-          paddingTop: 6,
-          paddingBottom: Math.max(bottom, 8),
+          // 54pt of content (icon + label) above the inset.
+          height: 4 + 54 + padBottom,
+          paddingTop: 4,
+          paddingBottom: padBottom,
         },
         sceneStyle: { backgroundColor: colors.surface },
       }}>

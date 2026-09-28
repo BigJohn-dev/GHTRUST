@@ -51,5 +51,10 @@ export const useApplication = (id: string) =>
   useQuery({ queryKey: keys.application(id), queryFn: () => loans.application(id), enabled: !!id });
 export const useLoans = () => useQuery({ queryKey: keys.loans, queryFn: loans.list });
 export const useLoan = (id: string) => useQuery({ queryKey: keys.loan(id), queryFn: () => loans.detail(id), enabled: !!id });
-export const useWallet = (enabled = true) => useQuery({ queryKey: keys.wallet, queryFn: wallet.summary, enabled });
+/**
+ * Always refetched on mount and app focus: money arrives by bank transfer outside the app,
+ * and a stale balance would tell a customer who just paid in that they can't repay.
+ */
+export const useWallet = (enabled = true) =>
+  useQuery({ queryKey: keys.wallet, queryFn: wallet.summary, enabled, staleTime: 0 });
 export const useBanks = () => useQuery({ queryKey: keys.banks, queryFn: banks.list, staleTime: 6 * 3600_000 });

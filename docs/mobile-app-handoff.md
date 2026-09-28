@@ -104,7 +104,8 @@ device replaces its previous session.
      `account_name` for the customer to confirm; store it as `bank_account_name`.
      Resolve is rate-limited per customer (10/min); `422 BANK_ACCOUNT_UNVERIFIED`
      means the details didn't match an account.
-   - Send the tenure as `product_data.tenure_months` (integer).
+   - Send the tenure as `product_data.tenure_months` (integer), at most the product's
+     `max_tenure_days` ÷ 30 months. Submit rejects a longer tenure with `APPLICATION_INCOMPLETE`.
 4. `POST /loans/me/applications/{id}/documents/{document_type}` (multipart
    `file`): PDF/JPG/PNG, ≤ 10 MB. Content is checked, not just the extension —
    compress camera photos to JPEG before upload.
@@ -156,7 +157,7 @@ Branch on `code`, show `detail`. Codes you should handle explicitly:
 |---|---|
 | `OTP_INVALID`, `OTP_EXPIRED`, `OTP_ATTEMPTS_EXCEEDED` | OTP screen states |
 | `RATE_LIMITED` (429) | back off using `Retry-After` |
-| `BVN_NOT_FOUND`, `KYC_UNAVAILABLE`, `ACCOUNT_EXISTS`, `ACCOUNT_RESTRICTED` | onboarding |
+| `BVN_NOT_FOUND`, `KYC_UNAVAILABLE`, `ACCOUNT_EXISTS`, `PHONE_IN_USE`, `ACCOUNT_RESTRICTED` | onboarding |
 | `SMS_UNAVAILABLE` (503) | "couldn't send code, try again" |
 | `TOKEN_INVALID` | refresh and retry |
 | `SESSION_REVOKED`, `ACCOUNT_INACTIVE`, `REFRESH_TOKEN_INVALID`, `REFRESH_TOKEN_REUSED` | sign in again |
