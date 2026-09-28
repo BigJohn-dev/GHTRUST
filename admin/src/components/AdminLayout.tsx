@@ -1,7 +1,8 @@
 import clsx from 'clsx'
 import { Menu, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useSidebarPin } from '../lib/sidebarPin'
 import { NotificationsMenu } from './NotificationsMenu'
 import { AppSidebar } from './ui/AppSidebar'
 
@@ -25,10 +26,36 @@ function pageTitleFromPath(pathname: string): string {
   return 'Dashboard'
 }
 
+const SOFT_SPRING = 'cubic-bezier(0.25, 1.1, 0.4, 1)'
+const PEEK_OPEN_MS = 150
+const PEEK_CLOSE_MS = 300
+/** Peeking is for desktop pointers only; touch screens use the mobile drawer. */
+const PEEK_MEDIA = '(min-width: 1024px) and (hover: hover)'
+
 export function AdminLayout({ children, title, subtitle, tabs, activeTab, onTabChange }: AdminLayoutProps) {
   const location = useLocation()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { pinned, togglePinned } = useSidebarPin()
+
+  // Unpinned, the rail "peeks": hovering (or tabbing into) it slides the full menu over the
+  // page without reflowing it. A short open delay ignores the cursor passing across it.
+  const [peek, setPeek] = useState(false)
+  const peekTimer = useRef<number | undefined>(undefined)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  useEffect(() => () => window.clearTimeout(peekTimer.current), [])
+
+  const canPeek = () => !pinned && window.matchMedia(PEEK_MEDIA).matches
+  const schedulePeek = (open: boolean, delay: number) => {
+    window.clearTimeout(peekTimer.current)
+    peekTimer.current = window.setTimeout(() => setPeek(open), delay)
+  }
+  const typingInSidebar = () => {
+    const active = document.activeElement
+    return !!active && active.tagName === 'INPUT' && !!sidebarRef.current?.contains(active)
+  }
+
+  const floating = peek && !pinned
+  const expanded = mobileOpen || pinned || floating
 
   const pageTitle = title ?? pageTitleFromPath(location.pathname)
 
@@ -43,19 +70,41 @@ export function AdminLayout({ children, title, subtitle, tabs, activeTab, onTabC
         />
       )}
 
-      {/* Sidebar — fixed on mobile; pinned in flex row on desktop (does not scroll with content) */}
+      {/* Sidebar. Desktop: the wrapper reserves the rail or the pinned width, and the sidebar
+          itself is absolutely positioned so a peek overlays the page. Mobile: a drawer. */}
       <div
         className={clsx(
-          'shrink-0 h-screen z-50 transition-transform duration-200',
+          'shrink-0 h-screen z-50 transition-[transform,width] duration-500',
           'fixed lg:relative',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+          pinned ? 'lg:w-[272px]' : 'lg:w-[72px]',
         )}
+        style={{ transitionTimingFunction: SOFT_SPRING }}
       >
-        <AppSidebar
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
-          onNavigate={() => setMobileOpen(false)}
-        />
+        <div
+          ref={sidebarRef}
+          className="h-full lg:absolute lg:inset-y-0 lg:left-0"
+          onMouseEnter={() => canPeek() && schedulePeek(true, PEEK_OPEN_MS)}
+          onMouseLeave={() => !typingInSidebar() && schedulePeek(false, PEEK_CLOSE_MS)}
+          onFocus={() => canPeek() && schedulePeek(true, 0)}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) schedulePeek(false, 0)
+          }}
+        >
+          <AppSidebar
+            collapsed={!expanded}
+            pinned={pinned}
+            floating={floating}
+            onTogglePin={() => {
+              setPeek(false)
+              togglePinned()
+            }}
+            onNavigate={() => {
+              setMobileOpen(false)
+              setPeek(false)
+            }}
+          />
+        </div>
       </div>
 
       {/* Main — only this column scrolls */}
