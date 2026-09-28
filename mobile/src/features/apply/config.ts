@@ -200,11 +200,33 @@ const STEP_PAGES: Record<string, PageId[]> = {
 
 export type WizardPage = PageDef & { stepIndex: number };
 
-/** Screens for a product, each tagged with its backend step (1-based, for `step`). */
-export function pagesFor(workflowSteps: string[]): WizardPage[] {
+const DAYS_PER_MONTH = 30; // matches the servicing engine
+
+/** Longest tenure in whole months a product allows (the API gives days; null = no cap). */
+export function maxTenureMonths(maxTenureDays: number | null | undefined): number {
+  if (!maxTenureDays) return 24;
+  return Math.max(1, Math.floor(maxTenureDays / DAYS_PER_MONTH));
+}
+
+/**
+ * Screens for a product, each tagged with its backend step (1-based, for `step`).
+ * The tenure field is capped at the product's own limit, so a customer can't submit a
+ * tenure that staff would later be unable to disburse.
+ */
+export function pagesFor(workflowSteps: string[], maxTenureDays?: number | null): WizardPage[] {
+  const maxMonths = maxTenureMonths(maxTenureDays);
+  const withLimits = (page: PageDef): PageDef =>
+    page.fields
+      ? {
+          ...page,
+          fields: page.fields.map((f) =>
+            f.key === 'tenure_months' ? { ...f, max: maxMonths, hint: `Up to ${maxMonths} month${maxMonths === 1 ? '' : 's'}.` } : f,
+          ),
+        }
+      : page;
   const pages: WizardPage[] = [];
   workflowSteps.forEach((step, i) => {
-    for (const id of STEP_PAGES[step] ?? []) pages.push({ ...PAGES[id], stepIndex: i + 1 });
+    for (const id of STEP_PAGES[step] ?? []) pages.push({ ...withLimits(PAGES[id]), stepIndex: i + 1 });
   });
   if (!pages.some((p) => p.id === 'review')) pages.push({ ...PAGES.review, stepIndex: workflowSteps.length });
   return pages;
@@ -254,6 +276,7 @@ export function submitProblems(errors: string[]): SubmitProblem[] {
     else if (lower.includes('trade type')) add({ text: 'Tell us what your business sells.', page: 'business' });
     else if (lower.includes('employer') || lower.includes('salary')) add({ text: 'Add your employer and the day you’re paid.', page: 'employment' });
     else if (lower.includes('student') || lower.includes('school')) add({ text: 'Add the student’s and school’s details.', page: 'student' });
+    else if (lower.includes('tenure')) add({ text: 'Choose a shorter repayment period for this loan.', page: 'request' });
     else if (lower.includes('asset')) add({ text: 'Describe the asset and add its price.', page: 'asset' });
     else add({ text: 'Some details are missing. Please check each step.', page: null });
   }

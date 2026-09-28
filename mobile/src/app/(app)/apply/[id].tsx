@@ -66,7 +66,10 @@ function pageValid(page: WizardPage, draft: Draft, application: Application): bo
 
 function Wizard({ application, product }: { application: Application; product: LoanProduct }) {
   const queryClient = useQueryClient();
-  const pages = useMemo(() => pagesFor(product.workflow_steps), [product.workflow_steps]);
+  const pages = useMemo(
+    () => pagesFor(product.workflow_steps, product.max_tenure_days),
+    [product.workflow_steps, product.max_tenure_days],
+  );
   const [draft, setDraft] = useState<Draft>(() => draftFrom(application));
   const [index, setIndex] = useState(() => {
     // A new draft starts at the top so pre-filled BVN details get checked.
@@ -236,9 +239,7 @@ function Wizard({ application, product }: { application: Application; product: L
 
           {page.fields ? (
             <FieldsPage
-              fields={page.fields.map((f) =>
-                f.key === 'tenure_months' && product.max_tenure_days ? { ...f, max: Math.max(1, Math.floor(product.max_tenure_days / 30)) } : f,
-              )}
+              fields={page.fields}
               draft={draft}
               onChange={setDraft}
               errors={errors}

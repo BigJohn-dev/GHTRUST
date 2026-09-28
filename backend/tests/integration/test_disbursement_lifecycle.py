@@ -89,6 +89,14 @@ def monnify_signed(payload: dict) -> tuple[bytes, dict]:
 
 
 async def submitted_application(api_client, db_session, form=UNIVERSAL_FORM, tenure=6) -> str:
+    app_id, headers = await complete_draft(api_client, db_session, form=form, tenure=tenure)
+    submitted = await api_client.post(f"/api/v1/loans/me/applications/{app_id}/submit", headers=headers)
+    assert submitted.status_code == 200, submitted.text
+    return app_id
+
+
+async def complete_draft(api_client, db_session, form=UNIVERSAL_FORM, tenure=6) -> tuple[str, dict]:
+    """A business-loan draft with every field and document in place, not yet submitted."""
     await _seed(db_session)
     headers = {"Authorization": f"Bearer {await _customer_token(api_client)}"}
     app_id = (
@@ -118,9 +126,7 @@ async def submitted_application(api_client, db_session, form=UNIVERSAL_FORM, ten
             headers=headers,
             files={"file": ("d.pdf", io.BytesIO(b"%PDF-1.4 doc"), "application/pdf")},
         )
-    submitted = await api_client.post(f"/api/v1/loans/me/applications/{app_id}/submit", headers=headers)
-    assert submitted.status_code == 200, submitted.text
-    return app_id
+    return app_id, headers
 
 
 async def approved_application(api_client, db_session, admin_headers, form=UNIVERSAL_FORM, tenure=6) -> str:
@@ -161,6 +167,24 @@ async def disbursement_for(db_session, app_id) -> LoanDisbursement:
         select(LoanDisbursement).where(LoanDisbursement.application_id == app_id)
     )
     return result.scalar_one()
+
+
+class TestTenureLimit:
+    async def test_submit_rejects_tenure_over_product_maximum(self, api_client, db_session):
+        from app.modules.loans.models import LoanProduct
+
+        app_id, headers = await complete_draft(api_client, db_session, tenure=6)
+        product = (
+            await db_session.execute(select(LoanProduct).where(LoanProduct.code == "business_loan"))
+        ).scalar_one()
+        product.max_tenure_days = 120
+        await db_session.flush()
+
+        res = await api_client.post(f"/api/v1/loans/me/applications/{app_id}/submit", headers=headers)
+        assert res.status_code == 422, res.text
+        body = res.json()
+        assert body["code"] == "APPLICATION_INCOMPLETE"
+        assert any("maximum of 4 months" in e for e in body["errors"])
 
 
 class TestBankCodeCapture:

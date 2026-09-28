@@ -52,6 +52,12 @@ class TestRegistrationFlow:
         res = await api_client.post("/api/v1/auth/register/bvn", json={"bvn": TEST_BVN})
         assert res.status_code == 409
 
+    async def test_register_bvn_whose_phone_is_taken_conflicts(self, api_client, registered_customer):
+        # The mock lookup returns the same phone for every BVN, so a second BVN clashes.
+        res = await api_client.post("/api/v1/auth/register/bvn", json={"bvn": TEST_BVN_2})
+        assert res.status_code == 409
+        assert res.json()["code"] == "PHONE_IN_USE"
+
     async def test_resend_registration_otp(self, api_client):
         await api_client.post("/api/v1/auth/register/bvn", json={"bvn": TEST_BVN})
         res = await api_client.post(

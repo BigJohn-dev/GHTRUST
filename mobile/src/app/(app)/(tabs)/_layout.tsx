@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
-import { Platform, type ColorValue } from 'react-native';
+import { type ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFeatures } from '@/lib/queries';
 import { colors, font } from '@/theme/tokens';
@@ -15,6 +16,9 @@ function icon(name: IconName, active: IconName) {
 
 export default function TabsLayout() {
   const { wallet } = useFeatures();
+  // Size the bar ourselves: the default 49pt clips Montserrat's labels, and a fixed height
+  // ignores the home indicator / Android gesture bar under edge-to-edge.
+  const { bottom } = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
@@ -25,7 +29,9 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
-          ...(Platform.OS === 'android' ? { height: 64, paddingBottom: 8, paddingTop: 6 } : null),
+          height: 58 + bottom,
+          paddingTop: 6,
+          paddingBottom: Math.max(bottom, 8),
         },
         sceneStyle: { backgroundColor: colors.surface },
       }}>

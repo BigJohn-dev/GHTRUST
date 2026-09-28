@@ -71,7 +71,7 @@ from app.modules.loans.schemas import (
     UpdateApplicationStepRequest,
     VerifyDocumentRequest,
 )
-from app.modules.loans.servicing import resolve_tenure_months
+from app.modules.loans.servicing import DAYS_PER_MONTH, resolve_tenure_months
 from app.modules.loans.storage import DocumentStorage
 
 logger = structlog.get_logger()
@@ -1005,6 +1005,14 @@ class LoanService:
             if doc_type not in uploaded_types:
                 label = DOCUMENT_LABELS.get(doc_type, doc_type)
                 errors.append(f"Missing document: {label}")
+
+        # Catch an over-long tenure now, while the customer can still change it, rather
+        # than at disbursement after staff have approved the application.
+        tenure = resolve_tenure_months(application)
+        max_days = application.product.max_tenure_days
+        if tenure and max_days and tenure * DAYS_PER_MONTH > max_days:
+            max_months = max(max_days // DAYS_PER_MONTH, 1)
+            errors.append(f"Tenure of {tenure} months exceeds this product's maximum of {max_months} months")
 
         code = application.product.code
         data = application.product_data or {}

@@ -11,6 +11,7 @@ import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { Banner, CardSkeleton, ErrorState } from '@/components/States';
 import { Text } from '@/components/Text';
+import { maxTenureMonths } from '@/features/apply/config';
 import { keys, useApplications, useProducts } from '@/lib/queries';
 import { CADENCE } from '@/lib/status';
 import { colors, font, radius, space } from '@/theme/tokens';
@@ -81,7 +82,7 @@ export default function ChooseProduct() {
                   <Chip text={`${Number(p.interest_rate_pct_monthly)}% monthly`} />
                   <Chip text={`${Number(p.processing_fee_pct)}% fee`} />
                   <Chip text={p.repayment_cadence_options.map((c) => CADENCE[c] ?? c).join(' / ')} />
-                  {p.max_tenure_days ? <Chip text={`Up to ${Math.floor(p.max_tenure_days / 30)} months`} /> : null}
+                  {p.max_tenure_days ? <Chip text={`Up to ${maxTenureMonths(p.max_tenure_days)} months`} /> : null}
                 </View>
                 {draft ? (
                   <Text variant="small" color={colors.cyanDeep} style={{ fontFamily: font.bold, marginTop: space.sm }}>

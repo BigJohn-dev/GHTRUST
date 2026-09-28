@@ -75,6 +75,19 @@ class AuthService:
 
         phone = Customer.normalize_phone(entity.phone_number1)
 
+        # Phone numbers are unique per customer; a second BVN registered to the same
+        # number (e.g. a family member's) must not reach the unique constraint as a 500.
+        clash = await self.db.execute(
+            select(Customer.id).where(Customer.phone_primary == phone, Customer.bvn != bvn)
+        )
+        if clash.first() is not None:
+            raise AppError(
+                status.HTTP_409_CONFLICT,
+                ErrorCode.PHONE_IN_USE,
+                "The phone number on this BVN is already linked to another GH Trust account. "
+                "Please visit a branch to open your account.",
+            )
+
         if customer is None:
             customer = Customer(
                 bvn=bvn,
