@@ -4,8 +4,7 @@ import io
 
 from sqlalchemy import select
 
-from app.modules.admin.models import Role, Staff, StaffStatus
-from app.modules.loans.workflow_models import AuditEventType
+from app.modules.admin.models import Role
 from app.modules.loans.workflow_seed import seed_default_workflows
 from tests.conftest import TEST_BVN, TEST_OTP
 
@@ -47,6 +46,7 @@ async def _submit_business_application(api_client, db_session) -> str:
             "universal_form": {
                 "residential_address": "52 Ijaye Road",
                 "bank_name": "GTBank",
+                "bank_code": "058",
                 "bank_account_name": "Adaeze Okafor",
                 "bank_account_number": "0123456789",
                 "next_of_kin_name": "John Okafor",
@@ -75,7 +75,7 @@ async def _submit_business_application(api_client, db_session) -> str:
         "guarantor_photo",
         "collateral_original",
     ):
-        file = io.BytesIO(b"fake pdf content")
+        file = io.BytesIO(b"%PDF-1.4 test document")
         await api_client.post(
             f"/api/v1/loans/me/applications/{app_id}/documents/{doc_type}",
             headers=headers,

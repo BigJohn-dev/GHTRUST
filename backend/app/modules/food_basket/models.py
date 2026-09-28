@@ -1,8 +1,7 @@
-import enum
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Date, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, Date, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,7 +17,10 @@ class FoodBasketPlan(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     plan_type: Mapped[FoodBasketPlanType] = mapped_column(StrEnum(FoodBasketPlanType))
     monthly_price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     description: Mapped[str | None] = mapped_column(Text)
-    items_included: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    # JSON variant lets the SQLite test schema build; Postgres DDL is unchanged.
+    items_included: Mapped[list[str]] = mapped_column(
+        ARRAY(String).with_variant(JSON(), "sqlite"), default=list
+    )
     is_active: Mapped[bool] = mapped_column(default=True)
 
 

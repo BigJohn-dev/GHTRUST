@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.modules.admin.models import Role, Staff, StaffStatus
+from app.modules.auth.schemas import DeviceInfo, TokenPair
 from app.modules.loans.schemas import LoanApplicationSummaryResponse
 from app.modules.users.models import Customer
 
@@ -11,6 +12,7 @@ class StaffLoginRequest(BaseModel):
 
 class VerifyStaffOtpRequest(StaffLoginRequest):
     otp: str = Field(..., min_length=4, max_length=8)
+    device: DeviceInfo | None = None
 
     @field_validator("otp")
     @classmethod
@@ -30,13 +32,13 @@ class OtpSentResponse(BaseModel):
 class RoleCreateRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     description: str | None = Field(None, max_length=255)
-    permissions: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list, max_length=50)
 
 
 class RoleUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=2, max_length=100)
     description: str | None = Field(None, max_length=255)
-    permissions: list[str] | None = None
+    permissions: list[str] | None = Field(None, max_length=50)
 
 
 class RoleResponse(BaseModel):
@@ -63,14 +65,14 @@ class StaffCreateRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=200)
     email: EmailStr
     phone: str = Field(..., min_length=10, max_length=15)
-    role_id: str | None = None
+    role_id: str | None = Field(None, max_length=36)
 
 
 class StaffUpdateRequest(BaseModel):
     full_name: str | None = Field(None, min_length=2, max_length=200)
     email: EmailStr | None = None
     phone: str | None = Field(None, min_length=10, max_length=15)
-    role_id: str | None = None
+    role_id: str | None = Field(None, max_length=36)
 
 
 class StaffResponse(BaseModel):
@@ -99,9 +101,15 @@ class StaffResponse(BaseModel):
         )
 
 
-class StaffAuthTokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class StaffTokenPair(TokenPair):
+    refresh_token: str | None = Field(  # type: ignore[assignment]
+        None,
+        description="Omitted when the client asked for cookie transport (X-Token-Transport: cookie); "
+        "the token is then set as an httpOnly cookie instead.",
+    )
+
+
+class StaffAuthTokenResponse(StaffTokenPair):
     staff: StaffResponse
 
 

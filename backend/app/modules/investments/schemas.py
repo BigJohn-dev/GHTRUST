@@ -25,7 +25,7 @@ class InvestmentPlanResponse(BaseModel):
 
 
 class InvestRequest(BaseModel):
-    plan_id: str
+    plan_id: str = Field(..., max_length=36)
     amount: Decimal = Field(gt=0)
 
 

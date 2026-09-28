@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +42,28 @@ class ApplicationAuditService:
         self.db.add(entry)
         await self.db.flush()
         return entry
+
+    async def logged_recently(
+        self,
+        application_id: str,
+        event_type: AuditEventType,
+        actor_id: str,
+        *,
+        within: timedelta,
+    ) -> bool:
+        """Whether this actor already has this event on this application within the window."""
+        since = datetime.now(timezone.utc) - within
+        found = await self.db.scalar(
+            select(ApplicationAuditLog.id)
+            .where(
+                ApplicationAuditLog.application_id == application_id,
+                ApplicationAuditLog.event_type == event_type,
+                ApplicationAuditLog.actor_id == actor_id,
+                ApplicationAuditLog.created_at >= since,
+            )
+            .limit(1)
+        )
+        return found is not None
 
     async def log_customer(
         self,

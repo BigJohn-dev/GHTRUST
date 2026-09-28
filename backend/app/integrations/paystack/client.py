@@ -5,9 +5,11 @@ from uuid import uuid4
 
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
+from app.integrations.retry import transient_retry
 
 from app.core.config import settings
+from app.integrations.payments.schemas import MOCK_BANKS, Bank
+from app.integrations.payments.schemas import ResolvedAccount as RailResolvedAccount
 from app.integrations.paystack.constants import (
     TRANSACTION_STATUS_SUCCESS,
     TRANSFER_STATUS_SUCCESS,
@@ -27,6 +29,7 @@ from app.integrations.paystack.schemas import (
     PaystackDedicatedAccount,
     PaystackEnvelope,
     PaystackError,
+    TransientPaystackError,
     PaystackTransaction,
     PaystackTransfer,
     PaystackTransferRecipient,
@@ -76,7 +79,7 @@ class PaystackClient:
             )
         return envelope.data
 
-    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+    @transient_retry()
     async def _request(
         self,
         method: str,
@@ -86,14 +89,18 @@ class PaystackClient:
         json: dict[str, Any] | None = None,
     ) -> Any:
         url = f"{self.base_url}{path}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.request(
-                method,
-                url,
-                headers=self._headers(),
-                params=params,
-                json=json,
-            )
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.request(
+                    method,
+                    url,
+                    headers=self._headers(),
+                    params=params,
+                    json=json,
+                )
+        except httpx.HTTPError as exc:
+            logger.warning("paystack_transport_error", method=method, path=path, error=str(exc))
+            raise TransientPaystackError("Paystack unreachable. Please try again.", status_code=502) from exc
 
         if response.status_code >= 500:
             logger.error(
@@ -103,7 +110,7 @@ class PaystackClient:
                 status=response.status_code,
                 body=response.text[:300],
             )
-            raise PaystackError("Paystack service unavailable. Please try again.", status_code=502)
+            raise TransientPaystackError("Paystack service unavailable. Please try again.", status_code=502)
 
         try:
             payload = response.json()
@@ -377,6 +384,18 @@ class PaystackClient:
             ]
         data = await self._request("GET", "/bank", params={"country": country})
         return [PaystackBank.model_validate(item) for item in data or []]
+
+    async def supported_banks(self) -> list[Bank]:
+        if self._use_mock:
+            return list(MOCK_BANKS)
+        return [Bank(code=b.code, name=b.name) for b in await self.list_banks() if b.active]
+
+    async def validate_bank_account(self, account_number: str, bank_code: str) -> RailResolvedAccount:
+        """Rail-interface name enquiry (disbursement + the app's account check)."""
+        resolved = await self.resolve_account(account_number, bank_code)
+        return RailResolvedAccount(
+            account_number=resolved.account_number, account_name=resolved.account_name, bank_code=bank_code
+        )
 
     async def resolve_account(self, account_number: str, bank_code: str) -> ResolvedAccount:
         if self._use_mock:

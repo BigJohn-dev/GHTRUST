@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -30,6 +31,8 @@ def _active_provider() -> PaymentProvider:
         return PaymentProvider.PAYSTACK
     if provider == "zest":
         return PaymentProvider.ZEST
+    if provider == "stanbic":
+        return PaymentProvider.STANBIC
     return PaymentProvider.MONNIFY
 
 
@@ -214,11 +217,37 @@ class WalletService:
         return withdrawal
 
     async def process_withdrawal(self, withdrawal: WithdrawalRequest) -> WithdrawalRequest:
-        if withdrawal.status not in (WithdrawalStatus.PENDING, WithdrawalStatus.PROCESSING):
+        """
+        Send a held withdrawal to the rail. Called by the Celery worker, which
+        commits after each withdrawal.
+
+        * The PaymentTransaction is created and committed BEFORE the provider is
+          called, so reconciliation can always find the transfer by reference.
+        * Provider rejection → FAILED and the hold is released.
+        * Transient failure (timeout / 5xx) → outcome unknown: stays PROCESSING
+          and the hold stays in place until reconciliation confirms either way.
+          Releasing it (the old behaviour) let a customer withdraw the same
+          money twice whenever a bank timeout hid a successful transfer.
+        """
+        if withdrawal.status != WithdrawalStatus.PENDING:
             return withdrawal
 
+        payment_tx = PaymentTransaction(
+            provider=self.provider,
+            provider_reference=withdrawal.transfer_reference,
+            direction=PaymentDirection.OUTBOUND,
+            channel=PaymentChannel.TRANSFER,
+            amount=withdrawal.amount,
+            currency="NGN",
+            status=TransactionStatus.PENDING,
+            customer_id=withdrawal.customer_id,
+            wallet_id=withdrawal.wallet_id,
+            withdrawal_id=withdrawal.id,
+            raw_payload={},
+        )
+        self.db.add(payment_tx)
         withdrawal.status = WithdrawalStatus.PROCESSING
-        await self.db.flush()
+        await self.db.commit()
 
         try:
             if settings.active_payment_provider == "paystack":
@@ -232,9 +261,9 @@ class WalletService:
                         reference=withdrawal.transfer_reference,
                     )
                 )
-                transfer_code = transfer.transfer_code
-                provider_tx_id = str(transfer.id)
-                raw_payload = {"transfer_code": transfer.transfer_code, "status": transfer.status}
+                withdrawal.transfer_code = transfer.transfer_code
+                payment_tx.provider_transaction_id = str(transfer.id)
+                payment_tx.raw_payload = {"transfer_code": transfer.transfer_code, "status": transfer.status}
             else:
                 result = await self.rail.initiate_disbursement(
                     amount=withdrawal.amount,
@@ -244,12 +273,23 @@ class WalletService:
                     account_name=withdrawal.account_name,
                     narration="GH Trust wallet withdrawal",
                 )
-                transfer_code = result.transaction_id
-                provider_tx_id = result.transaction_id or withdrawal.transfer_reference
-                raw_payload = {"status": result.status, "reference": result.reference}
+                withdrawal.transfer_code = result.transaction_id
+                payment_tx.provider_transaction_id = result.transaction_id or withdrawal.transfer_reference
+                payment_tx.raw_payload = {"status": result.status, "reference": result.reference}
         except PaymentRailError as exc:
+            if exc.outcome_unknown:
+                logger.warning(
+                    "withdrawal_outcome_unknown",
+                    withdrawal_id=withdrawal.id,
+                    reference=withdrawal.transfer_reference,
+                    error=exc.message,
+                )
+                return withdrawal
+            payment_tx.status = TransactionStatus.FAILED
+            payment_tx.failure_reason = exc.message
             withdrawal.status = WithdrawalStatus.FAILED
             withdrawal.failure_reason = exc.message
+            withdrawal.processed_at = datetime.now(timezone.utc)
             try:
                 await self.ledger.release_withdrawal_hold(
                     customer_id=withdrawal.customer_id,
@@ -259,24 +299,6 @@ class WalletService:
                 )
             except LedgerError as ledger_err:
                 logger.error("withdrawal_release_failed", withdrawal_id=withdrawal.id, error=ledger_err.message)
-            await self.db.flush()
-            return withdrawal
-
-        withdrawal.transfer_code = transfer_code
-        payment_tx = PaymentTransaction(
-            provider=self.provider,
-            provider_reference=withdrawal.transfer_reference,
-            provider_transaction_id=provider_tx_id,
-            direction=PaymentDirection.OUTBOUND,
-            channel=PaymentChannel.TRANSFER,
-            amount=withdrawal.amount,
-            currency="NGN",
-            status=TransactionStatus.PENDING,
-            customer_id=withdrawal.customer_id,
-            wallet_id=withdrawal.wallet_id,
-            withdrawal_id=withdrawal.id,
-            raw_payload=raw_payload,
-        )
-        self.db.add(payment_tx)
+                raise
         await self.db.flush()
         return withdrawal

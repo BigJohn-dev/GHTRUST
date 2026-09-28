@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
+from app.integrations.retry import transient_retry
 
 from app.core.config import settings
 from app.integrations.monnify.constants import (
@@ -18,11 +18,14 @@ from app.integrations.monnify.constants import (
     DISBURSEMENT_STATUS_SUCCESS,
 )
 from app.integrations.payments.schemas import (
+    MOCK_BANKS,
+    Bank,
     DisbursementResult,
     PaymentRailError,
     ReservedAccountResult,
     ResolvedAccount,
     TransactionVerification,
+    TransientRailError,
     WalletBalanceResult,
 )
 
@@ -117,7 +120,7 @@ class MonnifyClient:
             "Content-Type": "application/json",
         }
 
-    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+    @transient_retry()
     async def _request(
         self,
         method: str,
@@ -131,14 +134,18 @@ class MonnifyClient:
 
         url = f"{self.base_url}{path}"
         headers = await self._headers()
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.request(
-                method,
-                url,
-                headers=headers,
-                params=params,
-                json=json,
-            )
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.request(
+                    method,
+                    url,
+                    headers=headers,
+                    params=params,
+                    json=json,
+                )
+        except httpx.HTTPError as exc:
+            logger.warning("monnify_transport_error", method=method, path=path, error=str(exc))
+            raise TransientRailError("Monnify unreachable. Please try again.", status_code=502) from exc
 
         if response.status_code >= 500:
             logger.error(
@@ -148,7 +155,7 @@ class MonnifyClient:
                 status=response.status_code,
                 body=response.text[:300],
             )
-            raise PaymentRailError("Monnify service unavailable. Please try again.", status_code=502)
+            raise TransientRailError("Monnify service unavailable. Please try again.", status_code=502)
 
         try:
             payload = response.json()
@@ -265,6 +272,12 @@ class MonnifyClient:
             reservation_reference=str(primary.get("reservationReference") or "") or None,
             raw=body,
         )
+
+    async def supported_banks(self) -> list[Bank]:
+        if self._use_mock:
+            return list(MOCK_BANKS)
+        body = await self._request("GET", "/api/v1/banks")
+        return [Bank(code=str(b["code"]), name=str(b["name"])) for b in body or [] if b.get("code") and b.get("name")]
 
     async def validate_bank_account(self, account_number: str, bank_code: str) -> ResolvedAccount:
         if self._use_mock:

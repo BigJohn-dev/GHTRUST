@@ -1,9 +1,14 @@
 import structlog
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential
+from app.integrations.retry import transient_retry
 
 from app.core.config import settings
-from app.integrations.dojah.schemas import DojahBvnEntity, DojahBvnResponse, DojahError
+from app.integrations.dojah.schemas import (
+    DojahBvnEntity,
+    DojahBvnResponse,
+    DojahError,
+    TransientDojahError,
+)
 
 logger = structlog.get_logger()
 
@@ -48,11 +53,14 @@ class DojahClient:
         self.app_id = settings.dojah_app_id
         self.secret_key = settings.dojah_secret_key
 
-    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+    @transient_retry()
     async def lookup_bvn_advanced(self, bvn: str) -> DojahBvnEntity:
         if settings.dojah_mock or not settings.dojah_enabled:
             logger.info("dojah_mock_lookup", bvn=bvn[:3] + "****")
-            entity = MOCK_ENTITY.model_copy(update={"bvn": bvn})
+            update = {"bvn": bvn}
+            if settings.dojah_mock_phone:
+                update["phone_number1"] = settings.dojah_mock_phone
+            entity = MOCK_ENTITY.model_copy(update=update)
             return entity
 
         url = f"{self.base_url}/api/v1/kyc/bvn/advance"
@@ -62,11 +70,22 @@ class DojahClient:
         }
         params = {"bvn": bvn}
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, headers=headers, params=params)
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, headers=headers, params=params)
+        except httpx.HTTPError as exc:
+            logger.warning("dojah_transport_error", error=str(exc))
+            raise TransientDojahError(
+                "BVN verification is temporarily unavailable. Please try again.", status_code=502
+            ) from exc
 
         if response.status_code == 404:
             raise DojahError("BVN not found or invalid", status_code=404)
+        if response.status_code >= 500:
+            logger.error("dojah_api_unavailable", status=response.status_code)
+            raise TransientDojahError(
+                "BVN verification is temporarily unavailable. Please try again.", status_code=502
+            )
         if response.status_code >= 400:
             logger.error("dojah_api_error", status=response.status_code, body=response.text[:200])
             raise DojahError("BVN verification failed. Please try again.", status_code=502)

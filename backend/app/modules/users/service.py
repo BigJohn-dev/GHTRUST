@@ -1,11 +1,12 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.loans.models import LoanApplication
+from app.modules.loans.models import Loan, LoanApplication
 from app.modules.loans.schemas import ApplicationStatus
 from app.modules.loans.service import LoanService
 from app.modules.users.models import Customer, CustomerStatus
+from app.modules.users.search import customer_search_clause
 from app.modules.users.schemas import (
     CustomerDetailResponse,
     CustomerStatsResponse,
@@ -24,30 +25,25 @@ class CustomerAdminService:
         status: CustomerStatus | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[CustomerSummaryResponse]:
-        query = select(Customer).order_by(Customer.created_at.desc())
-        if search:
-            term = f"%{search.strip()}%"
-            query = query.where(
-                or_(
-                    Customer.first_name.ilike(term),
-                    Customer.last_name.ilike(term),
-                    Customer.middle_name.ilike(term),
-                    Customer.email.ilike(term),
-                    Customer.account_number.ilike(term),
-                    Customer.phone_primary.ilike(term),
-                    Customer.bvn.ilike(term),
-                )
-            )
+    ) -> tuple[list[CustomerSummaryResponse], int]:
+        conditions = []
+        if search and search.strip():
+            conditions.append(customer_search_clause(search))
         if status:
-            query = query.where(Customer.status == status)
+            conditions.append(Customer.status == status)
 
-        query = query.limit(min(limit, 100)).offset(max(offset, 0))
-        result = await self.db.execute(query)
-        customers = result.scalars().all()
+        total = await self.db.scalar(select(func.count()).select_from(Customer).where(*conditions))
+        query = (
+            select(Customer)
+            .where(*conditions)
+            .order_by(Customer.created_at.desc())
+            .limit(min(limit, 100))
+            .offset(max(offset, 0))
+        )
+        customers = (await self.db.execute(query)).scalars().all()
 
         if not customers:
-            return []
+            return [], int(total or 0)
 
         customer_ids = [c.id for c in customers]
         count_rows = await self.db.execute(
@@ -60,7 +56,7 @@ class CustomerAdminService:
         return [
             CustomerSummaryResponse.from_customer(c, application_count=counts.get(c.id, 0))
             for c in customers
-        ]
+        ], int(total or 0)
 
     async def get_customer(self, customer_id: str) -> CustomerDetailResponse:
         customer = await self._get_customer(customer_id)
@@ -70,18 +66,21 @@ class CustomerAdminService:
         active_statuses = {
             ApplicationStatus.SUBMITTED,
             ApplicationStatus.UNDER_REVIEW,
+            ApplicationStatus.DOCUMENTS_INCOMPLETE,
             ApplicationStatus.APPROVED,
+            ApplicationStatus.READY_TO_DISBURSE,
         }
         disbursed = [a for a in applications if a.status == ApplicationStatus.DISBURSED]
-        total_disbursed = sum(
-            float(a.approved_amount or a.requested_amount or 0) for a in disbursed
+        # What was actually paid out (loan book), not the application's requested/approved figure.
+        total_disbursed = await self.db.scalar(
+            select(func.coalesce(func.sum(Loan.disbursed_amount), 0)).where(Loan.customer_id == customer_id)
         )
 
         stats = CustomerStatsResponse(
             total_applications=len(applications),
             active_applications=sum(1 for a in applications if a.status in active_statuses),
             disbursed_count=len(disbursed),
-            total_disbursed_amount=total_disbursed,
+            total_disbursed_amount=float(total_disbursed or 0),
         )
 
         return CustomerDetailResponse.from_customer(

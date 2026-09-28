@@ -1,7 +1,6 @@
 """Shared pytest fixtures for GH Trust MFB backend."""
 
 from collections.abc import AsyncGenerator
-from unittest.mock import patch
 
 import fakeredis.aioredis
 import pytest
@@ -14,41 +13,18 @@ from app.core.rate_limit import OtpService
 from app.core.redis import get_redis
 from app.integrations.dojah.schemas import DojahBvnEntity
 from app.main import create_app
-from app.modules.admin.models import Role, Staff
+import app.models.registry  # noqa: F401
+from app.models import Base
+from app.modules.admin.models import Staff
 from app.modules.admin.service import ensure_super_admin_role, seed_super_admin
-from app.modules.loans.models import (
-    ApplicationCollateral,
-    ApplicationDocument,
-    ApplicationGuarantor,
-    ApplicationStatusLog,
-    Loan,
-    LoanApplication,
-    LoanProduct,
-)
-from app.modules.payments.models import (
-    CustomerWallet,
-    LedgerEntry,
-    LedgerJournal,
-    LoanDisbursement,
-    PaymentTransaction,
-    ProcessedWebhookEvent,
-    WithdrawalRequest,
-)
-from app.modules.loans.workflow_models import (
-    ApplicationAuditLog,
-    ApplicationStageDecision,
-    LoanWorkflow,
-    LoanWorkflowStage,
-)
-from app.modules.users.models import Customer
 
 TEST_BVN = "22222222222"
 TEST_BVN_2 = "33333333333"
 TEST_OTP = "123456"
 TEST_PHONE = "+2348035794364"
-TEST_ADMIN_EMAIL = "admin@ghtrust.com"
-TEST_ADMIN_PHONE = "08107891549"
-TEST_ADMIN_NAME = "Divine Obinali"
+TEST_ADMIN_EMAIL = "superadmin@example.com"
+TEST_ADMIN_PHONE = "08000000001"
+TEST_ADMIN_NAME = "Test Super Admin"
 
 _SETTINGS_CONSUMER_MODULES = (
     "app.core.rate_limit",
@@ -96,6 +72,8 @@ def _test_env(monkeypatch):
     monkeypatch.setenv("MONNIFY_CONTRACT_CODE", "1234567890")
     monkeypatch.setenv("ZEST_AUTH_ENCRYPTION_IV", "3A4CD38XVS621KZ6")
     monkeypatch.setenv("SMS_MOCK", "true")
+    # Never inherit a developer's local test-mode phone from backend/.env.
+    monkeypatch.setenv("DOJAH_MOCK_PHONE", "")
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-for-jwt-and-otp-hashing")
     monkeypatch.setenv("OTP_LENGTH", "6")
     monkeypatch.setenv("OTP_EXPIRE_SECONDS", "600")
@@ -122,27 +100,9 @@ async def fake_redis():
 async def db_engine():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
-        await conn.run_sync(Role.__table__.create)
-        await conn.run_sync(Staff.__table__.create)
-        await conn.run_sync(Customer.__table__.create)
-        await conn.run_sync(LoanProduct.__table__.create)
-        await conn.run_sync(LoanApplication.__table__.create)
-        await conn.run_sync(ApplicationDocument.__table__.create)
-        await conn.run_sync(ApplicationGuarantor.__table__.create)
-        await conn.run_sync(ApplicationCollateral.__table__.create)
-        await conn.run_sync(ApplicationStatusLog.__table__.create)
-        await conn.run_sync(LoanWorkflow.__table__.create)
-        await conn.run_sync(LoanWorkflowStage.__table__.create)
-        await conn.run_sync(ApplicationStageDecision.__table__.create)
-        await conn.run_sync(ApplicationAuditLog.__table__.create)
-        await conn.run_sync(CustomerWallet.__table__.create)
-        await conn.run_sync(WithdrawalRequest.__table__.create)
-        await conn.run_sync(PaymentTransaction.__table__.create)
-        await conn.run_sync(LedgerJournal.__table__.create)
-        await conn.run_sync(LedgerEntry.__table__.create)
-        await conn.run_sync(LoanDisbursement.__table__.create)
-        await conn.run_sync(ProcessedWebhookEvent.__table__.create)
-        await conn.run_sync(Loan.__table__.create)
+        # Build from the same registry Alembic uses, so a new model can never
+        # be missing from the test schema.
+        await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
 

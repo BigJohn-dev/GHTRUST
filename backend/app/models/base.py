@@ -3,11 +3,10 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum, Numeric, String, func
+from sqlalchemy import DateTime, Enum, Numeric, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import Base
 
 
 class TimestampMixin:

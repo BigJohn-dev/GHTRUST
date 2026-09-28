@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.errors import AppError, ErrorCode
 from app.modules.loans.audit_service import ApplicationAuditService
 from app.modules.loans.constants import DOCUMENT_LABELS, LOAN_PRODUCT_SEED
 from app.modules.loans.models import (
@@ -50,10 +51,10 @@ from app.modules.admin.schemas import (
     DemographicBucket,
 )
 from app.modules.loans.schemas import (
-    ApplicationChannel,
     ApplicationDocumentResponse,
     ApplicationStatus,
     ApplicationStatusUpdate,
+    LoanStatus,
     CollateralInput,
     CreateApplicationRequest,
     DocumentChecklistItem,
@@ -70,6 +71,7 @@ from app.modules.loans.schemas import (
     UpdateApplicationStepRequest,
     VerifyDocumentRequest,
 )
+from app.modules.loans.servicing import DAYS_PER_MONTH, resolve_tenure_months
 from app.modules.loans.storage import DocumentStorage
 
 logger = structlog.get_logger()
@@ -80,6 +82,7 @@ UNIVERSAL_REQUIRED_FIELDS = (
     "phone",
     "bvn",
     "bank_name",
+    "bank_code",
     "bank_account_name",
     "bank_account_number",
     "next_of_kin_name",
@@ -102,6 +105,9 @@ async def seed_loan_products(db: AsyncSession) -> None:
         db.add(LoanProduct(**item))
     await db.flush()
 
+
+# Repeat views of an application by the same staff member inside this window aren't re-logged.
+VIEW_AUDIT_WINDOW = timedelta(minutes=15)
 
 class LoanService:
     def __init__(self, db: AsyncSession):
@@ -149,6 +155,49 @@ class LoanService:
         result = await self.db.execute(query.order_by(LoanApplication.created_at.desc()))
         return [self._summary(app) for app in result.scalars().all()]
 
+    async def list_applications_page(
+        self,
+        *,
+        customer_id: str | None = None,
+        status: ApplicationStatus | None = None,
+        statuses: tuple[ApplicationStatus, ...] | None = None,
+        product_code: str | None = None,
+        search: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[LoanApplicationSummaryResponse], int]:
+        conditions = []
+        if search and search.strip():
+            from app.modules.users.models import Customer
+            from app.modules.users.search import customer_search_clause
+
+            conditions.append(
+                LoanApplication.customer_id.in_(select(Customer.id).where(customer_search_clause(search)))
+            )
+        if customer_id:
+            conditions.append(LoanApplication.customer_id == customer_id)
+        if status:
+            conditions.append(LoanApplication.status == status)
+        if statuses:
+            conditions.append(LoanApplication.status.in_(statuses))
+        count_query = select(func.count()).select_from(LoanApplication).where(*conditions)
+        query = select(LoanApplication).options(
+            selectinload(LoanApplication.product),
+            selectinload(LoanApplication.workflow).selectinload(LoanWorkflow.stages).selectinload(
+                LoanWorkflowStage.approver_role
+            ),
+            selectinload(LoanApplication.current_stage).selectinload(LoanWorkflowStage.approver_role),
+            selectinload(LoanApplication.stage_decisions),
+        ).where(*conditions)
+        if product_code:
+            count_query = count_query.join(LoanProduct).where(LoanProduct.code == product_code)
+            query = query.join(LoanProduct).where(LoanProduct.code == product_code)
+        total = await self.db.scalar(count_query)
+        result = await self.db.execute(
+            query.order_by(LoanApplication.created_at.desc()).limit(limit).offset(offset)
+        )
+        return [self._summary(app) for app in result.scalars().all()], int(total or 0)
+
     async def get_dashboard(self) -> AdminDashboardResponse:
         status_rows = await self.db.execute(
             select(LoanApplication.status, func.count()).group_by(LoanApplication.status)
@@ -167,46 +216,43 @@ class LoanService:
             ApplicationStatus.SUBMITTED, 0
         )
 
-        disbursed_row = await self.db.execute(
-            select(func.coalesce(func.sum(LoanApplication.approved_amount), 0)).where(
-                LoanApplication.status == ApplicationStatus.DISBURSED
+        # Money figures come from the loan book, not application fields. The old
+        # query summed approved_amount, which is null when a loan is disbursed at
+        # the requested amount — so "total disbursed" read ₦0 — and "loan book"
+        # was just disbursed principal again, ignoring repayments.
+        total_disbursed = await self.db.scalar(
+            select(func.coalesce(func.sum(Loan.disbursed_amount), 0))
+        ) or Decimal("0")
+        loan_book = await self.db.scalar(
+            select(func.coalesce(func.sum(Loan.principal_outstanding), 0)).where(
+                Loan.status.in_((LoanStatus.ACTIVE, LoanStatus.OVERDUE))
             )
-        )
-        total_disbursed = disbursed_row.scalar_one() or Decimal("0")
+        ) or Decimal("0")
 
-        loan_book_row = await self.db.execute(
-            select(
-                func.coalesce(
-                    func.sum(func.coalesce(LoanApplication.approved_amount, LoanApplication.requested_amount, 0)),
-                    0,
-                )
-            ).where(LoanApplication.status == ApplicationStatus.DISBURSED)
+        # Bounded queries. This used to load EVERY application (with four
+        # relationship loads each) just to show 10, plus 7 separate count queries.
+        recent_applications, _ = await self.list_applications_page(limit=10)
+        pending_queue, _ = await self.list_applications_page(
+            statuses=(ApplicationStatus.UNDER_REVIEW, ApplicationStatus.SUBMITTED), limit=5
         )
-        loan_book = loan_book_row.scalar_one() or Decimal("0")
-
-        all_apps = await self.list_applications()
-        recent_applications = all_apps[:10]
-        pending_queue = [
-            app
-            for app in all_apps
-            if app.status in (ApplicationStatus.UNDER_REVIEW, ApplicationStatus.SUBMITTED)
-        ][:5]
 
         today = datetime.now(timezone.utc).date()
-        daily_submissions: list[DashboardDailySubmission] = []
-        for offset in range(6, -1, -1):
-            day = today - timedelta(days=offset)
-            day_start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
-            day_end = day_start + timedelta(days=1)
-            count_row = await self.db.execute(
-                select(func.count()).where(
-                    func.coalesce(LoanApplication.submitted_at, LoanApplication.created_at) >= day_start,
-                    func.coalesce(LoanApplication.submitted_at, LoanApplication.created_at) < day_end,
-                )
+        window_start = datetime.combine(today - timedelta(days=6), datetime.min.time(), tzinfo=timezone.utc)
+        activity_at = func.coalesce(LoanApplication.submitted_at, LoanApplication.created_at)
+        stamps = (
+            await self.db.execute(select(activity_at).where(activity_at >= window_start))
+        ).scalars().all()
+        per_day = Counter(
+            (stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).date()
+            for stamp in stamps
+        )
+        daily_submissions = [
+            DashboardDailySubmission(
+                date=(today - timedelta(days=offset)).isoformat(),
+                count=per_day.get(today - timedelta(days=offset), 0),
             )
-            daily_submissions.append(
-                DashboardDailySubmission(date=day.isoformat(), count=count_row.scalar_one() or 0)
-            )
+            for offset in range(6, -1, -1)
+        ]
 
         product_rows = await self.db.execute(
             select(LoanProduct.code, LoanProduct.name, func.count())
@@ -351,12 +397,15 @@ class LoanService:
         upload: UploadFile,
     ) -> LoanApplicationDetailResponse:
         application = await self._get_application_for_customer(application_id, customer_id)
-        self._ensure_editable(application)
+        replacing_rejected = application.status != ApplicationStatus.DRAFT
+        if replacing_rejected:
+            self._ensure_reupload_allowed(application, document_type)
 
         if document_type not in application.product.required_document_types:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Document type '{document_type}' is not required for this product",
+            raise AppError(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                ErrorCode.DOCUMENT_TYPE_NOT_ALLOWED,
+                f"Document type '{document_type}' is not required for this product",
             )
 
         file_key, file_name, mime_type, size_bytes = await self.storage.save(
@@ -388,7 +437,47 @@ class LoanService:
         )
         await self.db.flush()
         await self.db.refresh(application, attribute_names=["documents", "guarantors", "collaterals", "product"])
+        if replacing_rejected:
+            await self._after_reupload(application, customer_id, document_type)
         return await self.get_application(application_id, customer_id=customer_id)
+
+    # After submission a customer may replace only what staff rejected, while it is still in review.
+    _REUPLOAD_STATUSES = frozenset(
+        {ApplicationStatus.SUBMITTED, ApplicationStatus.UNDER_REVIEW, ApplicationStatus.DOCUMENTS_INCOMPLETE}
+    )
+
+    def _ensure_reupload_allowed(self, application: LoanApplication, document_type: str) -> None:
+        rejected = any(
+            d.document_type == document_type and d.status == DocumentStatus.REJECTED for d in application.documents
+        )
+        if application.status not in self._REUPLOAD_STATUSES or not rejected:
+            raise AppError(
+                status.HTTP_409_CONFLICT,
+                ErrorCode.APPLICATION_NOT_EDITABLE,
+                "Only documents we've asked you to replace can be uploaded now.",
+            )
+
+    async def _after_reupload(self, application: LoanApplication, customer_id: str, document_type: str) -> None:
+        customer = await self.db.get(Customer, customer_id)
+        if customer:
+            await ApplicationAuditService(self.db).log_customer(
+                application.id,
+                AuditEventType.DOCUMENT_UPLOADED,
+                customer,
+                message=f"Customer replaced {DOCUMENT_LABELS.get(document_type, document_type)}",
+                metadata={"document_type": document_type},
+            )
+        still_rejected = any(d.status == DocumentStatus.REJECTED for d in application.documents)
+        if application.status == ApplicationStatus.DOCUMENTS_INCOMPLETE and not still_rejected:
+            application.status = ApplicationStatus.UNDER_REVIEW
+            await self._log_status(
+                application,
+                ApplicationStatus.DOCUMENTS_INCOMPLETE.value,
+                ApplicationStatus.UNDER_REVIEW.value,
+                note="Customer replaced the rejected documents",
+                customer_id=customer_id,
+            )
+        await self.db.flush()
 
     async def submit_application(
         self,
@@ -401,9 +490,11 @@ class LoanService:
 
         errors = self._validate_for_submission(application)
         if errors:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={"message": "Application incomplete", "errors": errors},
+            raise AppError(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                ErrorCode.APPLICATION_INCOMPLETE,
+                "Application incomplete",
+                errors=errors,
             )
 
         application.status = ApplicationStatus.SUBMITTED
@@ -438,6 +529,13 @@ class LoanService:
     ) -> LoanApplicationDetailResponse:
         application = await self._get_application(application_id)
         audit = ApplicationAuditService(self.db)
+        # One view record per staff member per application per window: re-fetches after
+        # each action on the page would otherwise flood the audit trail. Decisions and
+        # changes are always logged separately.
+        if await audit.logged_recently(
+            application.id, AuditEventType.APPLICATION_VIEWED, staff.id, within=VIEW_AUDIT_WINDOW
+        ):
+            return self._detail(application)
         await audit.log_staff(
             application.id,
             AuditEventType.APPLICATION_VIEWED,
@@ -476,8 +574,10 @@ class LoanService:
         decisions = sorted(application.stage_decisions, key=lambda d: d.decided_at)
         decision_rows: list[StageDecisionResponse] = []
         for decision in decisions:
-            stage = await self.db.get(LoanWorkflowStage, decision.stage_id)
-            staff = await self.db.get(Staff, decision.staff_id)
+            # Loaded by _get_application(load_workflow=True); previously two
+            # extra queries per decision.
+            stage = decision.stage
+            staff = decision.staff
             decision_rows.append(
                 StageDecisionResponse(
                     id=decision.id,
@@ -539,6 +639,30 @@ class LoanService:
         await self.db.flush()
         return self._detail(application)
 
+    async def record_manual_disbursement(
+        self,
+        application_id: str,
+        staff: Staff,
+        payload,
+        *,
+        ip: str | None = None,
+    ) -> LoanApplicationDetailResponse:
+        from datetime import date as _date
+
+        from app.modules.payments.disbursement_service import DisbursementService
+
+        application = await self._get_application(application_id)
+        await DisbursementService(self.db).record_manual(
+            application,
+            staff,
+            external_reference=payload.external_reference,
+            disbursed_on=payload.disbursed_on or _date.today(),
+            note=payload.note,
+            ip=ip,
+        )
+        await self.db.flush()
+        return self._detail(application)
+
     async def get_active_product_workflow(self, product_code: str):
         product = await self._get_product_by_code(product_code)
         workflow = await WorkflowService(self.db).get_active_workflow(product.id)
@@ -588,30 +712,102 @@ class LoanService:
         application = await self._get_application(application_id, customer_id=customer_id)
         return self._detail(application)
 
+    # Statuses in which staff may still adjust terms or reject manually.
+    _MANUALLY_ADJUSTABLE = frozenset(
+        {
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.UNDER_REVIEW,
+            ApplicationStatus.DOCUMENTS_INCOMPLETE,
+            ApplicationStatus.APPROVED,
+        }
+    )
+
     async def update_application_status(
         self,
         application_id: str,
         payload: ApplicationStatusUpdate,
         *,
-        staff_id: str,
+        staff: Staff,
+        ip: str | None = None,
     ) -> LoanApplicationDetailResponse:
         application = await self._get_application(application_id)
-        old_status = application.status.value
+        current = application.status
 
-        application.status = payload.status
+        if current not in self._MANUALLY_ADJUSTABLE:
+            raise AppError(
+                status.HTTP_409_CONFLICT,
+                ErrorCode.INVALID_STATUS_TRANSITION,
+                f"Application is {current.value}; it can no longer be changed manually.",
+            )
+        target = payload.status
+        if target is not None and target not in (current, ApplicationStatus.REJECTED):
+            raise AppError(
+                status.HTTP_409_CONFLICT,
+                ErrorCode.INVALID_STATUS_TRANSITION,
+                "Only rejection can be applied manually. Approve through the workflow "
+                "stages and disburse through the disburse action.",
+            )
+        if target == ApplicationStatus.REJECTED and not (payload.note or "").strip():
+            raise AppError(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                ErrorCode.INVALID_STATUS_TRANSITION,
+                "A rejection reason (note) is required.",
+            )
+        if (
+            target is None
+            and payload.approved_amount is None
+            and payload.repayment_cadence is None
+            and payload.tenure_months is None
+        ):
+            raise AppError(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "VALIDATION_ERROR",
+                "Nothing to update.",
+            )
+
+        changes: dict = {}
         if payload.approved_amount is not None:
+            changes["approved_amount"] = {
+                "from": str(application.approved_amount) if application.approved_amount else None,
+                "to": str(payload.approved_amount),
+            }
             application.approved_amount = payload.approved_amount
         if payload.repayment_cadence is not None:
+            changes["repayment_cadence"] = {
+                "from": application.repayment_cadence,
+                "to": payload.repayment_cadence.value,
+            }
             application.repayment_cadence = payload.repayment_cadence.value
-        if payload.status == ApplicationStatus.REJECTED:
-            application.rejection_reason = payload.note
+        if payload.tenure_months is not None:
+            changes["tenure_months"] = {
+                "from": application.approved_tenure_months,
+                "to": payload.tenure_months,
+            }
+            application.approved_tenure_months = payload.tenure_months
 
-        await self._log_status(
-            application,
-            old_status,
-            payload.status.value,
-            note=payload.note,
-            staff_id=staff_id,
+        if target == ApplicationStatus.REJECTED and current != ApplicationStatus.REJECTED:
+            now = datetime.now(timezone.utc)
+            application.status = ApplicationStatus.REJECTED
+            application.rejected_at = now
+            application.rejection_reason = payload.note
+            application.current_stage_id = None
+            application.current_stage_entered_at = None
+            changes["status"] = {"from": current.value, "to": ApplicationStatus.REJECTED.value}
+            await self._log_status(
+                application,
+                current.value,
+                ApplicationStatus.REJECTED.value,
+                note=payload.note,
+                staff_id=staff.id,
+            )
+
+        await ApplicationAuditService(self.db).log_staff(
+            application.id,
+            AuditEventType.STATUS_CHANGED,
+            staff,
+            message=payload.note or "Loan terms updated",
+            metadata={"changes": changes},
+            ip_address=ip,
         )
         await self.db.flush()
         return self._detail(application)
@@ -720,9 +916,10 @@ class LoanService:
     @staticmethod
     def _ensure_editable(application: LoanApplication) -> None:
         if application.status != ApplicationStatus.DRAFT:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Only draft applications can be edited",
+            raise AppError(
+                status.HTTP_409_CONFLICT,
+                ErrorCode.APPLICATION_NOT_EDITABLE,
+                "Only draft applications can be edited",
             )
 
     @staticmethod
@@ -808,6 +1005,14 @@ class LoanService:
             if doc_type not in uploaded_types:
                 label = DOCUMENT_LABELS.get(doc_type, doc_type)
                 errors.append(f"Missing document: {label}")
+
+        # Catch an over-long tenure now, while the customer can still change it, rather
+        # than at disbursement after staff have approved the application.
+        tenure = resolve_tenure_months(application)
+        max_days = application.product.max_tenure_days
+        if tenure and max_days and tenure * DAYS_PER_MONTH > max_days:
+            max_months = max(max_days // DAYS_PER_MONTH, 1)
+            errors.append(f"Tenure of {tenure} months exceeds this product's maximum of {max_months} months")
 
         code = application.product.code
         data = application.product_data or {}
@@ -1056,6 +1261,8 @@ class LoanService:
             requested_amount=application.requested_amount,
             approved_amount=application.approved_amount,
             repayment_cadence=application.repayment_cadence,
+            approved_tenure_months=application.approved_tenure_months,
+            tenure_months=resolve_tenure_months(application),
             universal_form=application.universal_form or {},
             product_data=application.product_data or {},
             submitted_at=application.submitted_at,

@@ -1,3 +1,6 @@
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -16,8 +19,48 @@ class PhoneLoginRequest(BaseModel):
     phone: str = Field(..., min_length=10, max_length=15, description="Phone number linked to BVN account")
 
 
+class DeviceInfo(BaseModel):
+    """Optional client/device metadata. Send it from the mobile app on every OTP verify."""
+
+    device_id: str | None = Field(
+        default=None,
+        max_length=128,
+        description="Stable per-install ID. Re-login from the same device replaces its old session.",
+    )
+    device_name: str | None = Field(default=None, max_length=128, examples=["Ada's iPhone"])
+    platform: Literal["ios", "android", "web"] | None = None
+    app_version: str | None = Field(default=None, max_length=32, examples=["1.0.0"])
+
+
+class TokenPair(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = Field(description="Access token lifetime in seconds")
+    refresh_token: str = Field(description="Opaque; rotates on every refresh. Store securely.")
+    refresh_expires_in: int = Field(description="Refresh token lifetime in seconds")
+    session_id: str
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=20, max_length=256)
+
+
+class SessionResponse(BaseModel):
+    id: str
+    device_id: str | None = None
+    device_name: str | None = None
+    platform: str | None = None
+    app_version: str | None = None
+    ip_address: str | None = None
+    created_at: datetime
+    last_used_at: datetime
+    expires_at: datetime
+    current: bool = False
+
+
 class VerifyOtpRequest(BaseModel):
     otp: str = Field(..., min_length=4, max_length=8)
+    device: DeviceInfo | None = None
 
     @field_validator("otp")
     @classmethod
@@ -44,6 +87,11 @@ class OtpSentResponse(BaseModel):
     phone_masked: str
     expires_in: int
     purpose: str  # registration | login
+    dev_code: str | None = Field(
+        None,
+        description="Local development with mocked SMS only: the code, so a dev build can fill it in. "
+        "Never present when SMS is real or outside APP_ENV=development.",
+    )
 
 
 class CustomerProfileResponse(BaseModel):
@@ -104,7 +152,5 @@ class CustomerMask:
         return "****"
 
 
-class AuthTokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class AuthTokenResponse(TokenPair):
     customer: CustomerProfileResponse

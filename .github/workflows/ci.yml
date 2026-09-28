@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend — lint, migrations, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ghtrust
+          POSTGRES_PASSWORD: ghtrust_secret
+          POSTGRES_DB: ghtrust_mfb
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ghtrust -d ghtrust_mfb"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://ghtrust:ghtrust_secret@localhost:5432/ghtrust_mfb
+      POSTGRES_HOST: localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check app scripts tests alembic
+
+      # Migrations must build a fresh database and match the models exactly;
+      # a model change without a migration fails here.
+      - name: Migrations apply cleanly
+        run: alembic upgrade head
+      - name: Models match migrations
+        run: alembic check
+      - name: Migrations roll back
+        run: alembic downgrade 009_schema_reconcile && alembic upgrade head
+
+      - name: Tests
+        run: pytest -q --cov=app --cov-report=term-missing:skip-covered
+
+  backend-image:
+    name: Backend — Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ghtrust-backend:ci backend
+      - name: Image refuses insecure production config
+        run: |
+          if docker run --rm -e APP_ENV=production ghtrust-backend:ci \
+               python -c "from app.main import create_app; create_app()"; then
+            echo "Expected the production config guard to refuse startup" >&2
+            exit 1
+          fi
+
+  admin:
+    name: Admin portal — types, lint, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - run: npm ci
+      - run: npx tsc -b
+      - run: npx oxlint
+      - run: npm run build
+
+  web:
+    name: Next.js app (src/) — lint, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  mobile:
+    name: Mobile app — types, lint, API contract
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: npm ci
+      - run: pip install -r ../backend/requirements.txt
+      - run: npm run typecheck
+      - run: npm run lint
+      # The app's types are generated from the backend. If an API change isn't
+      # reflected here (npm run gen:api), the app would be built against a stale contract.
+      - name: API types match the backend
+        run: npm run gen:api && git diff --exit-code -- src/api/schema.d.ts

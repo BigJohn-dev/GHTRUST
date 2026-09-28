@@ -1,3 +1,5 @@
-from app.integrations.payments.factory import get_payment_client
+"""Payment rail port. Import the factory from app.integrations.payments.factory.
 
-__all__ = ["get_payment_client"]
+Not re-exported here: eager import created a cycle (client -> schemas ->
+package init -> factory -> client).
+"""

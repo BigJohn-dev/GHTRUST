@@ -15,6 +15,9 @@ LOAN_REVIEW = "loan:review"
 LOAN_VERIFY_DOCS = "loan:verify_documents"
 LOAN_DISBURSE = "loan:disburse"
 LOAN_CONFIGURE_WORKFLOW = "loan:configure_workflow"
+LOAN_RECORD_REPAYMENT = "loan:record_repayment"
+
+PAYMENT_READ = "payment:read"
 
 ALL_PERMISSIONS: tuple[str, ...] = (
     STAFF_READ,
@@ -30,6 +33,8 @@ ALL_PERMISSIONS: tuple[str, ...] = (
     LOAN_VERIFY_DOCS,
     LOAN_DISBURSE,
     LOAN_CONFIGURE_WORKFLOW,
+    LOAN_RECORD_REPAYMENT,
+    PAYMENT_READ,
 )
 
 SUPER_ADMIN_ROLE_NAME = "Super Admin"

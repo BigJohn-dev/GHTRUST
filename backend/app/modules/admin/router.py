@@ -1,7 +1,12 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import Response
+from fastapi.security import HTTPAuthorizationCredentials
 
-from app.core.deps import DbSession, RedisClient
+from app.core.cache import cached_model
+from app.core.config import get_settings
+from app.core.deps import DbSession, RedisClient, bearer_scheme, request_meta
+from app.core.errors import AppError, ErrorCode
+from app.core.security import TOKEN_TYPE_STAFF, TokenError, decode_access_token
 from app.core.rate_limit import get_client_ip
 from app.modules.admin.deps import CurrentStaff, require_permission
 from app.modules.admin.models import Staff
@@ -29,13 +34,54 @@ from app.modules.admin.schemas import (
     StaffCreateRequest,
     StaffLoginRequest,
     StaffResponse,
+    StaffTokenPair,
     StaffUpdateRequest,
     VerifyStaffOtpRequest,
 )
 from app.modules.admin.service import AdminAuthService, RoleService, StaffService
+from app.core.deps import unauthenticated
+from app.modules.auth.models import SubjectType
+from app.modules.auth.schemas import RefreshTokenRequest
+from app.modules.auth.session_service import SessionService
 from app.modules.loans.service import LoanService
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+# ── Refresh-token cookie (web portal) ───────────────────────────────────────
+# The portal sends `X-Token-Transport: cookie`; its refresh token then lives only in
+# an httpOnly, SameSite=Strict session cookie scoped to these auth routes, so page
+# scripts can never read it and it disappears when the browser closes. Other
+# clients (mobile, scripts) keep receiving the token in the JSON body.
+_COOKIE_PATH = "/api/v1/admin/auth"
+
+
+def _wants_cookie(request: Request) -> bool:
+    return request.headers.get("x-token-transport", "").lower() == "cookie"
+
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    settings = get_settings()
+    response.set_cookie(
+        settings.staff_refresh_cookie_name,
+        token,
+        httponly=True,
+        secure=settings.app_env != "development",  # http://localhost in dev
+        samesite="strict",
+        path=_COOKIE_PATH,
+        # No max_age/expires: a browser-session cookie. The server also ends
+        # sessions after staff_session_idle_minutes without a refresh.
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    settings = get_settings()
+    response.delete_cookie(
+        settings.staff_refresh_cookie_name,
+        path=_COOKIE_PATH,
+        httponly=True,
+        secure=settings.app_env != "development",
+        samesite="strict",
+    )
 
 
 @router.post(
@@ -61,11 +107,17 @@ async def staff_request_login_otp(
 async def staff_verify_login_otp(
     payload: VerifyStaffOtpRequest,
     request: Request,
+    response: Response,
     db: DbSession,
     redis: RedisClient,
 ):
-    ip = get_client_ip(request)
-    return await AdminAuthService(db, redis).verify_login_otp(payload.phone, payload.otp, ip=ip)
+    result = await AdminAuthService(db, redis).verify_login_otp(
+        payload.phone, payload.otp, meta=request_meta(request), device=payload.device
+    )
+    if _wants_cookie(request):
+        _set_refresh_cookie(response, result.refresh_token)
+        result.refresh_token = None
+    return result
 
 
 @router.post(
@@ -83,6 +135,59 @@ async def staff_resend_login_otp(
     return await AdminAuthService(db, redis).resend_login_otp(payload.phone, ip=ip)
 
 
+@router.post(
+    "/auth/token/refresh",
+    response_model=StaffTokenPair,
+    summary="Staff — refresh access token",
+    description="Send the refresh token in the body, or (web portal) rely on the httpOnly cookie.",
+)
+async def staff_refresh_token(
+    request: Request,
+    response: Response,
+    db: DbSession,
+    redis: RedisClient,
+    payload: RefreshTokenRequest | None = None,
+):
+    cookie_token = request.cookies.get(get_settings().staff_refresh_cookie_name)
+    token = payload.refresh_token if payload else cookie_token
+    if not token:
+        raise unauthenticated(ErrorCode.REFRESH_TOKEN_INVALID, "Session expired. Please sign in again.")
+    pair = await AdminAuthService(db, redis).refresh(token, meta=request_meta(request))
+    result = StaffTokenPair(**pair.model_dump())
+    if payload is None or _wants_cookie(request):
+        _set_refresh_cookie(response, result.refresh_token)
+        result.refresh_token = None
+    return result
+
+
+@router.post(
+    "/auth/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Staff — sign out",
+    description="Ends the session identified by the bearer token and/or the refresh cookie. "
+    "Works even when the access token has already expired.",
+)
+async def staff_logout(
+    request: Request,
+    db: DbSession,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+):
+    sessions = SessionService(db)
+    if credentials:
+        try:
+            claims = decode_access_token(credentials.credentials, expected_typ=TOKEN_TYPE_STAFF)
+            session = await sessions.get_owned(claims.sid, subject_type=SubjectType.STAFF, subject_id=claims.sub)
+            await sessions.revoke(session, reason="logout")
+        except (TokenError, AppError):
+            pass  # expired token or unknown session: fall back to the cookie
+    cookie_token = request.cookies.get(get_settings().staff_refresh_cookie_name)
+    if cookie_token:
+        await sessions.revoke_by_refresh_token(cookie_token, subject_type=SubjectType.STAFF, reason="logout")
+    resp = Response(status_code=status.HTTP_204_NO_CONTENT)
+    _clear_refresh_cookie(resp)
+    return resp
+
+
 @router.get("/auth/me", response_model=StaffResponse, summary="Current staff profile")
 async def staff_me(staff: CurrentStaff):
     return StaffResponse.from_staff(staff)
@@ -91,9 +196,11 @@ async def staff_me(staff: CurrentStaff):
 @router.get("/dashboard", response_model=AdminDashboardResponse, summary="Admin dashboard aggregates")
 async def admin_dashboard(
     db: DbSession,
+    redis: RedisClient,
     _: Staff = Depends(require_permission(LOAN_READ)),
 ):
-    return await LoanService(db).get_dashboard()
+    # Several screens poll this; served from Redis until the next write anywhere.
+    return await cached_model(redis, "admin:dashboard", AdminDashboardResponse, LoanService(db).get_dashboard)
 
 
 @router.get("/dashboard/demographics/export", summary="Export demographics report as CSV")
@@ -115,8 +222,16 @@ PERMISSION_GROUPS: list[tuple[str, tuple[str, ...]]] = [
     ("Role management", ("role:read", "role:create", "role:update", "role:delete")),
     (
         "Loan operations",
-        ("loan:read", "loan:review", "loan:verify_documents", "loan:disburse", "loan:configure_workflow"),
+        (
+            "loan:read",
+            "loan:review",
+            "loan:verify_documents",
+            "loan:disburse",
+            "loan:record_repayment",
+            "loan:configure_workflow",
+        ),
     ),
+    ("Payments", ("payment:read",)),
 ]
 
 

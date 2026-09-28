@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.contributions.models import ContributionGroup, GroupContribution
+from app.modules.contributions.models import ContributionGroup
 from app.modules.contributions.schemas import (
     ContributionCreate,
     ContributionGroupResponse,

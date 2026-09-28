@@ -1,3 +1,5 @@
+# Local development stack (hot reload, source mounted). For production use
+# docker-compose.prod.yml.
 services:
   postgres:
     image: postgres:16-alpine
@@ -44,6 +46,7 @@ services:
       - "8000:8000"
     volumes:
       - ./app:/app/app
+      - uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,3 +87,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads:

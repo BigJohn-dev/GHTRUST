@@ -3,7 +3,7 @@ import re
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, DateTime, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -27,6 +27,18 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """
 
     __tablename__ = "customers"
+    __table_args__ = (
+        # Directory list is newest-first.
+        Index("ix_customers_created_at", "created_at"),
+        # Staff search matches substrings (ILIKE '%term%'); B-tree can't serve that, trigram GIN can.
+        # On SQLite (tests) these become plain indexes — the postgresql_* options are ignored.
+        Index("ix_customers_first_name_trgm", "first_name", postgresql_using="gin", postgresql_ops={"first_name": "gin_trgm_ops"}),
+        Index("ix_customers_last_name_trgm", "last_name", postgresql_using="gin", postgresql_ops={"last_name": "gin_trgm_ops"}),
+        Index("ix_customers_middle_name_trgm", "middle_name", postgresql_using="gin", postgresql_ops={"middle_name": "gin_trgm_ops"}),
+        Index("ix_customers_email_trgm", "email", postgresql_using="gin", postgresql_ops={"email": "gin_trgm_ops"}),
+        Index("ix_customers_phone_primary_trgm", "phone_primary", postgresql_using="gin", postgresql_ops={"phone_primary": "gin_trgm_ops"}),
+        Index("ix_customers_account_number_trgm", "account_number", postgresql_using="gin", postgresql_ops={"account_number": "gin_trgm_ops"}),
+    )
 
     # --- Core banking ---
     account_number: Mapped[str] = mapped_column(String(20), unique=True, index=True)
@@ -67,7 +79,8 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     watch_listed: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     # --- Photo (base64 from Dojah — move to object storage in production) ---
-    bvn_photo_base64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Deferred: can be 100s of KB and was loaded on every authenticated request.
+    bvn_photo_base64: Mapped[str | None] = mapped_column(Text, nullable=True, deferred=True)
 
     # --- Auth tracking ---
     phone_verified: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -84,8 +97,10 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     payout_account_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     payout_account_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
+    # Not auto-loaded: every request resolves the customer, and nothing reads
+    # the wallet through this relationship (services query it explicitly).
     wallet: Mapped["CustomerWallet | None"] = relationship(
-        "CustomerWallet", back_populates="customer", uselist=False, lazy="joined"
+        "CustomerWallet", back_populates="customer", uselist=False, lazy="raise"
     )
 
     @property

@@ -13,10 +13,12 @@ alembic==1.14.0
 # Redis & background jobs (Python equivalent of BullMQ — Celery + Redis)
 redis==5.2.1
 celery[redis]==5.4.0
+sentry-sdk[fastapi,celery]==2.70.0
 
-# Auth & security (scaffold)
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+# Auth & security
+# PyJWT replaces python-jose (CVE-2024-33663 algorithm confusion,
+# CVE-2024-33664 JWT bomb). passlib removed: auth is passwordless.
+PyJWT==2.10.1
 python-multipart==0.0.20
 
 # Utils
@@ -26,11 +28,3 @@ tenacity==9.0.0
 
 # Cryptography (Zest authData AES)
 pycryptodome==3.21.0
-
-# Dev / Test
-pytest==8.3.4
-pytest-asyncio==0.25.0
-pytest-cov==6.0.0
-fakeredis==2.26.2
-aiosqlite==0.20.0
-ruff==0.8.4

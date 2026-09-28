@@ -1,6 +1,7 @@
-from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
+
+from app.integrations.retry import TransientError
 
 
 class DojahBvnEntity(BaseModel):
@@ -41,3 +42,7 @@ class DojahError(Exception):
         self.message = message
         self.status_code = status_code
         super().__init__(message)
+
+
+class TransientDojahError(DojahError, TransientError):
+    """Transport failure or Dojah 5xx — retried."""

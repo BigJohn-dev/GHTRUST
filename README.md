@@ -1,238 +1,84 @@
-# GH Trust International Ltd — Digital Microfinance Platform
+# GH Trust MFB — Digital Microfinance Platform
 
-Full-stack platform for **GH Trust MFB**: customer mobile/web banking, staff operations, loan origination, wallets, savings, investments, and group contributions. The product goal is a regulated microfinance experience—apply for loans, manage money, and run branch operations—without relying on a single monolithic core banking UI.
+Backend and staff portal for **GH Trust International Ltd (MFB)**: BVN-based
+onboarding, loan origination with configurable approval workflows,
+disbursement, loan servicing (schedules, repayments, overdue tracking), and a
+double-entry ledger behind customer wallets. The customer channel is a **mobile
+app** (not in this repo yet — see [docs/mobile-app-handoff.md](docs/mobile-app-handoff.md)).
 
----
-
-## What we are building
-
-### Vision
-
-A **digital-first MFB** where:
-
-- **Customers** register with BVN, use a wallet (fund, withdraw), apply for loan products step-by-step, upload documents, and track applications and active loans.
-- **Staff** review applications in a real admin portal, verify documents, move files through **configurable approval workflows**, and disburse approved loans to customer bank accounts.
-- **Operations** reconcile payments via webhooks and background jobs, with a **double-entry ledger** behind customer balances.
-- **Future phases** connect savings, investments, group thrift, food basket, automated loan repayments, and a **bank partner API** for wallet rails (see `docs/GH_Trust_Bank_Partner_Wallet_API_Requirements.pdf`).
-
-### Product modules (roadmap)
-
-| Module | Customer | Admin / API | Status |
-|--------|----------|-------------|--------|
-| **Auth (BVN + OTP)** | Register & login | Staff OTP + RBAC | **Live** |
-| **Loans** | Apply, upload docs, track | Queue, workflows, disburse | **Live (core path)** |
-| **Wallet & payments** | Fund, withdraw, balance | Disbursement rail, webhooks | **Backend live**; customer UI mostly mock |
-| **Savings** | Products & accounts | Product config | API scaffold; wallet debit TBD |
-| **Investments** | Plans & calculator | — | API scaffold |
-| **Contributions (Ajo)** | Group thrift | — | API scaffold |
-| **Food basket** | Subscriptions | — | API scaffold |
-
-### Loan products (configured in backend)
-
-| Product | Audience | Notes |
-|---------|----------|--------|
-| GH Trust Business Loan | Traders (3+ years) | Daily / weekly / monthly repayment options |
-| Payday Loan | Salary earners | Salary-date cadence; Remita mandate planned |
-| GH Trust Study Loan | Guardians / study abroad | School disbursement path in workflow |
-| Asset Loan | Asset financing | Collateral & affidavit rules |
-| LPO / Invoice Financing | — | Reserved (inactive) |
-
----
-
-## Repository layout
+## Repository
 
 | Path | Stack | Role |
-|------|-------|------|
-| **`backend/`** | FastAPI, PostgreSQL, Redis, Celery | **Source of truth** — APIs, ledger, loans, payments |
-| **`admin/`** | Vite, React, TypeScript | **Staff portal** — applications, products, workflows (calls real API) |
-| **`/` (`src/`)** | Next.js 14 | **Customer demo UI** — rich prototype; many screens still use local mock data |
-| **`docs/`** | PDF / HTML briefs | Product-owner loan brief; bank partner wallet API requirements |
+|---|---|---|
+| [`backend/`](backend/README.md) | Python 3.12, FastAPI, PostgreSQL 16, Redis 7, Celery | The API and background jobs — source of truth |
+| `src/` (repo root) | Next.js 15, React 19, Tailwind v3 | **Staff portal** (`/admin`) on the live API: dashboard, applications & workflows, documents, disbursement, loan book, customers, transactions, reports, staff & roles, audit log. `/customer` is a sample-data design demo only |
+| [`admin/`](admin/README.md) | Vite, React 19, TypeScript, Tailwind v4 | Earlier staff portal, superseded by `src/` |
+| `docs/` | | Product brief, bank-partner API requirements, mobile handoff |
+| `.github/workflows/ci.yml` | GitHub Actions | Lint, migrations (apply + drift + rollback), tests, Docker image, admin build, Next.js lint + build |
 
-```
-gh-trust-mfb/
-├── backend/          # Modular monolith API
-├── admin/            # Staff admin (production-oriented)
-├── src/              # Next.js customer demo
-└── docs/             # Shareable PDFs for stakeholders & bank
-```
+## Status
 
----
+| Area | State |
+|---|---|
+| Customer auth (BVN + OTP), device sessions, refresh tokens | **Working** — SMS delivery pending a provider |
+| Staff auth, roles & permissions | **Working** |
+| Loan application → workflow approval | **Working** |
+| Disbursement (rail, or manual record of an off-rail transfer) | **Working** — rails run in mock mode until credentials |
+| Loan servicing: schedule, repayments (staff-recorded + wallet), overdue job | **Working** — interest method & penalties need credit-team sign-off |
+| Wallet: balances, funding webhooks, withdrawals | **Working** on mock rails |
+| Savings, investments, group thrift, food basket | Read-only; writes return 501 |
+| Customer mobile app | Not started |
 
-## What has been done so far
+**External dependencies still mocked** (the app runs fully without them in
+development; production refuses to boot until they are configured):
 
-### Backend (implemented)
-
-- **Modular monolith** with domain modules: auth, users, admin/RBAC, loans, payments, savings, investments, contributions, food basket.
-- **Customer auth**: Dojah BVN verification (mockable), phone OTP, JWT sessions, rate limits on Redis.
-- **Staff auth**: OTP login, roles, permissions (Loan Officer, Credit Analyst, Branch Manager, Operations, super admin).
-- **Loans — full origination path**:
-  - Product catalog with fees, rates, document lists, wizard steps, eligibility JSON.
-  - Customer APIs: create application, wizard steps, document upload, submit.
-  - Application statuses from draft through submitted, under review, approved, ready to disburse, disbursed, rejected.
-  - **Configurable workflows** per product (create, edit stages, publish versions).
-  - Admin: application queue, detail, stage approve/reject, document verify, status updates, audit log.
-  - **Loan disbursement** to applicant bank account via payment rail (Monnify / Paystack paths); creates loan book entry on success webhook.
-- **Payments & wallet (backend)**:
-  - Customer wallet ledger (available + locked balances).
-  - Reserved / dedicated virtual account provisioning (Monnify-style; provider-dependent).
-  - Zest dynamic VA top-up sessions (optional provider).
-  - Withdrawals with hold → transfer → settle/release via Celery.
-  - Webhooks: Paystack, Monnify, Zest (inbound credit, outbound transfer, loan disbursement completion).
-  - Demo seed scripts and Makefile targets (`bootstrap`, `seed-local`, `seed-demo`).
-- **Database**: Alembic migrations (schema, loans, workflows, ledger, payment providers).
-- **Tests**: Integration tests for auth, payments/ledger, webhooks; unit tests for payment clients.
-
-### Admin app (implemented)
-
-- Login with backend OTP.
-- **Applications** list and filters, charts, workflow pipeline UI.
-- **Application detail**: documents, stage actions, disburse (permission-gated).
-- **Loan products** management and **workflow configuration** per product.
-- Team / roles (partial), settings hooks.
-
-### Customer Next.js app (prototype)
-
-- Polished UI for dashboard, savings, loans apply wizard, wallet, investments, group thrift, admin mock screens.
-- **Most data is Zustand + localStorage** — not wired to production loan/wallet APIs yet.
-- Useful for demos and UX; **admin + backend** are the live stack for loan operations today.
-
-### Documentation
-
-- **`docs/GH_Trust_Loan_Platform_Brief.pdf`** — Product-owner summary: loans can launch without wallet; customer/admin flows.
-- **`docs/GH_Trust_Bank_Partner_Wallet_API_Requirements.pdf`** — APIs needed from a bank partner for wallet go-live.
-
-### Known gaps (honest status)
-
-| Area | Gap |
-|------|-----|
-| Customer app | Wire Next.js (or mobile) to `/api/v1/loans` and `/api/v1/wallet` |
-| Wallet UI | Root customer wallet page still mock; backend wallet API is real |
-| Processing fee | Product fee defined; no payment collection flow yet |
-| Repayment schedules | Table exists; auto-generation and collections not built |
-| Payday Remita | Eligibility rules only; mandate API not integrated |
-| Savings / investments / contributions | Routers exist; wallet debit returns not implemented |
-| Paystack as sole `PAYMENT_PROVIDER` | DVA provisioning path incomplete vs Monnify |
-| Zest | Inbound dynamic VA only; no outbound disbursement on Zest |
-
-**Loans can still run end-to-end** (apply → approve → disburse) with **manual or Monnify/Paystack outbound** transfer; wallet funding is optional for loan MVP.
-
----
-
-## Architecture (high level)
-
-```
-┌──────────────────┐     ┌─────────────────────────────────────────┐
-│  Customer app    │     │  FastAPI backend (modular monolith)      │
-│  (Next.js demo   │────▶│  Auth · Loans · Payments/Ledger · …     │
-│   or future app) │     └───────────────┬─────────────────────────┘
-└──────────────────┘                     │
-┌──────────────────┐                     ├── PostgreSQL
-│  admin/ (Vite)   │─────────────────────┤
-│  Staff portal    │                     └── Redis → Celery (withdrawals, reconcile)
-└──────────────────┘
-                              │
-                    Payment rails (configurable):
-                    Monnify · Paystack · Zest (partial)
-                              │
-                    Webhooks → credit wallet / complete disbursement
-```
-
-Details: **[backend/README.md](backend/README.md)** (Celery queues, auth flow, Docker).
-
----
+- SMS provider (Termii / Africa's Talking) — **required to launch**: no OTP, no login
+- Dojah credentials (BVN Advanced)
+- Bank partner: Stanbic IBTC sandbox spec + credentials (adapter scaffolded, see
+  `backend/app/integrations/stanbic/`), or Monnify/Paystack credentials
+- Object storage for loan documents (currently a Docker volume)
 
 ## Quick start
 
-### 1. Backend + database
-
 ```bash
 cd backend
-cp .env.example .env
-# Edit .env as needed (DOJAH_MOCK=true, SMS_MOCK=true for local dev)
-
-make bootstrap          # wait for Postgres, migrate, seed staff + products
-make seed-demo          # optional: sample loan applications in queue
-
-# Or Docker:
-docker compose up -d --build
-docker compose exec api alembic upgrade head
-docker compose exec api python scripts/seed.py
+cp .env.example .env              # set SEED_SUPER_ADMIN_* at minimum
+make bootstrap                    # Postgres + Redis, migrate, seed
+make dev                          # API on :8000, docs at /docs
 ```
-
-- API: http://localhost:8000  
-- Swagger: http://localhost:8000/docs  
-
-### 2. Admin portal (recommended for loan ops)
 
 ```bash
-cd admin
-cp .env.example .env
-npm install
-npm run dev
+cp .env.example .env.local        # repo root: NEXT_PUBLIC_API_URL
+npm ci && npm run dev             # staff portal on http://localhost:3000/admin (Turbopack)
 ```
 
-Open http://localhost:5173 — staff OTP login (see seeded super admin in `backend/scripts/seed.py` / team docs).
+Sign in with `SEED_SUPER_ADMIN_PHONE`. With `SMS_MOCK=true` the one-time code is
+printed in the API's terminal (the `sms_mock_delivery` line).
 
-### 3. Customer demo (Next.js)
+For day-to-day use, run the production build — pages are precompiled and much
+faster than dev mode: `npm run build && npm start`.
 
-```bash
-npm install
-npm run dev
-```
+### Staff portal sessions
 
-Open http://localhost:3000 — **demo data**; not the live loan API.
+- **No automatic sign-in on launch.** The access token (10 min) lives only in
+  memory; the refresh token is an `httpOnly`, `SameSite=Strict` browser-session
+  cookie that page scripts can't read. A fresh launch shows the sign-in screen and
+  ends any leftover session. Reloading a tab, or opening another tab while one is
+  signed in, continues the session.
+- **Background lock:** no portal tab visible for 5 minutes → signed out.
+- **Inactivity:** 15 minutes without input → 60-second warning → signed out. The
+  server independently refuses to renew a staff session unused for
+  `STAFF_SESSION_IDLE_MINUTES` (20).
+- Signing out in one tab signs out all tabs.
+- **Deployment:** the portal and API must be on the same site (e.g.
+  `portal.ghtrust.com` and `api.ghtrust.com`) and served over HTTPS; the API's
+  `CORS_ORIGINS` must list the portal origin.
 
----
+## Decisions pending from GH Trust
 
-## Key API surfaces
-
-| Audience | Base | Examples |
-|----------|------|----------|
-| Customer | `/api/v1/auth`, `/api/v1/loans`, `/api/v1/wallet` | Register, apply, submit, wallet summary, withdraw |
-| Staff | `/api/v1/admin/...` | Applications, stage actions, disburse, products, workflows |
-| Webhooks | `/api/v1/webhooks/{provider}` | Inbound transfers, transfer success/fail |
-
----
-
-## Brand (UI)
-
-| Color | Hex | Usage |
-|-------|-----|-------|
-| Navy | `#1B2F6B` | Primary, headers |
-| Cyan | `#2FA4D7` | Accents, CTAs |
-| Mint | `#E9F8F9` | Backgrounds |
-| Success | `#00A86B` | Active / completed |
-| Warning | `#E5AF59` | Pending |
-| Error | `#CF2E2E` | Failed / overdue |
-
-Font: **Montserrat**
-
----
-
-## Scripts (root Next.js)
-
-```bash
-npm run dev      # Customer demo dev server
-npm run build    # Production build
-npm run lint     # ESLint
-```
-
----
-
-## Deployment notes
-
-- Deploy **backend** (API + worker + beat + Postgres + Redis) as the core service.
-- Deploy **admin/** as static or Node host pointing `VITE_API_URL` at the API.
-- Customer app: deploy when wired to API; until then treat as prototype.
-- Set `PAYMENT_PROVIDER` and provider secrets in production; enable webhook URLs on the provider dashboard.
-- Never commit `.env` files (see `backend/.gitignore`).
-
----
-
-## Contributing & license
-
-Internal GH Trust / Divine Mercy project. For questions on loan workflows or bank API specs, see `docs/`.
-
----
-
-**Summary:** The platform is a **working loan origination and admin operations stack** on a real API, with **wallet and ledger** ready for bank partner integration, and a **customer UI prototype** ahead of full API wiring. Loans-first go-live is supported without customer wallet funding.
+1. **Interest method** — flat (current default) or reducing balance; per product.
+2. **Late penalties** — products list a daily %, but base, cap and compounding are
+   unspecified; installments are only marked overdue until defined.
+3. **Payment rails** — keep Monnify / Paystack / Zest as fallbacks alongside
+   Stanbic, or remove them.
+4. **Mobile stack** — React Native or Flutter (determines the generated API client).

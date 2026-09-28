@@ -25,14 +25,16 @@ class InvestmentService:
 
     async def list_customer_investments(self, customer_id: str) -> list[InvestmentResponse]:
         result = await self.db.execute(
-            select(CustomerInvestment).where(CustomerInvestment.customer_id == customer_id)
+            select(CustomerInvestment, InvestmentPlan.name)
+            .join(InvestmentPlan, InvestmentPlan.id == CustomerInvestment.plan_id)
+            .where(CustomerInvestment.customer_id == customer_id)
+            .order_by(CustomerInvestment.start_date.desc())
         )
-        rows = result.scalars().all()
         return [
             InvestmentResponse(
                 id=r.id,
                 customer_id=r.customer_id,
-                plan_name="",  # join plan in implementation phase
+                plan_name=plan_name,
                 amount=r.amount,
                 return_rate=r.return_rate,
                 start_date=r.start_date,
@@ -40,9 +42,10 @@ class InvestmentService:
                 projected_return=r.projected_return,
                 status=r.status,
             )
-            for r in rows
+            for r, plan_name in result.all()
         ]
 
+    @staticmethod
     def calculate(payload: InvestmentCalculatorRequest) -> InvestmentCalculatorResponse:
         projected = payload.amount * (payload.annual_rate / Decimal("100")) * (
             Decimal(payload.tenure_months) / Decimal("12")

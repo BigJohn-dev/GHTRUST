@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.admin.models import Role
 from app.modules.admin.permissions import (
-    LOAN_CONFIGURE_WORKFLOW,
     LOAN_DISBURSE,
     LOAN_READ,
+    LOAN_RECORD_REPAYMENT,
     LOAN_REVIEW,
     LOAN_VERIFY_DOCS,
 )
@@ -33,8 +33,8 @@ DEFAULT_ROLES: list[dict] = [
     },
     {
         "name": "Operations Officer",
-        "description": "Disbursement and operations",
-        "permissions": [LOAN_READ, LOAN_DISBURSE],
+        "description": "Disbursement, repayments and operations",
+        "permissions": [LOAN_READ, LOAN_DISBURSE, LOAN_RECORD_REPAYMENT],
     },
 ]
 

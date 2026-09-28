@@ -1,5 +1,7 @@
 """Side-effect imports so Alembic sees all mapped tables."""
 
+from app.modules.auth.models import AuthSession  # noqa: F401
+
 from app.modules.contributions.models import (  # noqa: F401
     ContributionGroup,
     GroupContribution,
@@ -29,7 +31,14 @@ from app.modules.loans.models import (  # noqa: F401
     LoanApplication,
     LoanDraft,
     LoanProduct,
+    LoanRepayment,
     RepaymentSchedule,
+)
+from app.modules.loans.workflow_models import (  # noqa: F401
+    ApplicationAuditLog,
+    ApplicationStageDecision,
+    LoanWorkflow,
+    LoanWorkflowStage,
 )
 from app.modules.savings.models import SavingsAccount, SavingsProduct  # noqa: F401
 from app.modules.admin.models import Role, Staff  # noqa: F401

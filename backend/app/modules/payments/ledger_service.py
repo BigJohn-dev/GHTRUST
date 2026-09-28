@@ -2,11 +2,11 @@ from decimal import Decimal
 from typing import Any
 
 import structlog
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.base import TransactionStatus
 from app.modules.payments.models import (
     CustomerWallet,
     JournalType,
@@ -96,8 +96,20 @@ class LedgerService:
             payment_transaction_id=payment_transaction_id,
             metadata_json=metadata or {},
         )
-        self.db.add(journal)
-        await self.db.flush()
+        # Savepoint: if a concurrent request posts the same idempotency key
+        # between our check and this insert, the unique constraint fires. Roll
+        # back only the savepoint and return the winner's journal, instead of
+        # failing the whole transaction.
+        try:
+            async with self.db.begin_nested():
+                self.db.add(journal)
+                await self.db.flush()
+        except IntegrityError:
+            winner = await self._get_journal_by_idempotency(idempotency_key)
+            if winner is None:
+                raise
+            logger.info("ledger_journal_race_resolved", idempotency_key=idempotency_key)
+            return winner, False
 
         for account_code, direction, amount in entries:
             self.db.add(
@@ -234,6 +246,67 @@ class LedgerService:
         )
         if created:
             wallet.locked_balance -= amount
+            wallet.available_balance += amount
+        return journal
+
+    async def debit_wallet(
+        self,
+        *,
+        customer_id: str,
+        amount: Decimal,
+        journal_type: JournalType,
+        idempotency_key: str,
+        reference: str,
+        credits: list[tuple[LedgerAccountCode, LedgerDirection, Decimal]],
+        description: str | None = None,
+    ) -> LedgerJournal:
+        """Debit the customer's available wallet balance against the given credits."""
+        if amount <= 0:
+            raise LedgerError("Debit amount must be positive")
+
+        wallet = await self._lock_wallet(customer_id)
+        existing = await self._get_journal_by_idempotency(idempotency_key)
+        if existing:
+            return existing
+        if wallet.available_balance < amount:
+            raise LedgerError("Insufficient wallet balance", status_code=409)
+
+        journal, created = await self.post_journal(
+            idempotency_key=idempotency_key,
+            journal_type=journal_type,
+            customer_id=customer_id,
+            reference=reference,
+            description=description,
+            entries=[(LedgerAccountCode.CUSTOMER_WALLET, LedgerDirection.DEBIT, amount), *credits],
+        )
+        if created:
+            wallet.available_balance -= amount
+        return journal
+
+    async def refund_settled_withdrawal(
+        self,
+        *,
+        customer_id: str,
+        amount: Decimal,
+        idempotency_key: str,
+        reference: str,
+        payment_transaction_id: str | None = None,
+    ) -> LedgerJournal:
+        """Bank reversed a completed withdrawal: money is back in settlement, credit the wallet."""
+        wallet = await self._lock_wallet(customer_id)
+        journal, created = await self.post_journal(
+            idempotency_key=idempotency_key,
+            journal_type=JournalType.WALLET_WITHDRAWAL_RELEASE,
+            customer_id=customer_id,
+            reference=reference,
+            description="Withdrawal reversed by bank; funds returned to wallet",
+            payment_transaction_id=payment_transaction_id,
+            entries=[
+                (LedgerAccountCode.PAYSTACK_SETTLEMENT, LedgerDirection.DEBIT, amount),
+                (LedgerAccountCode.CUSTOMER_WALLET, LedgerDirection.CREDIT, amount),
+            ],
+        )
+        if created:
             wallet.available_balance += amount
         return journal
 

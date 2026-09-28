@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -7,8 +7,9 @@ from app.modules.admin.settings_schemas import (
     BranchSummaryResponse,
     GlobalAuditLogResponse,
 )
-from app.modules.loans.workflow_models import ApplicationAuditLog, AuditActorType
+from app.modules.loans.workflow_models import ApplicationAuditLog, AuditActorType, AuditEventType
 from app.modules.users.models import Customer
+from app.modules.users.search import like_pattern
 
 
 class AdminSettingsService:
@@ -52,13 +53,33 @@ class AdminSettingsService:
         self,
         *,
         actor_type: AuditActorType | None = AuditActorType.STAFF,
+        event_type: AuditEventType | None = None,
+        search: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[GlobalAuditLogResponse]:
-        query = select(ApplicationAuditLog).order_by(ApplicationAuditLog.created_at.desc())
+    ) -> tuple[list[GlobalAuditLogResponse], int]:
+        conditions = []
         if actor_type:
-            query = query.where(ApplicationAuditLog.actor_type == actor_type)
-        query = query.limit(min(limit, 100)).offset(max(offset, 0))
+            conditions.append(ApplicationAuditLog.actor_type == actor_type)
+        if event_type:
+            conditions.append(ApplicationAuditLog.event_type == event_type)
+        if search and search.strip():
+            term = like_pattern(search.strip())
+            conditions.append(
+                or_(
+                    ApplicationAuditLog.message.ilike(term, escape="\\"),
+                    ApplicationAuditLog.actor_label.ilike(term, escape="\\"),
+                    ApplicationAuditLog.ip_address.ilike(term, escape="\\"),
+                )
+            )
+        total = await self.db.scalar(select(func.count()).select_from(ApplicationAuditLog).where(*conditions))
+        query = (
+            select(ApplicationAuditLog)
+            .where(*conditions)
+            .order_by(ApplicationAuditLog.created_at.desc())
+            .limit(min(limit, 100))
+            .offset(max(offset, 0))
+        )
         result = await self.db.execute(query)
         return [
             GlobalAuditLogResponse(
@@ -74,4 +95,4 @@ class AdminSettingsService:
                 application_id=log.application_id,
             )
             for log in result.scalars().all()
-        ]
+        ], int(total or 0)

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.rate_limit import OtpService, RateLimiter
-from app.core.security import create_staff_access_token
+from app.core.errors import AppError, ErrorCode
 from app.modules.admin.models import Role, Staff, StaffStatus
 from app.modules.admin.permissions import ALL_PERMISSIONS, SUPER_ADMIN_ROLE_NAME
 from app.modules.admin.schemas import (
@@ -19,6 +19,9 @@ from app.modules.admin.schemas import (
     StaffResponse,
     StaffUpdateRequest,
 )
+from app.modules.auth.models import SubjectType
+from app.modules.auth.schemas import DeviceInfo, TokenPair
+from app.modules.auth.session_service import RequestMeta, SessionService
 from app.modules.users.models import Customer
 
 logger = structlog.get_logger()
@@ -57,9 +60,16 @@ class AdminAuthService:
             expires_in=expires_in,
         )
 
-    async def verify_login_otp(self, phone: str, otp: str, *, ip: str) -> StaffAuthTokenResponse:
+    async def verify_login_otp(
+        self,
+        phone: str,
+        otp: str,
+        *,
+        meta: RequestMeta,
+        device: DeviceInfo | None = None,
+    ) -> StaffAuthTokenResponse:
         normalized = Customer.normalize_phone(phone)
-        await RateLimiter(self.redis).check_otp_verify(ip)
+        await RateLimiter(self.redis).check_otp_verify(meta.ip or "unknown")
         await self.otp.verify("staff_login", normalized, otp)
 
         result = await self.db.execute(
@@ -69,10 +79,33 @@ class AdminAuthService:
         if not staff or staff.status != StaffStatus.ACTIVE:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-        token = create_staff_access_token(staff.id, staff.phone, is_super_admin=staff.is_super_admin)
-        return StaffAuthTokenResponse(
-            access_token=token,
-            staff=StaffResponse.from_staff(staff),
+        pair = await SessionService(self.db).issue(
+            subject_type=SubjectType.STAFF,
+            subject_id=staff.id,
+            phone=staff.phone,
+            is_super_admin=staff.is_super_admin,
+            device=device,
+            meta=meta,
+        )
+        return StaffAuthTokenResponse(**pair.model_dump(), staff=StaffResponse.from_staff(staff))
+
+    async def refresh(self, refresh_token: str, *, meta: RequestMeta) -> TokenPair:
+        await RateLimiter(self.redis).check_refresh(meta.ip or "unknown")
+        sessions = SessionService(self.db)
+        session, new_refresh = await sessions.rotate(
+            refresh_token, subject_type=SubjectType.STAFF, meta=meta
+        )
+        staff = await self.db.get(Staff, session.subject_id)
+        if not staff or staff.status != StaffStatus.ACTIVE:
+            await sessions.revoke(session, reason="account_inactive")
+            await self.db.commit()
+            raise AppError(
+                status.HTTP_401_UNAUTHORIZED,
+                ErrorCode.ACCOUNT_INACTIVE,
+                "Staff account not found or inactive",
+            )
+        return sessions.pair_for(
+            session, new_refresh, phone=staff.phone, is_super_admin=staff.is_super_admin
         )
 
     async def resend_login_otp(self, phone: str, *, ip: str) -> OtpSentResponse:
@@ -241,6 +274,11 @@ class StaffService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot deactivate your own account")
 
         staff.status = StaffStatus.INACTIVE
+        # Kill live sessions now — otherwise the staff member keeps access until
+        # their current token expires.
+        await SessionService(self.db).revoke_all(
+            subject_type=SubjectType.STAFF, subject_id=staff.id, reason="staff_deactivated"
+        )
         await self.db.flush()
         return StaffResponse.from_staff(staff)
 

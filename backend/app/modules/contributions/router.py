@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.core.deps import DbSession
+from app.core.deps import CurrentCustomer, DbSession
 from app.modules.contributions.schemas import (
     ContributionCreate,
     ContributionGroupResponse,
@@ -20,14 +20,14 @@ async def list_contribution_groups(
 
 
 @router.post(
-    "/customers/{customer_id}/contribute",
+    "/me/contributions",
     response_model=ContributionResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def record_contribution(
-    customer_id: str, payload: ContributionCreate, db: DbSession
+async def record_my_contribution(
+    payload: ContributionCreate, db: DbSession, customer: CurrentCustomer
 ):
     try:
-        return await ContributionService(db).record_contribution(customer_id, payload)
+        return await ContributionService(db).record_contribution(customer.id, payload)
     except NotImplementedError as e:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(e))

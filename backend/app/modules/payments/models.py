@@ -1,9 +1,9 @@
 import enum
+from typing import TYPE_CHECKING
 from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -18,6 +18,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import StrEnum, TimestampMixin, TransactionStatus, UUIDPrimaryKeyMixin
 
+if TYPE_CHECKING:
+    from app.modules.users.models import Customer
+
+
 
 class JournalType(str, enum.Enum):
     WALLET_FUNDING = "wallet_funding"
@@ -25,6 +29,7 @@ class JournalType(str, enum.Enum):
     WALLET_WITHDRAWAL_HOLD = "wallet_withdrawal_hold"
     WALLET_WITHDRAWAL_RELEASE = "wallet_withdrawal_release"
     LOAN_DISBURSEMENT = "loan_disbursement"
+    LOAN_REPAYMENT = "loan_repayment"
 
 
 class LedgerDirection(str, enum.Enum):
@@ -37,6 +42,9 @@ class LedgerAccountCode(str, enum.Enum):
     CUSTOMER_WALLET = "customer_wallet"
     CUSTOMER_WALLET_LOCKED = "customer_wallet_locked"
     LOAN_RECEIVABLE = "loan_receivable"
+    # Interest is recognised when collected (cash basis) until GH Trust's
+    # accounting policy says otherwise.
+    INTEREST_INCOME = "interest_income"
 
 
 class PaymentDirection(str, enum.Enum):
@@ -48,6 +56,10 @@ class PaymentProvider(str, enum.Enum):
     PAYSTACK = "paystack"
     MONNIFY = "monnify"
     ZEST = "zest"
+    STANBIC = "stanbic"
+    # Funds moved outside any integrated rail (e.g. bank app / branch) and
+    # recorded by staff with the external reference.
+    MANUAL = "manual"
 
 
 class PaymentChannel(str, enum.Enum):
@@ -83,7 +95,7 @@ class CustomerWallet(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     locked_balance: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     dva_status: Mapped[DvaStatus] = mapped_column(StrEnum(DvaStatus), default=DvaStatus.PENDING)
 
-    customer: Mapped["Customer"] = relationship("Customer", back_populates="wallet", lazy="joined")
+    customer: Mapped["Customer"] = relationship("Customer", back_populates="wallet", lazy="raise")
 
 
 class LedgerJournal(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -128,6 +140,7 @@ class PaymentTransaction(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("provider", "provider_reference", name="uq_payment_provider_reference"),
         Index("ix_payment_transactions_customer_status", "customer_id", "status"),
+        Index("ix_payment_transactions_created_at", "created_at"),
     )
 
     provider: Mapped[PaymentProvider] = mapped_column(StrEnum(PaymentProvider), default=PaymentProvider.PAYSTACK)
