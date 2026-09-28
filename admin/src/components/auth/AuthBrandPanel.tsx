@@ -17,7 +17,7 @@ export function AuthBrandPanel() {
 
       <div className="relative space-y-6 max-w-md">
         <h1 className="text-4xl xl:text-5xl font-extrabold leading-tight tracking-tight">
-          Hello GH Trust! 👋
+          Hello GH Trust!
         </h1>
         <p className="text-white/60 text-base leading-relaxed">
           Your staff portal for loan operations, application reviews, and branch

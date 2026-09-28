@@ -1,7 +1,8 @@
 import clsx from 'clsx'
-import { Bell, Menu, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { NotificationsMenu } from './NotificationsMenu'
 import { AppSidebar } from './ui/AppSidebar'
 
 interface AdminLayoutProps {
@@ -75,13 +76,7 @@ export function AdminLayout({ children, title, subtitle, tabs, activeTab, onTabC
             )}
           </div>
 
-          <button
-            type="button"
-            className="relative h-9 w-9 rounded-lg bg-slate-100 ring-1 ring-slate-200/80 flex items-center justify-center hover:bg-white transition-colors"
-          >
-            <Bell className="h-[15px] w-[15px] text-slate-500" />
-            <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-[#1b2f6b] ring-2 ring-white" />
-          </button>
+          <NotificationsMenu />
         </header>
 
         {tabs && (
