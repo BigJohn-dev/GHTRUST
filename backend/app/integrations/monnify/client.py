@@ -28,11 +28,12 @@ from app.integrations.payments.schemas import (
     TransientRailError,
     WalletBalanceResult,
 )
+from app.integrations.payments.mock_accounts import mock_account_number
 
 logger = structlog.get_logger()
 
 MOCK_ACCOUNT_REFERENCE = "GHTRUST_MOCK_REF_001"
-MOCK_RESERVED_ACCOUNT = "5000112233"
+MOCK_ACCOUNT_PREFIX = "50"  # mock NUBANs look like 50xxxxxxxx
 MOCK_BANK_NAME = "Monnify Sandbox Bank"
 MOCK_BANK_CODE = "035"
 
@@ -208,7 +209,7 @@ class MonnifyClient:
         if self._use_mock:
             return ReservedAccountResult(
                 account_reference=account_reference,
-                account_number=MOCK_RESERVED_ACCOUNT,
+                account_number=mock_account_number(account_reference, MOCK_ACCOUNT_PREFIX),
                 account_name=account_name,
                 bank_name=MOCK_BANK_NAME,
                 bank_code=MOCK_BANK_CODE,
@@ -250,7 +251,7 @@ class MonnifyClient:
         if self._use_mock:
             return ReservedAccountResult(
                 account_reference=account_reference,
-                account_number=MOCK_RESERVED_ACCOUNT,
+                account_number=mock_account_number(account_reference, MOCK_ACCOUNT_PREFIX),
                 account_name="Mock Customer",
                 bank_name=MOCK_BANK_NAME,
                 bank_code=MOCK_BANK_CODE,
