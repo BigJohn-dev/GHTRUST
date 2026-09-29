@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.integrations.payments.factory import get_payment_client
 from app.integrations.payments.schemas import PaymentRailError
+from app.modules.notifications import events as notify
 from app.modules.payments.ledger_service import LedgerError, LedgerService, raise_ledger_http
 from app.modules.payments.models import (
     DvaStatus,
@@ -335,5 +336,6 @@ class WalletService:
             except LedgerError as ledger_err:
                 logger.error("withdrawal_release_failed", withdrawal_id=withdrawal.id, error=ledger_err.message)
                 raise
+            await notify.withdrawal_failed(self.db, withdrawal)
         await self.db.flush()
         return withdrawal

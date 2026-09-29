@@ -42,6 +42,7 @@ from app.modules.loans.schemas import (
     RepaymentCadence,
     RepaymentChannel,
 )
+from app.modules.notifications import events as notify
 from app.modules.payments.ledger_service import LedgerError, LedgerService
 from app.modules.payments.models import JournalType, LedgerAccountCode, LedgerDirection
 
@@ -322,6 +323,7 @@ class LoanServicingService:
             installments=len(lines),
             method=method.value,
         )
+        await notify.loan_disbursed(self.db, loan)
         return loan
 
     # -- repayments -----------------------------------------------------------
@@ -444,6 +446,9 @@ class LoanServicingService:
                 "This repayment is already being processed.",
             ) from exc
         logger.info("loan_repayment_recorded", loan_id=loan.id, amount=str(amount), channel=channel.value)
+        # Wallet repayments are made in the app; anything else (transfer, cash) gets a confirmation.
+        if channel != RepaymentChannel.WALLET:
+            await notify.repayment_received(self.db, loan, amount=amount, repayment_id=repayment.id)
         return repayment
 
     async def _post_repayment_journal(

@@ -2,7 +2,7 @@ import { QueryClient, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { ApiError } from '@/api/errors';
 import type { TransactionDirection } from '@/api/types';
-import { appConfig, auth, banks, loans, wallet } from '@/api/endpoints';
+import { appConfig, auth, banks, loans, notifications, wallet } from '@/api/endpoints';
 
 export const keys = {
   config: ['config'] as const,
@@ -15,6 +15,8 @@ export const keys = {
   loan: (id: string) => ['loans', id] as const,
   wallet: ['wallet'] as const,
   transactions: ['transactions'] as const,
+  notifications: ['notifications'] as const,
+  unread: ['notifications', 'unread'] as const,
   transactionList: (direction?: TransactionDirection) => ['transactions', 'list', direction ?? 'all'] as const,
   transaction: (id: string) => ['transactions', id] as const,
   banks: ['banks'] as const,
@@ -75,3 +77,16 @@ export const useTransactions = (direction?: TransactionDirection, enabled = true
   });
 export const useTransaction = (id: string) =>
   useQuery({ queryKey: keys.transaction(id), queryFn: () => wallet.transaction(id), enabled: !!id });
+
+/** Inbox, newest first, 30 at a time. */
+export const useNotifications = () =>
+  useInfiniteQuery({
+    queryKey: keys.notifications,
+    queryFn: ({ pageParam }) => notifications.list(pageParam, 30),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.offset + last.items.length < last.total ? last.offset + last.items.length : undefined),
+    staleTime: 0,
+  });
+/** Unread badge on the Home bell; refreshed on focus and whenever a push arrives. */
+export const useUnreadCount = (enabled = true) =>
+  useQuery({ queryKey: keys.unread, queryFn: notifications.unreadCount, enabled, staleTime: 30_000 });

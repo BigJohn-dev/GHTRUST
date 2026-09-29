@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 
 import { approvals } from '@/api/endpoints';
 import { setupFlow, usePinReset, useSetupFlow } from '@/lib/flags';
+import { usePushNotifications } from '@/lib/usePushNotifications';
 import { useMe } from '@/lib/queries';
 import { colors, font } from '@/theme/tokens';
 
@@ -23,6 +24,7 @@ export default function AppLayout() {
   }, [needsPin, resetting]);
 
   usePendingApprovals(!needsSetup);
+  usePushNotifications(!needsSetup);
 
   return (
     <Stack
@@ -63,6 +65,7 @@ export default function AppLayout() {
         <Stack.Screen name="payout-account" options={{ title: 'Bank account' }} />
         <Stack.Screen name="transactions/index" options={{ title: 'Transactions' }} />
         <Stack.Screen name="transactions/[id]" options={{ title: 'Receipt' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       </Stack.Protected>
     </Stack>
   );

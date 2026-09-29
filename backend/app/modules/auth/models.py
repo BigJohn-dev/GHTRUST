@@ -50,6 +50,9 @@ class AuthSession(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # The owner turned on Face ID / fingerprint on this device, so a biometric check there
     # can stand in for the sign-in PIN (e.g. approving a new device).
     biometric_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Expo push token of the app signed in with this session. Only active sessions are
+    # pushed to, so a signed-out phone stops receiving the customer's notifications.
+    push_token: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
 
 
 class CustomerDevice(Base, UUIDPrimaryKeyMixin, TimestampMixin):

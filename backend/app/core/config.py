@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     termii_base_url: str = "https://v3.api.termii.com"  # shown on your Termii dashboard
     termii_channel: str = "dnd"  # "dnd" reaches DND numbers; OTPs must use it
 
+    # Push notifications through Expo's push service (https://docs.expo.dev/push-notifications/sending-notifications/).
+    # PUSH_MOCK=true logs pushes instead of sending them. EXPO_PUSH_ACCESS_TOKEN is only
+    # needed if "enhanced push security" is switched on for the Expo project.
+    push_mock: bool = True
+    expo_push_url: str = "https://exp.host/--/api/v2/push/send"
+    expo_push_access_token: str = ""
+
     # Mobile app remote config (GET /api/v1/app/config) and version gate.
     app_min_version_ios: str = "1.0.0"
     app_min_version_android: str = "1.0.0"

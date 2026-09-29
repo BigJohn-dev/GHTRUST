@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useRef } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -14,7 +15,15 @@ import { ErrorState, Skeleton } from '@/components/States';
 import { Text } from '@/components/Text';
 import { recentActivity } from '@/lib/activity';
 import { greeting } from '@/lib/format';
-import { useApplications, useFeatures, useLoans, useMe, useTransactions, useWallet } from '@/lib/queries';
+import {
+  useApplications,
+  useFeatures,
+  useLoans,
+  useMe,
+  useTransactions,
+  useUnreadCount,
+  useWallet,
+} from '@/lib/queries';
 import { colors, font, radius, shadow, space } from '@/theme/tokens';
 
 const enter = (i: number) => FadeInDown.duration(380).delay(60 * i);
@@ -27,6 +36,29 @@ export default function Home() {
   const features = useFeatures();
   const wallet = useWallet(features.wallet);
   const history = useTransactions(undefined, features.wallet);
+  const unreadQuery = useUnreadCount();
+  const unread = unreadQuery.data?.unread_count ?? 0;
+
+  // Tabs stay mounted, so coming back to Home (e.g. from the inbox or after money arrived)
+  // wouldn't refetch on its own. The first focus is the initial load, so skip it.
+  const focusedOnce = useRef(false);
+  const refetchUnread = unreadQuery.refetch;
+  const refetchWallet = wallet.refetch;
+  const refetchHistory = history.refetch;
+  const walletOn = features.wallet;
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedOnce.current) {
+        focusedOnce.current = true;
+        return;
+      }
+      refetchUnread();
+      if (walletOn) {
+        refetchWallet();
+        refetchHistory();
+      }
+    }, [refetchUnread, refetchWallet, refetchHistory, walletOn]),
+  );
 
   const loanList = loans.data?.items ?? [];
   const apps = applications.data?.items ?? [];
@@ -45,6 +77,7 @@ export default function Home() {
     loans.refetch();
     applications.refetch();
     me.refetch();
+    unreadQuery.refetch();
     if (features.wallet) {
       wallet.refetch();
       history.refetch();
@@ -62,6 +95,20 @@ export default function Home() {
             {name ?? 'Welcome'}
           </Text>
         </View>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+          onPress={() => router.push('/notifications')}
+          style={styles.bell}>
+          <Ionicons name="notifications-outline" size={24} color={colors.navy} />
+          {unread > 0 ? (
+            <View style={styles.bellBadge}>
+              <Text variant="small" color={colors.white} style={styles.bellCount}>
+                {unread > 9 ? '9+' : unread}
+              </Text>
+            </View>
+          ) : null}
+        </PressableScale>
         <PressableScale accessibilityRole="button" accessibilityLabel="Profile" onPress={() => router.push('/profile')}>
           <View style={styles.avatarRing}>
             <View style={styles.avatar}>
@@ -212,6 +259,30 @@ function ActivitySkeleton() {
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.xs },
+  bell: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 5,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: colors.error,
+    borderWidth: 2,
+    borderColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellCount: { fontSize: 10, lineHeight: 12, fontFamily: font.bold },
   avatarRing: {
     width: 52,
     height: 52,

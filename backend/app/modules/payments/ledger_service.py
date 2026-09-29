@@ -159,6 +159,9 @@ class LedgerService:
         )
         if created:
             wallet.available_balance += amount
+            from app.modules.notifications import events as notify
+
+            await notify.wallet_funded(self.db, customer_id=customer_id, amount=amount, journal_id=journal.id)
         return journal
 
     async def hold_wallet_for_withdrawal(

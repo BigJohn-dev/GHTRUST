@@ -26,6 +26,7 @@ from app.modules.loans.workflow_models import (
     LoanWorkflowStage,
     StageDecisionAction,
 )
+from app.modules.notifications import events as notify
 
 
 def _utc_aware(dt: datetime) -> datetime:
@@ -256,6 +257,7 @@ class WorkflowService:
                 metadata={"stage_id": stage_id, "stage_name": stage_name, "duration_seconds": duration},
                 ip_address=ip,
             )
+            await notify.application_rejected(self.db, application)
             return application
 
         next_stage = await self._next_stage(application.workflow_id, stage.sort_order)
@@ -295,6 +297,7 @@ class WorkflowService:
                 metadata={"stage_id": stage_id, "stage_name": stage_name, "duration_seconds": duration},
                 ip_address=ip,
             )
+            await notify.application_approved(self.db, application)
 
         return application
 

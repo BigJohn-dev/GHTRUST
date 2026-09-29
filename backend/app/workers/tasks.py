@@ -8,9 +8,11 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.modules.payments.worker_service import (
+    run_deliver_notifications,
     run_process_pending_withdrawals,
     run_reconcile_payments,
     run_refresh_loan_statuses,
+    run_send_loan_reminders,
 )
 
 logger = structlog.get_logger()
@@ -67,16 +69,18 @@ def accrue_savings_interest(self):
     return {"status": "skipped", "accounts_processed": 0}
 
 
-@celery_app.task(name="app.workers.tasks.send_loan_reminders", bind=True)
+@celery_app.task(name="app.workers.tasks.send_loan_reminders", bind=True, **RETRY)
+@single_flight("send_loan_reminders", ttl_seconds=600)
 def send_loan_reminders(self):
-    """Due-soon / overdue loan reminders.
+    """Due-in-3-days, due-today and overdue repayment reminders (idempotent per loan per day)."""
+    return asyncio.run(run_send_loan_reminders())
 
-    Blocked on an SMS or push provider (see app/integrations/sms). The data it
-    needs — loans.next_due_date and overdue installments — is maintained daily
-    by ``refresh_loan_statuses``.
-    """
-    logger.info("task_skipped", task="send_loan_reminders", reason="no SMS/push provider")
-    return {"status": "skipped", "reminders_sent": 0}
+
+@celery_app.task(name="app.workers.tasks.deliver_notifications", bind=True, **RETRY)
+@single_flight("deliver_notifications", ttl_seconds=120)
+def deliver_notifications(self):
+    """Push queued notifications (payments, decisions, sign-in requests, reminders)."""
+    return asyncio.run(run_deliver_notifications())
 
 
 @celery_app.task(name="app.workers.tasks.refresh_loan_statuses", bind=True, **RETRY)

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Switch } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Linking, Switch } from 'react-native';
 
 import { security } from '@/api/endpoints';
 import { messageFor } from '@/api/errors';
@@ -11,6 +11,7 @@ import { Screen } from '@/components/Screen';
 import { Banner } from '@/components/States';
 import { Text } from '@/components/Text';
 import { dateTime } from '@/lib/format';
+import { disablePush, enablePush, pushState, type PushState } from '@/lib/push';
 import { useMe } from '@/lib/queries';
 import { colors, space } from '@/theme/tokens';
 
@@ -19,6 +20,25 @@ export default function Security() {
   const { biometric, biometricAvailable, setBiometric } = useSession();
   const [error, setError] = useState<string | null>(null);
   const [openedAt] = useState(() => Date.now());
+  const [push, setPush] = useState<PushState | null>(null);
+
+  useEffect(() => {
+    pushState()
+      .then(setPush)
+      .catch(() => setPush('unsupported'));
+  }, []);
+
+  const togglePush = async (on: boolean) => {
+    setError(null);
+    setPush(on ? 'on' : 'off'); // move the switch straight away
+    try {
+      if (on) setPush(await enablePush());
+      else await disablePush();
+    } catch (err) {
+      setError(messageFor(err));
+      setPush(await pushState().catch(() => 'off' as const));
+    }
+  };
   const p = me.data;
   const hold = p?.transfers_blocked_until ? new Date(p.transfers_blocked_until) : null;
   const onHold = hold && hold.getTime() > openedAt;
@@ -100,6 +120,38 @@ export default function Security() {
           />
         )}
       </Card>
+
+      {push && push !== 'unsupported' ? (
+        <>
+          <SectionHeader title="Notifications" />
+          <Card style={{ paddingVertical: space.xs }}>
+            {push === 'blocked' ? (
+              <Row
+                icon="notifications-off-outline"
+                title="Notifications are off"
+                subtitle="Allow them for GH Trust in your phone's settings"
+                onPress={() => Linking.openSettings()}
+                last
+              />
+            ) : (
+              <Row
+                icon="notifications-outline"
+                title="Push notifications"
+                subtitle="Payments, loan updates, reminders and sign-in alerts"
+                trailing={
+                  <Switch
+                    value={push === 'on'}
+                    onValueChange={togglePush}
+                    trackColor={{ true: colors.navy, false: colors.borderStrong }}
+                    accessibilityLabel="Push notifications"
+                  />
+                }
+                last
+              />
+            )}
+          </Card>
+        </>
+      ) : null}
 
       <SectionHeader title="Phones" />
       <Card style={{ paddingVertical: space.xs }}>

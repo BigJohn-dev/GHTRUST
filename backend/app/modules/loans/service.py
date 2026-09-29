@@ -74,6 +74,7 @@ from app.modules.loans.schemas import (
 )
 from app.modules.loans.servicing import DAYS_PER_MONTH, resolve_tenure_months
 from app.modules.loans.storage import DocumentStorage
+from app.modules.notifications import events as notify
 
 logger = structlog.get_logger()
 
@@ -838,6 +839,7 @@ class LoanService:
                 note=payload.note,
                 staff_id=staff.id,
             )
+            await notify.application_rejected(self.db, application)
 
         await ApplicationAuditService(self.db).log_staff(
             application.id,
@@ -890,6 +892,8 @@ class LoanService:
                 metadata={"document_id": document.id, "document_type": document.document_type},
                 ip_address=ip,
             )
+        if payload.status == DocumentStatus.REJECTED:
+            await notify.document_rejected(self.db, application, document)
 
         await self.db.flush()
         return self._detail(application)

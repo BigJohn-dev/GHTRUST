@@ -50,6 +50,7 @@ from app.modules.auth.schemas import (
     PendingApprovalResponse,
 )
 from app.modules.auth.session_service import RequestMeta, SessionService, as_utc
+from app.modules.notifications import events as notify
 from app.modules.users.models import Customer, CustomerStatus
 
 logger = structlog.get_logger()
@@ -378,6 +379,7 @@ class SecurityService:
         self.db.add(approval)
         await self.db.flush()
         logger.info("device_approval_requested", customer_id=customer.id, approval_id=approval.id)
+        await notify.sign_in_approval_requested(self.db, approval)
         names = list(dict.fromkeys(s.device_name or "your other phone" for s in approvers))
         return DeviceApprovalRequiredResponse(
             approval_id=approval.id,

@@ -15,6 +15,7 @@ const NAME_KEY = 'ghtrust.first_name';
 const INTRO_KEY = 'ghtrust.intro_seen';
 const DEVICE_TOKEN_KEY = 'ghtrust.device_token';
 const BIOMETRIC_KEY = 'ghtrust.biometric';
+const PUSH_OFF_KEY = 'ghtrust.push_off';
 
 const OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
@@ -74,6 +75,12 @@ export const tokenStore = {
   /** The customer chose to unlock with Face ID / fingerprint on this phone. */
   getBiometric: async () => (await get(BIOMETRIC_KEY)) === '1',
   setBiometric: (on: boolean) => (on ? set(BIOMETRIC_KEY, '1') : remove(BIOMETRIC_KEY)),
+};
+
+/** The customer switched push notifications off in the app (the OS permission may still be on). */
+export const pushOptOut = {
+  get: async () => (await get(PUSH_OFF_KEY)) === '1',
+  set: (off: boolean) => (off ? set(PUSH_OFF_KEY, '1') : remove(PUSH_OFF_KEY)),
 };
 
 /** Whether this install has seen the first-launch intro (kept across sign-outs). */
