@@ -2,16 +2,17 @@
  * Push notifications: permission, the Expo push token, and telling the API where to
  * send this phone's notifications.
  *
- * Push needs a real phone and the EAS project ID (written to app.json by `eas init`);
- * without either it's switched off quietly and the in-app inbox still works.
+ * Push needs a development build (not Expo Go) on a real phone and the EAS project ID
+ * (written to app.json by `eas init`); without them it's switched off quietly and the
+ * in-app inbox still works.
  */
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { notifications } from '@/api/endpoints';
 import { pushOptOut } from '@/auth/storage';
+import { Notifications } from '@/lib/notificationsModule';
 import { colors } from '@/theme/tokens';
 
 export type PushState = 'on' | 'off' | 'blocked' | 'unsupported';
@@ -19,9 +20,9 @@ export type PushState = 'on' | 'off' | 'blocked' | 'unsupported';
 const projectId: string | undefined =
   Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? undefined;
 
-export const pushSupported = Platform.OS !== 'web' && Device.isDevice && !!projectId;
+export const pushSupported = !!Notifications && Device.isDevice && !!projectId;
 
-if (Platform.OS !== 'web') {
+if (Notifications) {
   // Show notifications that arrive while the app is open, too.
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -34,7 +35,7 @@ if (Platform.OS !== 'web') {
 }
 
 async function ensureChannel() {
-  if (Platform.OS !== 'android') return;
+  if (!Notifications || Platform.OS !== 'android') return;
   // The server sends on channelId "default".
   await Notifications.setNotificationChannelAsync('default', {
     name: 'Account updates',
@@ -44,6 +45,7 @@ async function ensureChannel() {
 }
 
 async function registerToken(): Promise<void> {
+  if (!Notifications) return;
   await ensureChannel();
   const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
   await notifications.setPushToken(data);
@@ -51,7 +53,7 @@ async function registerToken(): Promise<void> {
 
 /** Current state, without asking the customer anything. */
 export async function pushState(): Promise<PushState> {
-  if (!pushSupported) return 'unsupported';
+  if (!pushSupported || !Notifications) return 'unsupported';
   const { status, canAskAgain } = await Notifications.getPermissionsAsync();
   if (status !== 'granted') return canAskAgain ? 'off' : 'blocked';
   return (await pushOptOut.get()) ? 'off' : 'on';
@@ -59,14 +61,14 @@ export async function pushState(): Promise<PushState> {
 
 /** Whether to offer notifications during setup (never asked, and not turned off before). */
 export async function shouldOfferPush(): Promise<boolean> {
-  if (!pushSupported) return false;
+  if (!pushSupported || !Notifications) return false;
   const { status, canAskAgain } = await Notifications.getPermissionsAsync();
   return status !== 'granted' && canAskAgain;
 }
 
 /** Ask for permission if needed and start sending this phone's notifications. */
 export async function enablePush(): Promise<PushState> {
-  if (!pushSupported) return 'unsupported';
+  if (!pushSupported || !Notifications) return 'unsupported';
   await ensureChannel(); // Android 13+ shows the permission prompt once a channel exists
   let { status, canAskAgain } = await Notifications.getPermissionsAsync();
   if (status !== 'granted' && canAskAgain) ({ status, canAskAgain } = await Notifications.requestPermissionsAsync());
