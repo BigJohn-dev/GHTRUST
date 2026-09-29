@@ -228,7 +228,9 @@ export function AppSidebar({ collapsed, pinned, floating, onTogglePin, onNavigat
       </nav>
 
       <div className="mt-auto border-t border-white/10 p-3">
-        <div className="flex items-center gap-1 rounded-lg">
+        {/* Collapsed, the rail only has room for the avatar: sign-out folds to zero width
+            (it's back as soon as the sidebar opens, e.g. on hover). */}
+        <div className={clsx('flex items-center rounded-lg transition-[gap]', collapsed ? 'gap-0' : 'gap-1')} style={motion}>
           <NavLink
             to="/profile"
             onClick={onNavigate}
@@ -255,11 +257,16 @@ export function AppSidebar({ collapsed, pinned, floating, onTogglePin, onNavigat
             type="button"
             onClick={logout}
             tabIndex={collapsed ? -1 : undefined}
-            className="p-2 rounded-lg text-white/50 hover:text-rose-300 hover:bg-white/10 transition-colors shrink-0"
+            aria-hidden={collapsed || undefined}
+            className={clsx(
+              'h-8 flex items-center justify-center rounded-lg overflow-hidden shrink-0 text-white/50 hover:text-rose-300 hover:bg-white/10 transition-[width,opacity,color,background-color]',
+              collapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-8 opacity-100',
+            )}
+            style={motion}
             title="Sign out"
             aria-label="Sign out"
           >
-            <LogOut size={15} />
+            <LogOut size={15} className="shrink-0" />
           </button>
         </div>
       </div>
