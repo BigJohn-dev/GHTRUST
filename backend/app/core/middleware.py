@@ -70,7 +70,7 @@ class ClientGateMiddleware:
       up so operations and payment callbacks continue.
     """
 
-    _ALWAYS_OPEN = ("/api/v1/app/config", "/api/v1/health", "/docs", "/redoc", "/openapi.json")
+    _ALWAYS_OPEN = ("/api/v1/app/config", "/api/v1/health", "/health", "/docs", "/redoc", "/openapi.json")
     _MAINTENANCE_EXEMPT = ("/api/v1/admin", "/api/v1/webhooks", *_ALWAYS_OPEN)
 
     def __init__(self, app: ASGIApp) -> None:

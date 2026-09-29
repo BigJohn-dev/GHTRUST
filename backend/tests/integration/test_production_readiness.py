@@ -43,6 +43,17 @@ async def test_api_rate_limit_per_ip(api_client, monkeypatch):
     assert int(limited.headers["retry-after"]) >= 1
     # Health checks are never throttled (load balancers poll them).
     assert (await api_client.get("/api/v1/health")).status_code == 200
+    assert (await api_client.get("/health")).status_code == 200
+
+
+async def test_root_health_aliases(api_client):
+    # Unversioned paths for hosting platforms; same answers as /api/v1/health*.
+    live = await api_client.get("/health")
+    assert live.status_code == 200
+    assert live.json() == (await api_client.get("/api/v1/health")).json()
+    ready = await api_client.get("/health/ready")
+    assert ready.status_code == 200
+    assert ready.json()["checks"] == {"database": "ok", "redis": "ok"}
 
 
 async def test_readiness_reports_dependencies(api_client):

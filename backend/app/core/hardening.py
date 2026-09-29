@@ -29,8 +29,8 @@ from app.core.redis import redis_for_scope
 
 logger = structlog.get_logger()
 
-_QUIET_PATHS = ("/api/v1/health",)
-_RATE_LIMIT_EXEMPT = ("/api/v1/health", "/api/v1/webhooks")
+_QUIET_PATHS = ("/api/v1/health", "/health")
+_RATE_LIMIT_EXEMPT = ("/api/v1/health", "/health", "/api/v1/webhooks")
 
 
 async def _send_error(send: Send, scope: Scope, status: int, code: str, detail: str, headers=()) -> None:
