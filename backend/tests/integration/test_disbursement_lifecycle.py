@@ -130,7 +130,10 @@ async def complete_draft(api_client, db_session, form=UNIVERSAL_FORM, tenure=6) 
     return app_id, headers
 
 
-async def approved_application(api_client, db_session, admin_headers, form=UNIVERSAL_FORM, tenure=6) -> str:
+async def approved_application(
+    api_client, db_session, admin_headers, form=UNIVERSAL_FORM, tenure=6, accept_offer=True
+) -> str:
+    """Approved by staff and (by default) the offer accepted by the customer, ready to pay out."""
     app_id = await submitted_application(api_client, db_session, form=form, tenure=tenure)
     await verify_all_documents(api_client, app_id, admin_headers)
     for _ in range(4):  # business loan: 4 stages; super admin may act on all
@@ -141,7 +144,25 @@ async def approved_application(api_client, db_session, admin_headers, form=UNIVE
         )
         assert res.status_code == 200, res.text
     assert res.json()["status"] == "approved"
+    if accept_offer:
+        await accept_loan_offer(api_client, app_id)
     return app_id
+
+
+async def accept_loan_offer(api_client, app_id: str) -> dict:
+    """The customer reviews the offer and accepts it with their transaction PIN."""
+    headers = {"Authorization": f"Bearer {await _login(api_client)}"}
+    me = (await api_client.get("/api/v1/auth/me", headers=headers)).json()
+    if not me["transaction_pin_set"]:
+        await set_transaction_pin(api_client, headers)
+    offer = (await api_client.get(f"/api/v1/loans/me/applications/{app_id}/offer", headers=headers)).json()
+    res = await api_client.post(
+        f"/api/v1/loans/me/applications/{app_id}/offer/accept",
+        json={"terms_hash": offer["terms_hash"], "transaction_pin": TEST_TXN_PIN},
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    return res.json()
 
 
 async def verify_all_documents(api_client, app_id, admin_headers, status="verified"):
@@ -385,17 +406,20 @@ class TestRailOutcomes:
 
     async def test_disbursement_requires_tenure(self, api_client, db_session, admin_headers):
         form = {**UNIVERSAL_FORM, "repayment_period": "as agreed"}
-        app_id = await approved_application(api_client, db_session, admin_headers, form=form, tenure=None)
+        app_id = await approved_application(
+            api_client, db_session, admin_headers, form=form, tenure=None, accept_offer=False
+        )
         res = await disburse(api_client, app_id, admin_headers)
         assert res.status_code == 409
         assert "tenure" in res.json()["detail"].lower()
 
-        # Staff confirm terms, then it disburses.
+        # Staff confirm terms, the customer accepts the offer, then it disburses.
         await api_client.patch(
             f"/api/v1/admin/loans/applications/{app_id}/status",
             json={"tenure_months": 3},
             headers=admin_headers,
         )
+        await accept_loan_offer(api_client, app_id)
         assert (await disburse(api_client, app_id, admin_headers)).status_code == 200
 
 
@@ -541,7 +565,7 @@ class TestRepayments:
         loan = await booked_loan(api_client, db_session, admin_headers)
         token = await _login(api_client)
         headers = {"Authorization": f"Bearer {token}"}
-        await set_transaction_pin(api_client, headers)
+        # The transaction PIN was created when the customer accepted the loan offer.
         url = f"/api/v1/loans/me/loans/{loan.id}/repayments"
 
         missing_key = await api_client.post(
@@ -578,7 +602,7 @@ class TestRepayments:
 
         token = await _login(api_client)
         headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": "repay-key-0002"}
-        await set_transaction_pin(api_client, headers)
+        # The transaction PIN was created when the customer accepted the loan offer.
         url = f"/api/v1/loans/me/loans/{loan.id}/repayments"
         body = {"amount": "15000", "transaction_pin": TEST_TXN_PIN}
         first = await api_client.post(url, json=body, headers=headers)

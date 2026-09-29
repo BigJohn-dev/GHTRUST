@@ -84,6 +84,18 @@ export default function Register() {
           Your BVN is only used to verify your identity. It doesn't give GH Trust access to your other bank accounts.
         </Text>
       </View>
+
+      <Text variant="small" muted>
+        By continuing you agree to our{' '}
+        <Text variant="small" color={colors.cyanDeep} onPress={() => router.push('/legal/terms')}>
+          Terms of Use
+        </Text>{' '}
+        and{' '}
+        <Text variant="small" color={colors.cyanDeep} onPress={() => router.push('/legal/privacy')}>
+          Privacy Policy
+        </Text>
+        . We'll ask you to confirm once your account is open.
+      </Text>
     </Screen>
   );
 }

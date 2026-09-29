@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     termii_base_url: str = "https://v3.api.termii.com"  # shown on your Termii dashboard
     termii_channel: str = "dnd"  # "dnd" reaches DND numbers; OTPs must use it
 
+    # A loan is only paid out after the customer accepts the final offer in the app.
+    loan_offer_acceptance_required: bool = True
+
     # Push notifications through Expo's push service (https://docs.expo.dev/push-notifications/sending-notifications/).
     # PUSH_MOCK=true logs pushes instead of sending them. EXPO_PUSH_ACCESS_TOKEN is only
     # needed if "enhanced push security" is switched on for the Expo project.
@@ -84,6 +87,9 @@ class Settings(BaseSettings):
     )
     support_phone: str = ""
     support_email: str = ""
+    # WhatsApp number in international format, e.g. 2348012345678 (opens wa.me/<number>).
+    support_whatsapp: str = ""
+    support_hours: str = "Monday to Friday, 8am to 5pm"
     # Comma-separated optional modules shown in the app: wallet, savings,
     # investments, contributions, food_basket. Loans are always on.
     feature_flags: str = ""

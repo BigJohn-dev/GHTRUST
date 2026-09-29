@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { SupportPage } from './pages/SupportPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider, useAuth } from './lib/auth'
 import { DashboardPage } from './pages/DashboardPage'
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/loan-products" element={<LoanProductsPage />} />
             <Route path="/team" element={<TeamPage />} />
             <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/support" element={<SupportPage />} />
             <Route path="/customers/:id" element={<CustomerDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/profile" element={<ProfilePage />} />

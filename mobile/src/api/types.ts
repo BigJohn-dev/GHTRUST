@@ -47,3 +47,10 @@ export type Page<T> = { items: T[]; total: number; limit: number; offset: number
 
 export type AppNotification = S['NotificationResponse'];
 export type NotificationPage = S['NotificationPage'];
+export type LegalDocumentSummary = S['DocumentSummary'];
+export type LegalDocument = S['DocumentResponse'];
+export type LoanOffer = S['LoanOfferResponse'];
+export type Faqs = S['FaqsResponse'];
+export type SupportTicket = S['TicketResponse'];
+export type TicketCategory = S['CreateTicketRequest']['category'];
+export type TicketRelated = NonNullable<S['CreateTicketRequest']['related_type']>;

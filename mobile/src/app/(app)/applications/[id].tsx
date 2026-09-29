@@ -39,6 +39,7 @@ export default function ApplicationDetail() {
   const s = applicationStatus(a.status);
   const loan = loansQuery.data?.items.find((l) => l.application_id === a.id);
   const needsDocs = a.status === 'documents_incomplete' || a.documents.some((d) => d.status === 'rejected');
+  const offerWaiting = a.status === 'approved' && !a.offer_accepted_at;
   const amount = a.approved_amount ?? a.requested_amount;
   const tenure = a.tenure_months;
 
@@ -50,6 +51,8 @@ export default function ApplicationDetail() {
       footer={
         a.status === 'draft' ? (
           <Button title="Continue application" onPress={() => router.replace(`/apply/${a.id}`)} />
+        ) : offerWaiting ? (
+          <Button title="Review your offer" icon="arrow-forward" onPress={() => router.push(`/applications/${a.id}/offer`)} />
         ) : loan ? (
           <Button title="View your loan" icon="arrow-forward" onPress={() => router.push(`/loans/${loan.id}`)} />
         ) : null
@@ -87,10 +90,29 @@ export default function ApplicationDetail() {
           </Text>
           <Button title="Start a new application" variant="secondary" size="sm" onPress={() => router.push('/apply')} />
         </Card>
+      ) : offerWaiting ? (
+        <Card style={{ gap: space.xs, borderWidth: 1.5, borderColor: colors.cyan }}>
+          <Text variant="heading">Your loan is approved</Text>
+          <Text variant="small" muted>
+            Review the offer: the amount, interest, fees and every payment date. We pay it out as soon as you accept.
+          </Text>
+          <Button
+            title="Review offer"
+            size="sm"
+            onPress={() => router.push(`/applications/${a.id}/offer`)}
+            style={{ alignSelf: 'flex-start', marginTop: space.xs }}
+          />
+        </Card>
       ) : (
         <Banner
           tone={needsDocs ? 'warning' : 'info'}
-          message={needsDocs ? 'A document needs replacing. Tap it below to upload a new one.' : s.hint}
+          message={
+            needsDocs
+              ? 'A document needs replacing. Tap it below to upload a new one.'
+              : a.status === 'approved' && a.offer_accepted_at
+                ? "You've accepted the offer. We're preparing your payout."
+                : s.hint
+          }
         />
       )}
 

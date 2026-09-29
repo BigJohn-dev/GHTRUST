@@ -56,6 +56,8 @@ class MaintenanceInfo(BaseModel):
 class SupportInfo(BaseModel):
     phone: str | None = None
     email: str | None = None
+    whatsapp: str | None = None
+    hours: str | None = None
 
 
 class AppConfigResponse(BaseModel):
@@ -85,6 +87,11 @@ def build_config(platform: Platform, version: str | None) -> AppConfigResponse:
             message=s.maintenance_message if s.maintenance_mode else None,
         ),
         features=enabled_features(),
-        support=SupportInfo(phone=s.support_phone or None, email=s.support_email or None),
+        support=SupportInfo(
+            phone=s.support_phone or None,
+            email=s.support_email or None,
+            whatsapp="".join(ch for ch in s.support_whatsapp if ch.isdigit()) or None,
+            hours=s.support_hours or None,
+        ),
         server_time=datetime.now(timezone.utc),
     )

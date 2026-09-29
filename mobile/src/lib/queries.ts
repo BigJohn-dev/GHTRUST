@@ -2,7 +2,7 @@ import { QueryClient, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { ApiError } from '@/api/errors';
 import type { TransactionDirection } from '@/api/types';
-import { appConfig, auth, banks, loans, notifications, wallet } from '@/api/endpoints';
+import { appConfig, auth, banks, legal, loans, notifications, support, wallet } from '@/api/endpoints';
 
 export const keys = {
   config: ['config'] as const,
@@ -16,6 +16,12 @@ export const keys = {
   wallet: ['wallet'] as const,
   transactions: ['transactions'] as const,
   notifications: ['notifications'] as const,
+  legal: (slug: string) => ['legal', slug] as const,
+  legalList: ['legal'] as const,
+  offer: (applicationId: string) => ['offer', applicationId] as const,
+  faqs: ['faqs'] as const,
+  tickets: ['tickets'] as const,
+  ticket: (id: string) => ['tickets', id] as const,
   unread: ['notifications', 'unread'] as const,
   transactionList: (direction?: TransactionDirection) => ['transactions', 'list', direction ?? 'all'] as const,
   transaction: (id: string) => ['transactions', id] as const,
@@ -90,3 +96,14 @@ export const useNotifications = () =>
 /** Unread badge on the Home bell; refreshed on focus and whenever a push arrives. */
 export const useUnreadCount = (enabled = true) =>
   useQuery({ queryKey: keys.unread, queryFn: notifications.unreadCount, enabled, staleTime: 30_000 });
+
+export const useLegalDocuments = () =>
+  useQuery({ queryKey: keys.legalList, queryFn: legal.list, staleTime: 10 * 60_000 });
+export const useLegalDocument = (slug: string) =>
+  useQuery({ queryKey: keys.legal(slug), queryFn: () => legal.document(slug), enabled: !!slug, staleTime: 10 * 60_000 });
+export const useLoanOffer = (applicationId: string) =>
+  useQuery({ queryKey: keys.offer(applicationId), queryFn: () => legal.offer(applicationId), enabled: !!applicationId, staleTime: 0 });
+export const useFaqs = () => useQuery({ queryKey: keys.faqs, queryFn: support.faqs, staleTime: 30 * 60_000 });
+export const useTickets = () => useQuery({ queryKey: keys.tickets, queryFn: support.tickets });
+export const useTicket = (id: string) =>
+  useQuery({ queryKey: keys.ticket(id), queryFn: () => support.ticket(id), enabled: !!id });

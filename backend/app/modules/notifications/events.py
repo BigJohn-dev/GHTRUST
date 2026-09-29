@@ -84,8 +84,9 @@ async def application_approved(db: AsyncSession, application: LoanApplication) -
         application.customer_id,
         "application_approved",
         "Your loan is approved",
-        f"Good news: your {product} application has been approved. We'll let you know when it's paid out.",
-        route=f"/applications/{application.id}",
+        f"Good news: your {product} application has been approved. Review and accept your offer so we can "
+        "pay it out.",
+        route=f"/applications/{application.id}/offer",
         dedupe_key=f"application_approved:{application.id}",
     )
 

@@ -98,6 +98,9 @@ const COPY: Record<string, string> = {
   PAYMENT_PROVIDER_ERROR: 'Our payment service is temporarily unavailable. Please try again shortly.',
   BANK_ACCOUNT_UNVERIFIED: "We couldn't verify this account. Check the bank and account number and try again.",
   LOAN_NOT_REPAYABLE: "This loan can't take repayments right now. Please contact GH Trust.",
+  OFFER_NOT_AVAILABLE: "There's no loan offer to accept right now. Pull down to refresh.",
+  OFFER_CHANGED: 'Your loan offer has changed. Please review the new terms before accepting.',
+  LEGAL_VERSION_OUTDATED: "We've just updated this document. Please read the latest version.",
   // Loan applications
   APPLICATION_INCOMPLETE: 'Your application is missing some details. Check each step and try again.',
   APPLICATION_NOT_EDITABLE: "This application can't be changed any more. Only documents we've asked you to replace can be uploaded.",

@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useRef } from 'react';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import type { ApplicationSummary } from '@/api/types';
 import { useSession } from '@/auth/session';
 import { Card, SectionHeader } from '@/components/Card';
 import { HeroCard } from '@/components/home/HeroCard';
@@ -65,8 +66,7 @@ export default function Home() {
   const openLoans = loanList.filter((l) => l.status === 'active' || l.status === 'overdue');
   const nextLoan = [...openLoans].sort((a, b) => (a.next_due_date ?? '9').localeCompare(b.next_due_date ?? '9'))[0];
   const overdue = openLoans.some((l) => l.status === 'overdue');
-  // One nudge at most: documents to fix beat an unfinished draft.
-  const nudge = apps.find((a) => a.status === 'documents_incomplete') ?? apps.find((a) => a.status === 'draft');
+  const nudge = pickNudge(apps);
   const activity = recentActivity(loanList, apps, history.data?.pages[0]?.items);
 
   const name = me.data?.first_name ?? firstName;
@@ -135,21 +135,15 @@ export default function Home() {
           <PressableScale
             scaleTo={0.98}
             accessibilityRole="button"
-            onPress={() => router.push(nudge.status === 'draft' ? `/apply/${nudge.id}` : `/applications/${nudge.id}`)}
-            style={[styles.nudge, nudge.status !== 'draft' && styles.nudgeWarn]}>
-            <Ionicons
-              name={nudge.status === 'draft' ? 'create-outline' : 'alert-circle-outline'}
-              size={22}
-              color={nudge.status === 'draft' ? colors.cyanDeep : colors.warning}
-            />
+            onPress={() => router.push(nudge.href)}
+            style={[styles.nudge, { borderLeftColor: nudge.accent }]}>
+            <Ionicons name={nudge.icon} size={22} color={nudge.iconColor} />
             <View style={{ flex: 1 }}>
               <Text variant="bodyStrong" numberOfLines={1}>
-                {nudge.status === 'draft' ? 'Finish your application' : 'Some documents need attention'}
+                {nudge.title}
               </Text>
               <Text variant="small" muted numberOfLines={1}>
-                {nudge.status === 'draft'
-                  ? `${nudge.product_name} · tap to continue`
-                  : `${nudge.product_name} · tap to fix and re-upload`}
+                {nudge.subtitle}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
@@ -172,15 +166,7 @@ export default function Home() {
           ) : (
             <QuickActionButton icon="shield-checkmark" label="Security" onPress={() => router.push('/security')} />
           )}
-          {features.support?.phone ? (
-            <QuickActionButton
-              icon="call"
-              label="Call support"
-              onPress={() => Linking.openURL(`tel:${features.support?.phone}`)}
-            />
-          ) : (
-            <QuickActionButton icon="phone-portrait" label="My devices" onPress={() => router.push('/devices')} />
-          )}
+          <QuickActionButton icon="help-buoy" label="Help & support" onPress={() => router.push('/support')} />
         </View>
       </Animated.View>
 
@@ -226,6 +212,53 @@ export default function Home() {
       </Animated.View>
     </Screen>
   );
+}
+
+type Nudge = {
+  href: Href;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  accent: string;
+  title: string;
+  subtitle: string;
+};
+
+/** One nudge at most: a loan offer to accept, then documents to fix, then an unfinished draft. */
+function pickNudge(apps: ApplicationSummary[]): Nudge | null {
+  const offer = apps.find((a) => a.status === 'approved' && !a.offer_accepted_at);
+  if (offer) {
+    return {
+      href: `/applications/${offer.id}/offer`,
+      icon: 'checkmark-circle-outline',
+      iconColor: colors.success,
+      accent: colors.success,
+      title: 'Your loan is approved',
+      subtitle: `${offer.product_name} · review your offer`,
+    };
+  }
+  const docs = apps.find((a) => a.status === 'documents_incomplete');
+  if (docs) {
+    return {
+      href: `/applications/${docs.id}`,
+      icon: 'alert-circle-outline',
+      iconColor: colors.warning,
+      accent: colors.warningRaw,
+      title: 'Some documents need attention',
+      subtitle: `${docs.product_name} · tap to fix and re-upload`,
+    };
+  }
+  const draft = apps.find((a) => a.status === 'draft');
+  if (draft) {
+    return {
+      href: `/apply/${draft.id}`,
+      icon: 'create-outline',
+      iconColor: colors.cyanDeep,
+      accent: colors.cyan,
+      title: 'Finish your application',
+      subtitle: `${draft.product_name} · tap to continue`,
+    };
+  }
+  return null;
 }
 
 /** Same footprint as the hero, so nothing jumps when data arrives. */
@@ -307,7 +340,6 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.cyan,
     ...shadow,
   },
-  nudgeWarn: { borderLeftColor: colors.warningRaw },
   actions: { flexDirection: 'row', gap: space.sm },
   list: { backgroundColor: colors.card, borderRadius: radius.lg, overflow: 'hidden', ...shadow },
   skeletonRow: {

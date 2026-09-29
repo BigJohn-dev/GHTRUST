@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Linking, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { APP_VERSION } from '@/api/config';
 import { useSession } from '@/auth/session';
@@ -10,13 +10,12 @@ import { CardSkeleton, ErrorState } from '@/components/States';
 import { Text } from '@/components/Text';
 import { confirm } from '@/lib/confirm';
 import { date, humanize } from '@/lib/format';
-import { useFeatures, useMe } from '@/lib/queries';
+import { useMe } from '@/lib/queries';
 import { colors, space } from '@/theme/tokens';
 
 export default function Profile() {
   const me = useMe();
   const { signOut } = useSession();
-  const { support } = useFeatures();
   const p = me.data;
 
   return (
@@ -70,25 +69,17 @@ export default function Profile() {
         <Row icon="phone-portrait-outline" title="Signed-in devices" subtitle="See and remove devices" onPress={() => router.push('/devices')} last />
       </Card>
 
-      {support?.phone || support?.email ? (
-        <>
-          <SectionHeader title="Help" />
-          <Card style={styles.list}>
-            {support.phone ? (
-              <Row
-                icon="call-outline"
-                title="Call us"
-                subtitle={support.phone}
-                onPress={() => Linking.openURL(`tel:${support.phone}`)}
-                last={!support.email}
-              />
-            ) : null}
-            {support.email ? (
-              <Row icon="mail-outline" title="Email us" subtitle={support.email} onPress={() => Linking.openURL(`mailto:${support.email}`)} last />
-            ) : null}
-          </Card>
-        </>
-      ) : null}
+      <SectionHeader title="Help & legal" />
+      <Card style={styles.list}>
+        <Row
+          icon="help-buoy-outline"
+          title="Help & support"
+          subtitle="Questions, contact us, report a problem"
+          onPress={() => router.push('/support')}
+        />
+        <Row icon="document-text-outline" title="Terms of Use" onPress={() => router.push('/legal/terms')} />
+        <Row icon="lock-closed-outline" title="Privacy Policy" onPress={() => router.push('/legal/privacy')} last />
+      </Card>
 
       <View style={{ gap: space.sm, marginTop: space.xl }}>
         <Button

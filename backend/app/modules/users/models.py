@@ -101,6 +101,10 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Money can't leave the account before this (e.g. after signing in without the old phone).
     transfers_blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Versions of the Terms of Use / Privacy Policy last accepted (history in legal_acceptances).
+    terms_accepted_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    privacy_accepted_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
     # --- Paystack / payout rails ---
     paystack_customer_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     paystack_dva_account_number: Mapped[str | None] = mapped_column(String(20), nullable=True, unique=True)

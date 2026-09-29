@@ -17,14 +17,17 @@ export default function AppLayout() {
   const resetting = usePinReset();
   const needsPin = me.data ? !me.data.login_pin_set : false;
   const needsSetup = setupActive || needsPin || resetting;
+  // Terms / Privacy come first: nothing else in the app until they're accepted.
+  const needsConsent = (me.data?.legal_pending?.length ?? 0) > 0;
 
   // Once started, setup stays on screen until the customer finishes its optional steps.
   useEffect(() => {
     if (needsPin || resetting) setupFlow.start();
   }, [needsPin, resetting]);
 
-  usePendingApprovals(!needsSetup);
-  usePushNotifications(!needsSetup);
+  const ready = !needsSetup && !needsConsent;
+  usePendingApprovals(ready);
+  usePushNotifications(ready);
 
   return (
     <Stack
@@ -36,15 +39,19 @@ export default function AppLayout() {
         headerBackButtonDisplayMode: 'minimal',
         contentStyle: { backgroundColor: colors.surface },
       }}>
-      <Stack.Protected guard={needsSetup}>
+      <Stack.Protected guard={needsConsent}>
+        <Stack.Screen name="legal-consent" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+      </Stack.Protected>
+      <Stack.Protected guard={needsSetup && !needsConsent}>
         <Stack.Screen name="security-setup" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
       </Stack.Protected>
-      <Stack.Protected guard={!needsSetup}>
+      <Stack.Protected guard={ready}>
         {/* title: what VoiceOver/TalkBack say on the back button of screens above ("Home, back"). */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Home' }} />
         <Stack.Screen name="apply/index" options={{ title: 'Choose a loan' }} />
         <Stack.Screen name="apply/[id]" options={{ title: 'Loan application' }} />
         <Stack.Screen name="applications/[id]" options={{ title: 'Application' }} />
+        <Stack.Screen name="applications/[id]/offer" options={{ title: 'Your loan offer' }} />
         <Stack.Screen name="loans/[id]" options={{ title: 'Loan' }} />
         <Stack.Screen name="devices" options={{ title: 'Signed-in devices' }} />
         <Stack.Screen name="security" options={{ title: 'Security' }} />
@@ -66,6 +73,9 @@ export default function AppLayout() {
         <Stack.Screen name="transactions/index" options={{ title: 'Transactions' }} />
         <Stack.Screen name="transactions/[id]" options={{ title: 'Receipt' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="support/index" options={{ title: 'Help & support' }} />
+        <Stack.Screen name="support/new" options={{ title: 'Report a problem' }} />
+        <Stack.Screen name="support/[id]" options={{ title: 'Your request' }} />
       </Stack.Protected>
     </Stack>
   );

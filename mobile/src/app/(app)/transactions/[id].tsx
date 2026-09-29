@@ -51,14 +51,26 @@ export default function TransactionReceipt() {
       onRefresh={() => tx.refetch()}
       refreshing={tx.isRefetching}
       footer={
-        t.loan_id ? (
+        <>
+          {t.loan_id ? (
+            <Button
+              title="View loan"
+              variant="secondary"
+              icon="document-text-outline"
+              onPress={() => router.push(`/loans/${t.loan_id}`)}
+            />
+          ) : null}
           <Button
-            title="View loan"
-            variant="secondary"
-            icon="document-text-outline"
-            onPress={() => router.push(`/loans/${t.loan_id}`)}
+            title="Report a problem"
+            variant="ghost"
+            onPress={() =>
+              router.push({
+                pathname: '/support/new',
+                params: { category: 'payments', related_type: 'transaction', related_id: t.id },
+              })
+            }
           />
-        ) : undefined
+        </>
       }>
       <View style={styles.head}>
         <View style={[styles.icon, { backgroundColor: `${tint}18` }]}>

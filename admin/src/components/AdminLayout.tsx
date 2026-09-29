@@ -20,6 +20,7 @@ function pageTitleFromPath(pathname: string): string {
   if (pathname === '/applications') return 'Loan queue'
   if (pathname === '/loan-products') return 'Loan products'
   if (pathname === '/team') return 'Team management'
+  if (pathname === '/support') return 'Support'
   if (pathname === '/customers') return 'Customers'
   if (pathname.startsWith('/customers/')) return 'Customer profile'
   if (pathname === '/settings') return 'Settings'

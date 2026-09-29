@@ -24,8 +24,15 @@ import type {
   SelfieRequired,
   Session,
   StepUpdate,
+  Faqs,
+  LegalDocument,
+  LegalDocumentSummary,
+  LoanOffer,
   NotificationPage,
   PayoutAccountSaved,
+  SupportTicket,
+  TicketCategory,
+  TicketRelated,
   TransactionDirection,
   Wallet,
   WalletFundSession,
@@ -165,6 +172,27 @@ export const notifications = {
   markRead: (ids?: string[]) => api.post<{ unread_count: number }>('/notifications/read', { ids }),
   setPushToken: (token: string) => api.put<void>('/notifications/push-token', { token }),
   removePushToken: () => api.delete<void>('/notifications/push-token'),
+};
+
+export const legal = {
+  list: () => api.get<LegalDocumentSummary[]>('/legal', { auth: false }),
+  document: (slug: string) => api.get<LegalDocument>(`/legal/${slug}`, { auth: false }),
+  accept: (documents: Record<string, string>) =>
+    api.post<{ legal_pending: string[] }>('/legal/accept', { documents }),
+  offer: (applicationId: string) => api.get<LoanOffer>(`/loans/me/applications/${applicationId}/offer`),
+  acceptOffer: (applicationId: string, termsHash: string, transactionPin: string) =>
+    api.post<LoanOffer>(`/loans/me/applications/${applicationId}/offer/accept`, {
+      terms_hash: termsHash,
+      transaction_pin: transactionPin,
+    }),
+};
+
+export const support = {
+  faqs: () => api.get<Faqs>('/support/faqs', { auth: false }),
+  tickets: () => api.get<SupportTicket[]>('/support/tickets'),
+  ticket: (id: string) => api.get<SupportTicket>(`/support/tickets/${id}`),
+  create: (ticket: { category: TicketCategory; message: string; related_type?: TicketRelated; related_id?: string }) =>
+    api.post<SupportTicket>('/support/tickets', ticket),
 };
 
 export const banks = {
