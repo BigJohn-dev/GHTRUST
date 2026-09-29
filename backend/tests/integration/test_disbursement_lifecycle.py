@@ -588,6 +588,15 @@ class TestRepayments:
         await db_session.refresh(wallet)
         assert wallet.available_balance == Decimal("5000.00")
 
+        # The wallet history shows it once, linked to the loan.
+        history = (
+            await api_client.get("/api/v1/wallet/transactions?direction=out", headers=headers)
+        ).json()["items"]
+        assert len(history) == 1
+        repayment = history[0]
+        assert repayment["kind"] == "repayment" and repayment["amount"] == 15000
+        assert repayment["loan_id"] == loan.id and repayment["loan_product"] == loan.product_type
+
 
 class TestOverdue:
     async def test_daily_job_marks_overdue(self, api_client, db_session, admin_headers):

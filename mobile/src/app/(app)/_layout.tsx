@@ -59,6 +59,10 @@ export default function AppLayout() {
           name="fund"
           options={{ title: 'Add money', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }}
         />
+        <Stack.Screen name="withdraw" options={{ title: 'Withdraw' }} />
+        <Stack.Screen name="payout-account" options={{ title: 'Bank account' }} />
+        <Stack.Screen name="transactions/index" options={{ title: 'Transactions' }} />
+        <Stack.Screen name="transactions/[id]" options={{ title: 'Receipt' }} />
       </Stack.Protected>
     </Stack>
   );

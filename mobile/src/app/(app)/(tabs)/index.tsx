@@ -14,7 +14,7 @@ import { ErrorState, Skeleton } from '@/components/States';
 import { Text } from '@/components/Text';
 import { recentActivity } from '@/lib/activity';
 import { greeting } from '@/lib/format';
-import { useApplications, useFeatures, useLoans, useMe, useWallet } from '@/lib/queries';
+import { useApplications, useFeatures, useLoans, useMe, useTransactions, useWallet } from '@/lib/queries';
 import { colors, font, radius, shadow, space } from '@/theme/tokens';
 
 const enter = (i: number) => FadeInDown.duration(380).delay(60 * i);
@@ -26,6 +26,7 @@ export default function Home() {
   const applications = useApplications();
   const features = useFeatures();
   const wallet = useWallet(features.wallet);
+  const history = useTransactions(undefined, features.wallet);
 
   const loanList = loans.data?.items ?? [];
   const apps = applications.data?.items ?? [];
@@ -34,7 +35,7 @@ export default function Home() {
   const overdue = openLoans.some((l) => l.status === 'overdue');
   // One nudge at most: documents to fix beat an unfinished draft.
   const nudge = apps.find((a) => a.status === 'documents_incomplete') ?? apps.find((a) => a.status === 'draft');
-  const activity = recentActivity(loanList, apps);
+  const activity = recentActivity(loanList, apps, history.data?.pages[0]?.items);
 
   const name = me.data?.first_name ?? firstName;
   const initials = `${(me.data?.first_name?.[0] ?? name?.[0] ?? 'G').toUpperCase()}${(me.data?.last_name?.[0] ?? '').toUpperCase()}`;
@@ -44,7 +45,10 @@ export default function Home() {
     loans.refetch();
     applications.refetch();
     me.refetch();
-    if (features.wallet) wallet.refetch();
+    if (features.wallet) {
+      wallet.refetch();
+      history.refetch();
+    }
   };
 
   return (
@@ -117,7 +121,7 @@ export default function Home() {
             onPress={() => router.push('/loans')}
           />
           {features.wallet ? (
-            <QuickActionButton icon="wallet" label="Add money" onPress={() => router.push('/fund')} />
+            <QuickActionButton icon="arrow-up-circle" label="Withdraw" onPress={() => router.push('/withdraw')} />
           ) : (
             <QuickActionButton icon="shield-checkmark" label="Security" onPress={() => router.push('/security')} />
           )}
@@ -138,7 +142,10 @@ export default function Home() {
           title="Recent activity"
           action={
             activity.length > 0 ? (
-              <Pressable accessibilityRole="button" hitSlop={10} onPress={() => router.push('/loans')}>
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={10}
+                onPress={() => router.push(features.wallet ? '/transactions' : '/loans')}>
                 <Text variant="small" color={colors.cyanDeep} style={{ fontFamily: font.semibold }}>
                   See all
                 </Text>

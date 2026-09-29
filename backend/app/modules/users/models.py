@@ -108,6 +108,7 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     paystack_dva_bank_slug: Mapped[str | None] = mapped_column(String(50), nullable=True)
     paystack_transfer_recipient_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payout_bank_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    payout_bank_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     payout_account_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     payout_account_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 

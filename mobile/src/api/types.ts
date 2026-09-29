@@ -36,5 +36,11 @@ export type ResolvedAccount = S['ResolveAccountResponse'];
 
 export type Wallet = S['WalletSummaryResponse'];
 export type WalletFundSession = S['WalletFundSessionResponse'];
+export type PayoutAccount = S['PayoutAccountSummary'];
+export type PayoutAccountSaved = S['PayoutAccountSavedResponse'];
+export type Withdrawal = S['WithdrawalResponse'];
+export type WalletTransaction = S['WalletTransactionResponse'];
+export type WalletTransactionPage = S['WalletTransactionPage'];
+export type TransactionDirection = 'in' | 'out';
 
 export type Page<T> = { items: T[]; total: number; limit: number; offset: number };
