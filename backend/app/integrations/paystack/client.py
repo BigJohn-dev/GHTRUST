@@ -36,12 +36,13 @@ from app.integrations.paystack.schemas import (
     ResolvedAccount,
     ValidateCustomerRequest,
 )
+from app.integrations.payments.mock_accounts import mock_account_number
 
 logger = structlog.get_logger()
 
 MOCK_CUSTOMER_CODE = "CUS_mock_ghtrust001"
 MOCK_RECIPIENT_CODE = "RCP_mock_ghtrust001"
-MOCK_DVA_ACCOUNT = "9930000901"
+MOCK_DVA_PREFIX = "99"  # mock NUBANs look like 99xxxxxxxx
 MOCK_DVA_BANK = "test-bank"
 
 
@@ -190,7 +191,7 @@ class PaystackClient:
             return PaystackDedicatedAccount(
                 id=1,
                 account_name="GH Trust / ADAEZE OKAFOR",
-                account_number=MOCK_DVA_ACCOUNT,
+                account_number=mock_account_number(payload.customer, MOCK_DVA_PREFIX),
                 assigned=True,
                 currency="NGN",
                 active=True,

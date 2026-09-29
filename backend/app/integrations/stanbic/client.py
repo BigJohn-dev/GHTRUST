@@ -61,10 +61,11 @@ from app.integrations.stanbic.constants import (
     TRANSFER_STATUS_SUCCESS,
     TRANSFER_SUCCESS_STATUSES,
 )
+from app.integrations.payments.mock_accounts import mock_account_number
 
 logger = structlog.get_logger()
 
-MOCK_ACCOUNT_NUMBER = "9920011223"
+MOCK_ACCOUNT_PREFIX = "99"  # mock NUBANs look like 99xxxxxxxx
 MOCK_BANK_NAME = "Stanbic IBTC Bank"
 MOCK_BANK_CODE = "221"  # NIP institution code for Stanbic IBTC
 MOCK_ACCOUNT_HOLDER = "Mock Account Holder"
@@ -268,7 +269,7 @@ class StanbicClient:
         if self._use_mock:
             return ReservedAccountResult(
                 account_reference=account_reference,
-                account_number=MOCK_ACCOUNT_NUMBER,
+                account_number=mock_account_number(account_reference, MOCK_ACCOUNT_PREFIX),
                 account_name=account_name,
                 bank_name=MOCK_BANK_NAME,
                 bank_code=MOCK_BANK_CODE,
@@ -318,7 +319,7 @@ class StanbicClient:
         if self._use_mock:
             return ReservedAccountResult(
                 account_reference=account_reference,
-                account_number=MOCK_ACCOUNT_NUMBER,
+                account_number=mock_account_number(account_reference, MOCK_ACCOUNT_PREFIX),
                 account_name=MOCK_ACCOUNT_HOLDER,
                 bank_name=MOCK_BANK_NAME,
                 bank_code=MOCK_BANK_CODE,

@@ -1,7 +1,7 @@
 """
 Simulate a customer's bank transfer into their wallet on the dev server.
 
-    python scripts/dev_credit_wallet.py 5000112233 185000
+    python scripts/dev_credit_wallet.py <wallet account number> 185000
 
 Sends the same signed webhook Monnify sends when money reaches a customer's
 account number, so the real crediting path (ledger, idempotency) runs.
