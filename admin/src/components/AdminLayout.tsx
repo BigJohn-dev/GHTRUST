@@ -2,7 +2,7 @@ import clsx from 'clsx'
 import { Menu, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useSidebarPin } from '../lib/sidebarPin'
+import { SIDEBAR_EASE, SIDEBAR_MS, useSidebarPin } from '../lib/sidebarPin'
 import { NotificationsMenu } from './NotificationsMenu'
 import { AppSidebar } from './ui/AppSidebar'
 
@@ -23,10 +23,10 @@ function pageTitleFromPath(pathname: string): string {
   if (pathname === '/customers') return 'Customers'
   if (pathname.startsWith('/customers/')) return 'Customer profile'
   if (pathname === '/settings') return 'Settings'
+  if (pathname === '/profile') return 'My profile'
   return 'Dashboard'
 }
 
-const SOFT_SPRING = 'cubic-bezier(0.25, 1.1, 0.4, 1)'
 const PEEK_OPEN_MS = 150
 const PEEK_CLOSE_MS = 300
 /** Peeking is for desktop pointers only; touch screens use the mobile drawer. */
@@ -74,12 +74,12 @@ export function AdminLayout({ children, title, subtitle, tabs, activeTab, onTabC
           itself is absolutely positioned so a peek overlays the page. Mobile: a drawer. */}
       <div
         className={clsx(
-          'shrink-0 h-screen z-50 transition-[transform,width] duration-500',
+          'shrink-0 h-screen z-50 transition-[transform,width]',
           'fixed lg:relative',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
           pinned ? 'lg:w-[272px]' : 'lg:w-[72px]',
         )}
-        style={{ transitionTimingFunction: SOFT_SPRING }}
+        style={{ transitionTimingFunction: SIDEBAR_EASE, transitionDuration: `${SIDEBAR_MS}ms` }}
       >
         <div
           ref={sidebarRef}

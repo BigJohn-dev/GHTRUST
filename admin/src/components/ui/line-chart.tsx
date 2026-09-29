@@ -43,7 +43,8 @@ function ChartContainer({
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
+        {/* Redraw once the container settles, not on every frame of a sidebar resize. */}
+        <RechartsPrimitive.ResponsiveContainer width="100%" height="100%" debounce={200}>
           {children}
         </RechartsPrimitive.ResponsiveContainer>
       </div>

@@ -38,7 +38,6 @@ from app.modules.loans.models import Loan, LoanApplication, LoanRepayment, Repay
 from app.modules.loans.schemas import (
     InstallmentStatus,
     InterestMethod,
-    LoanProductCode,
     LoanStatus,
     RepaymentCadence,
     RepaymentChannel,
@@ -281,7 +280,7 @@ class LoanServicingService:
         loan = Loan(
             customer_id=application.customer_id,
             application_id=application.id,
-            product_type=LoanProductCode(product.code),
+            product_type=product.code,
             principal=principal,
             disbursed_amount=principal,
             outstanding=total,

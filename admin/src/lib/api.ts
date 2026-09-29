@@ -173,6 +173,8 @@ export interface StaffProfile {
   status: string
   is_super_admin: boolean
   permissions: string[]
+  job_title?: string | null
+  avatar_color?: string | null
   role: {
     id: string
     name: string
@@ -192,7 +194,16 @@ export interface StaffAuthResponse {
   staff: StaffProfile
 }
 
+export interface StaffProfileUpdate {
+  full_name?: string
+  job_title?: string
+  avatar_color?: string
+}
+
 export const adminAuthApi = {
+  updateMe: (token: string, changes: StaffProfileUpdate) =>
+    apiFetch<StaffProfile>('/api/v1/admin/auth/me', { method: 'PATCH', body: JSON.stringify(changes) }, token),
+
   requestOtp: (phone: string) =>
     apiFetch<OtpSentResponse>('/api/v1/admin/auth/login/request-otp', {
       method: 'POST',

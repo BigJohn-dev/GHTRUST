@@ -84,7 +84,7 @@ export function StatusPill({ status }: { status: string }) {
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium capitalize',
+        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium capitalize whitespace-nowrap',
         style.bg,
         style.text,
       )}

@@ -342,7 +342,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update own profile
+         * @description Name, job title and avatar colour. Send an empty job title to clear it.
+         */
+        patch: operations["update_staff_me_api_v1_admin_auth_me_patch"];
         trace?: never;
     };
     "/api/v1/admin/dashboard": {
@@ -603,7 +607,11 @@ export interface paths {
         /** Admin List Products */
         get: operations["admin_list_products_api_v1_admin_loans_products_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create loan product
+         * @description Created switched off. Publish an approval workflow for it, then switch it on.
+         */
+        post: operations["admin_create_product_api_v1_admin_loans_products_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1930,9 +1938,46 @@ export interface components {
         };
         /** CreateApplicationRequest */
         CreateApplicationRequest: {
-            product_code: components["schemas"]["LoanProductCode"];
+            /** Product Code */
+            product_code: string;
             /** @default web */
             channel: components["schemas"]["ApplicationChannel"];
+        };
+        /**
+         * CreateLoanProductRequest
+         * @description A new product, created switched off. Steps, documents and cadences are limited to the
+         *     ones the customer app and servicing engine understand; switching it on requires a
+         *     published approval workflow.
+         */
+        CreateLoanProductRequest: {
+            /**
+             * Code
+             * @description Permanent ID, e.g. `agric_loan`
+             */
+            code: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Interest Rate Pct Monthly */
+            interest_rate_pct_monthly: number | string;
+            /**
+             * Processing Fee Pct
+             * @default 0
+             */
+            processing_fee_pct: number | string;
+            /** @default flat */
+            interest_method: components["schemas"]["InterestMethod"];
+            /** Max Tenure Days */
+            max_tenure_days?: number | null;
+            /** Default Penalty Pct Daily */
+            default_penalty_pct_daily?: number | string | null;
+            /** Repayment Cadence Options */
+            repayment_cadence_options: components["schemas"]["RepaymentCadence"][];
+            /** Required Document Types */
+            required_document_types: string[];
+            /** Workflow Steps */
+            workflow_steps: string[];
         };
         /** CreateWorkflowRequest */
         CreateWorkflowRequest: {
@@ -2491,7 +2536,8 @@ export interface components {
             customer_name?: string | null;
             /** Application Id */
             application_id?: string | null;
-            product_type: components["schemas"]["LoanProductCode"];
+            /** Product Type */
+            product_type: string;
             /** Principal */
             principal: string;
             /** Total Interest */
@@ -2539,11 +2585,6 @@ export interface components {
             /** Repayments */
             repayments: components["schemas"]["LoanRepaymentResponse"][];
         };
-        /**
-         * LoanProductCode
-         * @enum {string}
-         */
-        LoanProductCode: "business_loan" | "payday_loan" | "study_loan" | "asset_loan" | "lpo_invoice_financing";
         /** LoanProductResponse */
         LoanProductResponse: {
             /** Id */
@@ -2611,7 +2652,8 @@ export interface components {
             customer_name?: string | null;
             /** Application Id */
             application_id?: string | null;
-            product_type: components["schemas"]["LoanProductCode"];
+            /** Product Type */
+            product_type: string;
             /** Principal */
             principal: string;
             /** Total Interest */
@@ -3054,6 +3096,27 @@ export interface components {
             role?: components["schemas"]["RoleResponse"] | null;
             /** Permissions */
             permissions: string[];
+            /** Job Title */
+            job_title?: string | null;
+            /** Avatar Color */
+            avatar_color?: string | null;
+        };
+        /**
+         * StaffSelfUpdateRequest
+         * @description What staff may change on their own profile. Phone (the sign-in factor) and email are
+         *     not self-service: changing them from a signed-in session would let a stolen session
+         *     take over the account. Administrators change them on the Team page.
+         */
+        StaffSelfUpdateRequest: {
+            /** Full Name */
+            full_name?: string | null;
+            /** Job Title */
+            job_title?: string | null;
+            /**
+             * Avatar Color
+             * @description One of: navy, cyan, emerald, amber, rose, violet, slate
+             */
+            avatar_color?: string | null;
         };
         /** StaffTokenPair */
         StaffTokenPair: {
@@ -4040,6 +4103,39 @@ export interface operations {
             };
         };
     };
+    update_staff_me_api_v1_admin_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffSelfUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     admin_dashboard_api_v1_admin_dashboard_get: {
         parameters: {
             query?: never;
@@ -4555,6 +4651,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoanProductResponse"][];
+                };
+            };
+        };
+    };
+    admin_create_product_api_v1_admin_loans_products_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLoanProductRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanProductResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

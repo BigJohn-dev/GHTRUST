@@ -64,6 +64,7 @@ from app.modules.loans.schemas import (
     LoanApplicationSummaryResponse,
     CollateralResponse,
     GuarantorResponse,
+    CreateLoanProductRequest,
     LoanProductResponse,
     LoanResponse,
     PipelineStageBrief,
@@ -123,8 +124,45 @@ class LoanService:
 
     async def set_product_active(self, product_code: str, *, is_active: bool) -> LoanProductResponse:
         product = await self._get_product_by_code(product_code)
+        if is_active and not product.is_active:
+            # Without a published workflow, submitted applications could never be approved.
+            workflow = await WorkflowService(self.db).get_active_workflow(product.id)
+            if not workflow or not workflow.stages:
+                raise AppError(
+                    status.HTTP_409_CONFLICT,
+                    ErrorCode.WORKFLOW_REQUIRED,
+                    "Publish an approval workflow for this product before switching it on.",
+                )
         product.is_active = is_active
         await self.db.flush()
+        return LoanProductResponse.model_validate(product)
+
+    async def create_product(self, payload: CreateLoanProductRequest) -> LoanProductResponse:
+        existing = await self.db.execute(select(LoanProduct.id).where(LoanProduct.code == payload.code))
+        if existing.first() is not None:
+            raise AppError(
+                status.HTTP_409_CONFLICT,
+                ErrorCode.PRODUCT_EXISTS,
+                f"A loan product with the code '{payload.code}' already exists.",
+            )
+        product = LoanProduct(
+            code=payload.code,
+            name=payload.name,
+            description=payload.description or None,
+            is_active=False,  # switched on once its approval workflow is published
+            processing_fee_pct=payload.processing_fee_pct,
+            interest_rate_pct_monthly=payload.interest_rate_pct_monthly,
+            interest_method=payload.interest_method,
+            max_tenure_days=payload.max_tenure_days,
+            default_penalty_pct_daily=payload.default_penalty_pct_daily,
+            repayment_cadence_options=[c.value for c in payload.repayment_cadence_options],
+            required_document_types=payload.required_document_types,
+            workflow_steps=payload.workflow_steps,
+            eligibility_rules={},
+        )
+        self.db.add(product)
+        await self.db.flush()
+        logger.info("loan_product_created", product_code=product.code)
         return LoanProductResponse.model_validate(product)
 
     async def list_customer_loans(self, customer_id: str) -> list[LoanResponse]:
@@ -326,7 +364,7 @@ class LoanService:
         customer: Customer,
         payload: CreateApplicationRequest,
     ) -> LoanApplicationDetailResponse:
-        product = await self._get_active_product(payload.product_code.value)
+        product = await self._get_active_product(payload.product_code)
         universal = self._default_universal_form(customer)
 
         application = LoanApplication(

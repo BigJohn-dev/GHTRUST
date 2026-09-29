@@ -713,6 +713,51 @@
       "HTTPBearer": []
      }
     ]
+   },
+   "patch": {
+    "tags": [
+     "Admin"
+    ],
+    "summary": "Update own profile",
+    "description": "Name, job title and avatar colour. Send an empty job title to clear it.",
+    "operationId": "update_staff_me_api_v1_admin_auth_me_patch",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/StaffSelfUpdateRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/StaffResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
    }
   },
   "/api/v1/admin/dashboard": {
@@ -1569,6 +1614,51 @@
          },
          "type": "array",
          "title": "Response Admin List Products Api V1 Admin Loans Products Get"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   },
+   "post": {
+    "tags": [
+     "Admin \u2014 Loans"
+    ],
+    "summary": "Create loan product",
+    "description": "Created switched off. Publish an approval workflow for it, then switch it on.",
+    "operationId": "admin_create_product_api_v1_admin_loans_products_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateLoanProductRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LoanProductResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
         }
        }
       }
@@ -5379,7 +5469,10 @@
    "CreateApplicationRequest": {
     "properties": {
      "product_code": {
-      "$ref": "#/components/schemas/LoanProductCode"
+      "type": "string",
+      "maxLength": 50,
+      "minLength": 1,
+      "title": "Product Code"
      },
      "channel": {
       "$ref": "#/components/schemas/ApplicationChannel",
@@ -5391,6 +5484,129 @@
      "product_code"
     ],
     "title": "CreateApplicationRequest"
+   },
+   "CreateLoanProductRequest": {
+    "properties": {
+     "code": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,49}$",
+      "title": "Code",
+      "description": "Permanent ID, e.g. `agric_loan`"
+     },
+     "name": {
+      "type": "string",
+      "maxLength": 150,
+      "minLength": 3,
+      "title": "Name"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "interest_rate_pct_monthly": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 20.0,
+        "exclusiveMinimum": 0.0
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "title": "Interest Rate Pct Monthly"
+     },
+     "processing_fee_pct": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 20.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "title": "Processing Fee Pct",
+      "default": "0"
+     },
+     "interest_method": {
+      "$ref": "#/components/schemas/InterestMethod",
+      "default": "flat"
+     },
+     "max_tenure_days": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 1825.0,
+        "minimum": 30.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Tenure Days"
+     },
+     "default_penalty_pct_daily": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 5.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Default Penalty Pct Daily"
+     },
+     "repayment_cadence_options": {
+      "items": {
+       "$ref": "#/components/schemas/RepaymentCadence"
+      },
+      "type": "array",
+      "minItems": 1,
+      "title": "Repayment Cadence Options"
+     },
+     "required_document_types": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "minItems": 1,
+      "title": "Required Document Types"
+     },
+     "workflow_steps": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "minItems": 3,
+      "title": "Workflow Steps"
+     }
+    },
+    "type": "object",
+    "required": [
+     "code",
+     "name",
+     "interest_rate_pct_monthly",
+     "repayment_cadence_options",
+     "required_document_types",
+     "workflow_steps"
+    ],
+    "title": "CreateLoanProductRequest",
+    "description": "A new product, created switched off. Steps, documents and cadences are limited to the\nones the customer app and servicing engine understand; switching it on requires a\npublished approval workflow."
    },
    "CreateWorkflowRequest": {
     "properties": {
@@ -7282,7 +7498,8 @@
       "title": "Application Id"
      },
      "product_type": {
-      "$ref": "#/components/schemas/LoanProductCode"
+      "type": "string",
+      "title": "Product Type"
      },
      "principal": {
       "type": "string",
@@ -7404,17 +7621,6 @@
      "repayments"
     ],
     "title": "LoanDetailResponse"
-   },
-   "LoanProductCode": {
-    "type": "string",
-    "enum": [
-     "business_loan",
-     "payday_loan",
-     "study_loan",
-     "asset_loan",
-     "lpo_invoice_financing"
-    ],
-    "title": "LoanProductCode"
    },
    "LoanProductResponse": {
     "properties": {
@@ -7624,7 +7830,8 @@
       "title": "Application Id"
      },
      "product_type": {
-      "$ref": "#/components/schemas/LoanProductCode"
+      "type": "string",
+      "title": "Product Type"
      },
      "principal": {
       "type": "string",
@@ -8815,6 +9022,28 @@
       },
       "type": "array",
       "title": "Permissions"
+     },
+     "job_title": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Job Title"
+     },
+     "avatar_color": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Avatar Color"
      }
     },
     "type": "object",
@@ -8828,6 +9057,50 @@
      "permissions"
     ],
     "title": "StaffResponse"
+   },
+   "StaffSelfUpdateRequest": {
+    "properties": {
+     "full_name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 200,
+        "minLength": 2
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Full Name"
+     },
+     "job_title": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 100
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Job Title"
+     },
+     "avatar_color": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Avatar Color",
+      "description": "One of: navy, cyan, emerald, amber, rose, violet, slate"
+     }
+    },
+    "type": "object",
+    "title": "StaffSelfUpdateRequest",
+    "description": "What staff may change on their own profile. Phone (the sign-in factor) and email are\nnot self-service: changing them from a signed-in session would let a stolen session\ntake over the account. Administrators change them on the Team page."
    },
    "StaffTokenPair": {
     "properties": {

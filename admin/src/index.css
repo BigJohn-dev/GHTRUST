@@ -22,6 +22,26 @@ body,
   min-height: 100%;
 }
 
+/* Scrollbars: thin and invisible until the area scrolls, then fade out once it stops
+   (lib/scrollbars.ts sets data-scrolling). The gutter stays reserved, so showing the
+   bar never shifts content. In the base layer so Tailwind's transition-* utilities
+   (utilities layer) still win on elements that animate other properties. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.4s ease;
+  }
+  [data-scrolling] {
+    scrollbar-color: rgb(27 47 107 / 0.35) transparent;
+    transition-duration: 0.1s;
+  }
+  /* On the navy sidebar, a light thumb. */
+  .bg-navy [data-scrolling] {
+    scrollbar-color: rgb(255 255 255 / 0.3) transparent;
+  }
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);

@@ -14,6 +14,8 @@ import {
 import clsx from 'clsx'
 import { AdminLayout } from '../components/AdminLayout'
 import { PermissionGate } from '../components/PermissionGate'
+import { CreateProductDialog } from '../components/products/CreateProductDialog'
+import { ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { hasPermission } from '../lib/permissions'
 import { getProductMeta } from '../lib/productMeta'
@@ -65,6 +67,9 @@ function LoanProductsPageContent() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  const [productNotice, setProductNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
 
   const roleNameById = useMemo(
     () => Object.fromEntries(roles.map((r) => [r.id, r.name])),
@@ -77,9 +82,11 @@ function LoanProductsPageContent() {
       loansApi.listProducts(token),
       loansApi.listRoles(token),
     ])
-    setProducts(prods.filter((p) => p.is_active))
+    // All products, including switched-off ones: a new product needs its pipeline built here
+    // before it can be switched on.
+    setProducts(prods)
     setRoles(roleList)
-    if (!selectedCode && prods.length) setSelectedCode(prods[0].code)
+    if (!selectedCode && prods.length) setSelectedCode((prods.find((p) => p.is_active) ?? prods[0]).code)
   }, [token, selectedCode])
 
   const loadWorkflow = useCallback(async (code: string) => {
@@ -110,7 +117,26 @@ function LoanProductsPageContent() {
 
   useEffect(() => {
     if (selectedCode) loadWorkflow(selectedCode)
+    setProductNotice(null)
   }, [selectedCode, loadWorkflow])
+
+  const setActive = async (product: LoanProduct, isActive: boolean) => {
+    if (!token) return
+    setSwitching(true)
+    setProductNotice(null)
+    try {
+      const updated = await loansApi.setProductActive(token, product.code, isActive)
+      setProducts((prev) => prev.map((p) => (p.code === updated.code ? { ...p, ...updated } : p)))
+      setProductNotice({
+        tone: 'ok',
+        text: updated.is_active ? `${updated.name} is live for customers.` : `${updated.name} is switched off.`,
+      })
+    } catch (e) {
+      setProductNotice({ tone: 'error', text: e instanceof ApiError ? e.message : 'Could not update the product.' })
+    } finally {
+      setSwitching(false)
+    }
+  }
 
   const validStages = stagesToPayload(stages)
   const hasValidStages = validStages.length > 0
@@ -213,7 +239,7 @@ function LoanProductsPageContent() {
   return (
     <AdminLayout
       title="Loan products"
-      subtitle="Configure approval pipelines per product"
+      subtitle="Create products and configure their approval pipelines"
     >
       <div className="mb-6 p-4 rounded-xl bg-white ring-1 ring-slate-200/90 flex items-start gap-3 max-w-2xl">
         <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
@@ -235,7 +261,19 @@ function LoanProductsPageContent() {
       ) : (
         <div className="grid lg:grid-cols-12 gap-6">
           <div className="lg:col-span-4 space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 px-1">Products</p>
+            <div className="flex items-center justify-between px-1">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Products</p>
+              {canConfigure && (
+                <button
+                  type="button"
+                  onClick={() => setCreating(true)}
+                  className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-white bg-[#1b2f6b] hover:bg-[#141f45] px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New product
+                </button>
+              )}
+            </div>
             {products.map((p) => {
               const pm = getProductMeta(p.code)
               const PIcon = pm.icon
@@ -264,6 +302,9 @@ function LoanProductsPageContent() {
                           {pm.label}
                         </span>
                         <span className="text-[10px] text-slate-400">{p.interest_rate_pct_monthly}% / mo</span>
+                        {!p.is_active && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-500">Off</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -289,6 +330,21 @@ function LoanProductsPageContent() {
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
+                        {canConfigure && (
+                          <button
+                            type="button"
+                            disabled={switching}
+                            onClick={() => setActive(selected, !selected.is_active)}
+                            className={clsx(
+                              'text-[11px] font-semibold px-2.5 py-1 rounded-md ring-1 transition-colors disabled:opacity-50',
+                              selected.is_active
+                                ? 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
+                                : 'bg-[#1b2f6b] text-white ring-[#1b2f6b] hover:bg-[#141f45]',
+                            )}
+                          >
+                            {selected.is_active ? 'Switch off' : 'Switch on'}
+                          </button>
+                        )}
                         {activeWorkflow && (
                           <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
                             Live v{activeWorkflow.version}
@@ -307,6 +363,26 @@ function LoanProductsPageContent() {
                         </span>
                       </div>
                     </div>
+
+                    {!selected.is_active && !productNotice && (
+                      <p className="mt-4 text-[12px] text-amber-800 bg-amber-50 ring-1 ring-amber-200 rounded-lg px-3 py-2">
+                        {activeWorkflow
+                          ? 'Switched off: customers can’t see this product. Switch it on when you’re ready.'
+                          : 'Switched off. Build and publish its approval pipeline below, then switch it on.'}
+                      </p>
+                    )}
+                    {productNotice && (
+                      <p
+                        className={clsx(
+                          'mt-4 text-[12px] rounded-lg px-3 py-2 ring-1',
+                          productNotice.tone === 'ok'
+                            ? 'text-emerald-800 bg-emerald-50 ring-emerald-200'
+                            : 'text-rose-700 bg-rose-50 ring-rose-200',
+                        )}
+                      >
+                        {productNotice.text}
+                      </p>
+                    )}
 
                     {previewCount > 0 ? (
                       <div className="mt-6 overflow-x-auto pb-2">
@@ -481,7 +557,20 @@ function LoanProductsPageContent() {
             )}
           </div>
         </div>
-      )}
+            )}
+
+      <CreateProductDialog
+        open={creating}
+        existingCodes={products.map((p) => p.code)}
+        onClose={() => setCreating(false)}
+        onCreate={async (input) => {
+          if (!token) throw new Error('Signed out')
+          const created = await loansApi.createProduct(token, input)
+          setProducts((prev) => [...prev, created])
+          setSelectedCode(created.code)
+          return created
+        }}
+      />
     </AdminLayout>
   )
 }

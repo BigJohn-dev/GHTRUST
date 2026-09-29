@@ -8,6 +8,24 @@ export interface LoanProduct {
   is_active: boolean
   processing_fee_pct: string
   interest_rate_pct_monthly: string
+  max_tenure_days?: number | null
+  repayment_cadence_options?: string[]
+  required_document_types?: string[]
+  workflow_steps?: string[]
+}
+
+export interface LoanProductInput {
+  code: string
+  name: string
+  description?: string | null
+  interest_rate_pct_monthly: string
+  processing_fee_pct: string
+  interest_method: 'flat' | 'reducing_balance'
+  max_tenure_days: number | null
+  default_penalty_pct_daily: string | null
+  repayment_cadence_options: string[]
+  required_document_types: string[]
+  workflow_steps: string[]
 }
 
 export interface WorkflowStage {
@@ -126,10 +144,20 @@ export const loansApi = {
   listProducts: (token: string) =>
     apiFetch<LoanProduct[]>('/api/v1/admin/loans/products', {}, token),
 
-  listApplications: (token: string, params?: { status?: string; product_code?: string }) => {
+  createProduct: (token: string, product: LoanProductInput) =>
+    apiFetch<LoanProduct>('/api/v1/admin/loans/products', { method: 'POST', body: JSON.stringify(product) }, token),
+
+  setProductActive: (token: string, productCode: string, isActive: boolean) =>
+    apiFetch<LoanProduct>(`/api/v1/admin/loans/products/${productCode}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: isActive }),
+    }, token),
+
+  listApplications: (token: string, params?: { status?: string; product_code?: string; limit?: number }) => {
     const q = new URLSearchParams()
     if (params?.status) q.set('status', params.status)
     if (params?.product_code) q.set('product_code', params.product_code)
+    if (params?.limit) q.set('limit', String(params.limit))
     const qs = q.toString()
     return apiFetch<ApplicationSummary[]>(
       `/api/v1/admin/loans/applications${qs ? `?${qs}` : ''}`,

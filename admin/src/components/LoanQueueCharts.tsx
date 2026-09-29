@@ -12,10 +12,22 @@ import {
 import { formatNaira, type ApplicationSummary } from '../lib/loansApi'
 
 interface LoanQueueChartsProps {
+  /** The whole queue: the status chart always shows every status. */
   applications: ApplicationSummary[]
+  /** The selected tab ('' = all). Daily submissions follow it; its status bar is highlighted. */
+  status: string
 }
 
 const DAY_COLORS = ['#0B84CE', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#ef4444']
+
+/** Fixed categories, so the chart keeps its shape when a status has no applications. */
+const STATUS_BARS: { status: string; label: string }[] = [
+  { status: 'submitted', label: 'Submitted' },
+  { status: 'under_review', label: 'Review' },
+  { status: 'approved', label: 'Approved' },
+  { status: 'disbursed', label: 'Disbursed' },
+  { status: 'rejected', label: 'Rejected' },
+]
 
 const STATUS_COLORS: Record<string, string> = {
   under_review: '#f59e0b',
@@ -47,7 +59,11 @@ function last7DayKeys(): { label: string; idx: number }[] {
   return days
 }
 
-export function LoanQueueCharts({ applications }: LoanQueueChartsProps) {
+export function LoanQueueCharts({ applications, status }: LoanQueueChartsProps) {
+  const inView = useMemo(
+    () => (status ? applications.filter((a) => a.status === status) : applications),
+    [applications, status],
+  )
   const { dailyBars, statusBars, trendPct } = useMemo(() => {
     const keys = last7DayKeys()
     const today = new Date()
@@ -59,7 +75,7 @@ export function LoanQueueCharts({ applications }: LoanQueueChartsProps) {
       const dayEnd = new Date(dayStart)
       dayEnd.setDate(dayEnd.getDate() + 1)
 
-      const count = applications.filter((a) => {
+      const count = inView.filter((a) => {
         const ts = a.submitted_at ?? a.created_at
         if (!ts) return false
         const d = new Date(ts)
@@ -73,10 +89,12 @@ export function LoanQueueCharts({ applications }: LoanQueueChartsProps) {
     for (const app of applications) {
       statusCounts[app.status] = (statusCounts[app.status] ?? 0) + 1
     }
-    const statusBars = Object.entries(statusCounts).map(([status, count]) => ({
-      status: status.replace(/_/g, ' '),
-      count,
-      fill: STATUS_COLORS[status] ?? '#64748b',
+    const statusBars = STATUS_BARS.map((bar) => ({
+      status: bar.label,
+      count: statusCounts[bar.status] ?? 0,
+      // The selected tab's bar keeps its colour; the others fade back.
+      fill: STATUS_COLORS[bar.status] ?? '#64748b',
+      opacity: !status || status === bar.status ? 1 : 0.25,
     }))
 
     const firstHalf = dailyBars.slice(0, 3).reduce((s, b) => s + b.count, 0)
@@ -85,7 +103,7 @@ export function LoanQueueCharts({ applications }: LoanQueueChartsProps) {
       firstHalf === 0 ? (secondHalf > 0 ? 100 : 0) : Math.round(((secondHalf - firstHalf) / firstHalf) * 100)
 
     return { dailyBars, statusBars, trendPct: pct }
-  }, [applications])
+  }, [applications, inView, status])
 
   const up = trendPct >= 0
 
@@ -103,7 +121,9 @@ export function LoanQueueCharts({ applications }: LoanQueueChartsProps) {
               <span>{up ? '+' : ''}{trendPct}%</span>
             </Badge>
           </CardTitle>
-          <CardDescription className="text-xs">Last 7 days</CardDescription>
+          <CardDescription className="text-xs">
+            Last 7 days{status ? ` · ${STATUS_BARS.find((b) => b.status === status)?.label ?? status.replace(/_/g, ' ')}` : ''}
+          </CardDescription>
         </CardHeader>
         <CardContent className="px-2 pb-3 pt-0">
           <ChartContainer config={submissionsConfig} className="h-[110px] min-h-0 aspect-auto w-full">
@@ -126,8 +146,8 @@ export function LoanQueueCharts({ applications }: LoanQueueChartsProps) {
         <CardHeader className="py-3 px-4">
           <CardTitle className="text-sm">By status</CardTitle>
           <CardDescription className="text-xs">
-            {applications.length} apps · {formatNaira(
-              applications.reduce((s, a) => s + (parseFloat(a.requested_amount ?? '0') || 0), 0),
+            {inView.length} app{inView.length === 1 ? '' : 's'} · {formatNaira(
+              inView.reduce((s, a) => s + (parseFloat(a.requested_amount ?? '0') || 0), 0),
             )}
           </CardDescription>
         </CardHeader>
@@ -142,13 +162,12 @@ export function LoanQueueCharts({ applications }: LoanQueueChartsProps) {
                 tickMargin={4}
                 fontSize={9}
                 interval={0}
-                tickFormatter={(v: string) => v.slice(0, 6)}
               />
               <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={24} fontSize={10} />
               <ChartTooltip cursor={{ fill: 'rgba(139,92,246,0.08)' }} content={<ChartTooltipContent />} />
               <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={32}>
                 {statusBars.map((entry) => (
-                  <Cell key={entry.status} fill={entry.fill} />
+                  <Cell key={entry.status} fill={entry.fill} fillOpacity={entry.opacity} />
                 ))}
               </Bar>
             </BarChart>
