@@ -30,6 +30,12 @@ class DeviceInfo(BaseModel):
     device_name: str | None = Field(default=None, max_length=128, examples=["Ada's iPhone"])
     platform: Literal["ios", "android", "web"] | None = None
     app_version: str | None = Field(default=None, max_length=32, examples=["1.0.0"])
+    device_token: str | None = Field(
+        default=None,
+        max_length=128,
+        description="The `device_token` this phone was given at its last sign-in, if any. "
+        "Proves it is a phone the customer already trusts, so no approval is needed.",
+    )
 
 
 class TokenPair(BaseModel):
@@ -78,6 +84,27 @@ class VerifyLoginOtpRequest(VerifyOtpRequest):
     phone: str = Field(..., min_length=10, max_length=15)
 
 
+class SelfieRequiredResponse(BaseModel):
+    """SMS code accepted; the account opens once a selfie matches the BVN photo."""
+
+    status: Literal["selfie_required"] = "selfie_required"
+    registration_token: str = Field(description="Send with the selfie. Single use; keep in memory only.")
+    expires_in: int
+    attempts_left: int
+    first_name: str
+
+
+class RegistrationSelfieRequest(BaseModel):
+    registration_token: str = Field(..., min_length=20, max_length=128)
+    selfie_image: str = Field(
+        ...,
+        min_length=1000,
+        max_length=4_000_000,
+        description="JPEG/PNG, base64 (a data: URL prefix is accepted and removed). Face the camera in good light.",
+    )
+    device: DeviceInfo | None = None
+
+
 class ResendRegistrationOtpRequest(BaseModel):
     bvn: str = Field(..., min_length=11, max_length=11)
 
@@ -116,6 +143,11 @@ class CustomerProfileResponse(BaseModel):
     level_of_account: str | None = None
     branch: str
     status: str
+    login_pin_set: bool = False
+    transaction_pin_set: bool = False
+    transfers_blocked_until: datetime | None = Field(
+        None, description="Money can't leave the account before this time (set after a lost-phone sign-in)."
+    )
 
     @classmethod
     def from_customer(cls, customer) -> "CustomerProfileResponse":
@@ -141,6 +173,9 @@ class CustomerProfileResponse(BaseModel):
             level_of_account=customer.level_of_account,
             branch=customer.branch,
             status=customer.status.value if hasattr(customer.status, "value") else customer.status,
+            login_pin_set=bool(customer.login_pin_hash),
+            transaction_pin_set=bool(customer.transaction_pin_hash),
+            transfers_blocked_until=customer.transfers_blocked_until,
         )
 
 
@@ -153,4 +188,124 @@ class CustomerMask:
 
 
 class AuthTokenResponse(TokenPair):
+    status: Literal["signed_in"] = "signed_in"
     customer: CustomerProfileResponse
+    device_token: str | None = Field(
+        None,
+        description="Store securely on this phone and send it in `device` next time: it lets the "
+        "customer sign back in here with their PIN, and skips new-device approval.",
+    )
+
+
+# ── PINs ─────────────────────────────────────────────────────────────────────
+
+
+def _pin_field(length: int, what: str):
+    return Field(..., min_length=length, max_length=length, pattern=r"^\d+$", description=what)
+
+
+class SetLoginPinRequest(BaseModel):
+    pin: str = _pin_field(6, "New 6-digit sign-in PIN")
+
+
+class ChangeLoginPinRequest(BaseModel):
+    current_pin: str = _pin_field(6, "Current sign-in PIN")
+    new_pin: str = _pin_field(6, "New sign-in PIN")
+
+
+class VerifyLoginPinRequest(BaseModel):
+    pin: str = _pin_field(6, "Sign-in PIN")
+
+
+class ResetLoginPinRequest(BaseModel):
+    bvn: str = Field(..., min_length=11, max_length=11, pattern=r"^\d+$")
+    new_pin: str = _pin_field(6, "New sign-in PIN")
+
+
+class SetTransactionPinRequest(BaseModel):
+    pin: str = _pin_field(4, "New 4-digit transaction PIN")
+
+
+class ChangeTransactionPinRequest(BaseModel):
+    current_pin: str = _pin_field(4, "Current transaction PIN")
+    new_pin: str = _pin_field(4, "New transaction PIN")
+
+
+class ResetTransactionPinRequest(BaseModel):
+    login_pin: str = _pin_field(6, "Sign-in PIN, to prove it's you")
+    new_pin: str = _pin_field(4, "New transaction PIN")
+
+
+class BiometricRequest(BaseModel):
+    enabled: bool
+    pin: str | None = Field(
+        None, min_length=6, max_length=6, pattern=r"^\d+$", description="Sign-in PIN; required to turn it on"
+    )
+
+
+class PinSignInRequest(BaseModel):
+    device_id: str = Field(..., max_length=128)
+    device_token: str = Field(..., min_length=20, max_length=128)
+    pin: str = _pin_field(6, "Sign-in PIN")
+    device: DeviceInfo | None = None
+
+
+# ── New-device approval ──────────────────────────────────────────────────────
+
+
+class DeviceApprovalRequiredResponse(BaseModel):
+    """Login OTP was right, but this is a new phone: confirm it on a signed-in one first."""
+
+    status: Literal["approval_required"] = "approval_required"
+    approval_id: str
+    approval_secret: str = Field(description="Keep in memory; proves this phone started the sign-in.")
+    expires_in: int
+    approver_devices: list[str] = Field(description="Names of the signed-in phones that can approve")
+    fallback_needs_pin: bool = Field(
+        description="The lost-phone route asks for the sign-in PIN as well as the BVN."
+    )
+
+
+class ApprovalSecretRequest(BaseModel):
+    approval_secret: str = Field(..., min_length=20, max_length=128)
+
+
+class ApprovalStatusResponse(BaseModel):
+    status: Literal["pending", "approved", "denied", "completed", "expired", "failed"]
+    expires_in: int
+
+
+class CompleteApprovalRequest(ApprovalSecretRequest):
+    code: str = _pin_field(6, "Code shown on the approving phone")
+    device: DeviceInfo | None = None
+
+
+class ApprovalFallbackRequest(ApprovalSecretRequest):
+    bvn: str = Field(..., min_length=11, max_length=11, pattern=r"^\d+$")
+    pin: str | None = Field(None, min_length=6, max_length=6, pattern=r"^\d+$")
+    device: DeviceInfo | None = None
+
+
+class PendingApprovalResponse(BaseModel):
+    id: str
+    device_name: str | None = None
+    platform: str | None = None
+    ip_address: str | None = None
+    requested_at: datetime
+    expires_in: int
+
+
+class ApproveDeviceRequest(BaseModel):
+    pin: str | None = Field(
+        None, min_length=6, max_length=6, pattern=r"^\d+$", description="Sign-in PIN"
+    )
+    biometric: bool = Field(
+        False,
+        description="The customer passed Face ID / fingerprint on this phone instead. Only accepted "
+        "where they turned biometrics on.",
+    )
+
+
+class ApproveDeviceResponse(BaseModel):
+    code: str = Field(description="Show on this phone; the customer types it on the new one.")
+    expires_in: int

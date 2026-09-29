@@ -1,6 +1,6 @@
 /**
- * App lock: a saved session only opens after the device owner proves
- * presence (Face ID / fingerprint, or the device passcode as fallback).
+ * App lock: a saved session only opens with the customer's 6-digit sign-in PIN, or with
+ * Face ID / fingerprint if they chose to turn that on for this phone.
  */
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
@@ -8,26 +8,41 @@ import { Platform } from 'react-native';
 /** Background time after which the app locks again (matches the staff portal). */
 export const RELOCK_AFTER_MS = 5 * 60 * 1000;
 
-export type LockKind = 'face' | 'fingerprint' | 'passcode' | 'none';
+export type BiometricKind = 'face' | 'fingerprint';
 
-export async function lockKind(): Promise<LockKind> {
-  if (Platform.OS === 'web') return 'none';
+/** What this phone offers for biometrics right now (hardware present and enrolled), if anything. */
+export async function biometricKind(): Promise<BiometricKind | null> {
+  if (Platform.OS === 'web') return null;
   try {
-    const level = await LocalAuthentication.getEnrolledLevelAsync();
-    if (level === LocalAuthentication.SecurityLevel.NONE) return 'none';
-    if (level === LocalAuthentication.SecurityLevel.SECRET) return 'passcode';
+    const [hardware, enrolled] = await Promise.all([
+      LocalAuthentication.hasHardwareAsync(),
+      LocalAuthentication.isEnrolledAsync(),
+    ]);
+    if (!hardware || !enrolled) return null;
     const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-    return types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION) ? 'face' : 'fingerprint';
+    if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return 'face';
+    if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) return 'fingerprint';
+    return null;
   } catch {
-    return 'none';
+    return null;
   }
 }
 
-export async function unlock(): Promise<boolean> {
-  const result = await LocalAuthentication.authenticateAsync({
-    promptMessage: 'Unlock GH Trust',
-    cancelLabel: 'Cancel',
-    fallbackLabel: 'Use passcode',
-  });
-  return result.success;
+export function biometricName(kind: BiometricKind): string {
+  if (kind === 'face') return Platform.OS === 'ios' ? 'Face ID' : 'face unlock';
+  return Platform.OS === 'ios' ? 'Touch ID' : 'fingerprint';
+}
+
+/** Ask for a biometric check only; the PIN is the fallback, never the phone's passcode. */
+export async function checkBiometric(promptMessage: string): Promise<boolean> {
+  try {
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage,
+      cancelLabel: 'Use PIN',
+      disableDeviceFallback: true,
+    });
+    return result.success;
+  } catch {
+    return false;
+  }
 }

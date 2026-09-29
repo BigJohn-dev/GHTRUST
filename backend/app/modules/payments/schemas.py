@@ -35,6 +35,9 @@ class UpdatePayoutAccountRequest(BaseModel):
     account_number: str = Field(min_length=10, max_length=10)
     account_name: str | None = Field(default=None, max_length=200)
     bank_name: str | None = Field(None, max_length=100)
+    transaction_pin: str = Field(
+        ..., min_length=4, max_length=4, pattern=r"^\d+$", description="Customer's 4-digit transaction PIN"
+    )
 
     @field_validator("account_number")
     @classmethod
@@ -47,6 +50,9 @@ class UpdatePayoutAccountRequest(BaseModel):
 
 class WithdrawRequest(BaseModel):
     amount: Decimal = Field(gt=0, decimal_places=2)
+    transaction_pin: str = Field(
+        ..., min_length=4, max_length=4, pattern=r"^\d+$", description="Customer's 4-digit transaction PIN"
+    )
 
     @field_validator("amount")
     @classmethod

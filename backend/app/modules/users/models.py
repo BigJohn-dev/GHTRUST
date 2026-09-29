@@ -3,7 +3,7 @@ import re
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, DateTime, Index, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -86,6 +86,20 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     phone_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Selfie matched against the BVN photo at account opening (Dojah), and how closely.
+    selfie_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    selfie_match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # --- PINs (see app/core/pins.py; hashes only, never the PIN) ---
+    # 6-digit PIN that opens the app; 4-digit PIN that approves money leaving the account.
+    login_pin_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    login_pin_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    login_pin_failed_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    transaction_pin_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    transaction_pin_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    transaction_pin_failed_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Money can't leave the account before this (e.g. after signing in without the old phone).
+    transfers_blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # --- Paystack / payout rails ---
     paystack_customer_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

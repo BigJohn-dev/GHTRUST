@@ -134,18 +134,12 @@ class TestLogoutAndDevices:
         assert refresh.status_code == 401
 
     async def test_list_and_revoke_other_device(self, api_client):
+        from tests.integration.test_device_security import approve_new_phone
+
         phone_a = await _register(api_client)
-        await api_client.post("/api/v1/auth/login/request-otp", json={"phone": "08035794364"})
-        phone_b = (
-            await api_client.post(
-                "/api/v1/auth/login/verify-otp",
-                json={
-                    "phone": "08035794364",
-                    "otp": TEST_OTP,
-                    "device": {"device_id": "install-xyz", "platform": "ios"},
-                },
-            )
-        ).json()
+        phone_b = await approve_new_phone(
+            api_client, phone_a, {"device_id": "install-xyz", "platform": "ios"}
+        )
 
         listing = await api_client.get("/api/v1/auth/sessions", headers=_auth(phone_a["access_token"]))
         sessions = listing.json()

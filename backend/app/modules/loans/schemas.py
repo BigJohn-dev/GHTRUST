@@ -505,6 +505,9 @@ class RecordRepaymentRequest(BaseModel):
 
 class CustomerRepayRequest(BaseModel):
     amount: Decimal = Field(..., gt=0, decimal_places=2)
+    transaction_pin: str = Field(
+        ..., min_length=4, max_length=4, pattern=r"^\d+$", description="Customer's 4-digit transaction PIN"
+    )
 
 
 class ManualDisbursementRequest(BaseModel):

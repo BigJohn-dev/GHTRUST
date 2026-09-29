@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.models.base import TransactionStatus
+from tests.conftest import TEST_TXN_PIN, set_transaction_pin
 from app.modules.loans.models import Loan, LoanApplication
 from app.modules.loans.schemas import ApplicationStatus
 from app.modules.payments.models import (
@@ -540,13 +541,18 @@ class TestRepayments:
         loan = await booked_loan(api_client, db_session, admin_headers)
         token = await _login(api_client)
         headers = {"Authorization": f"Bearer {token}"}
+        await set_transaction_pin(api_client, headers)
         url = f"/api/v1/loans/me/loans/{loan.id}/repayments"
 
-        missing_key = await api_client.post(url, json={"amount": "1000"}, headers=headers)
+        missing_key = await api_client.post(
+            url, json={"amount": "1000", "transaction_pin": TEST_TXN_PIN}, headers=headers
+        )
         assert missing_key.status_code == 422
 
         broke = await api_client.post(
-            url, json={"amount": "1000"}, headers={**headers, "Idempotency-Key": "repay-key-0001"}
+            url,
+            json={"amount": "1000", "transaction_pin": TEST_TXN_PIN},
+            headers={**headers, "Idempotency-Key": "repay-key-0001"},
         )
         assert broke.status_code == 409
         assert broke.json()["code"] == "INSUFFICIENT_FUNDS"
@@ -572,9 +578,11 @@ class TestRepayments:
 
         token = await _login(api_client)
         headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": "repay-key-0002"}
+        await set_transaction_pin(api_client, headers)
         url = f"/api/v1/loans/me/loans/{loan.id}/repayments"
-        first = await api_client.post(url, json={"amount": "15000"}, headers=headers)
-        second = await api_client.post(url, json={"amount": "15000"}, headers=headers)
+        body = {"amount": "15000", "transaction_pin": TEST_TXN_PIN}
+        first = await api_client.post(url, json=body, headers=headers)
+        second = await api_client.post(url, json=body, headers=headers)
         assert first.status_code == second.status_code == 201
         assert first.json()["id"] == second.json()["id"]
         await db_session.refresh(wallet)

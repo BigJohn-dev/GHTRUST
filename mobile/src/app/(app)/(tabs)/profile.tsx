@@ -61,6 +61,12 @@ export default function Profile() {
 
       <SectionHeader title="Security" />
       <Card style={styles.list}>
+        <Row
+          icon="shield-checkmark-outline"
+          title="Security"
+          subtitle="PINs, Face ID / fingerprint"
+          onPress={() => router.push('/security')}
+        />
         <Row icon="phone-portrait-outline" title="Signed-in devices" subtitle="See and remove devices" onPress={() => router.push('/devices')} last />
       </Card>
 
@@ -89,7 +95,7 @@ export default function Profile() {
           title="Sign out"
           variant="secondary"
           icon="log-out-outline"
-          onPress={() => confirm('Sign out?', "You'll need a code sent to your phone to sign in again.", 'Sign out', () => signOut())}
+          onPress={() => confirm('Sign out?', 'You can sign back in on this phone with your PIN.', 'Sign out', () => signOut())}
         />
         <Button
           title="Sign out of all devices"

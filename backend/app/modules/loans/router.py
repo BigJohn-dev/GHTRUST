@@ -4,6 +4,7 @@ from fastapi import APIRouter, File, Header, Query, UploadFile, status
 
 from app.core.deps import CurrentCustomer, DbSession
 from app.core.errors import AppError
+from app.modules.auth.security_service import SecurityService
 from app.modules.loans.schemas import (
     ApplicationStatus,
     CreateApplicationRequest,
@@ -156,6 +157,7 @@ async def repay_my_loan(
             "IDEMPOTENCY_KEY_INVALID",
             "Idempotency-Key must be 8-64 characters: letters, digits, '-' or '_'.",
         )
+    await SecurityService(db).authorize_transaction(customer, payload.transaction_pin)
     repayment = await LoanServicingService(db).record_repayment(
         loan_id,
         amount=payload.amount,

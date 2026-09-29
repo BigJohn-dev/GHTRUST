@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 
 from app.core.deps import CurrentCustomer, DbSession, RedisClient, request_meta
 from app.core.rate_limit import get_client_ip
@@ -6,9 +6,12 @@ from app.modules.auth.schemas import (
     AuthTokenResponse,
     BvnRegisterRequest,
     CustomerProfileResponse,
+    DeviceApprovalRequiredResponse,
     OtpSentResponse,
     PhoneLoginRequest,
     RefreshTokenRequest,
+    RegistrationSelfieRequest,
+    SelfieRequiredResponse,
     ResendRegistrationOtpRequest,
     SessionResponse,
     TokenPair,
@@ -45,9 +48,13 @@ async def register_with_bvn(
 
 @router.post(
     "/register/verify-otp",
-    response_model=AuthTokenResponse,
+    response_model=AuthTokenResponse | SelfieRequiredResponse,
     summary="Verify registration OTP",
-    description="Activates the account and signs the device in. Send `device` from mobile clients.",
+    description=(
+        "With selfie checks on (the default) returns `status: selfie_required` and a "
+        "`registration_token` for `/auth/register/selfie`; otherwise opens the account and signs "
+        "the device in. Send `device` from mobile clients."
+    ),
 )
 async def verify_registration_otp(
     payload: VerifyRegistrationOtpRequest,
@@ -57,6 +64,27 @@ async def verify_registration_otp(
 ):
     return await _auth_service(db, redis).verify_registration_otp(
         payload.bvn, payload.otp, meta=request_meta(request), device=payload.device
+    )
+
+
+@router.post(
+    "/register/selfie",
+    response_model=AuthTokenResponse,
+    summary="Match a selfie to the BVN photo and open the account",
+    description=(
+        "Dojah compares the selfie with the BVN photo. A match opens the account and signs the "
+        "device in; `SELFIE_NO_MATCH` includes `attempts_left`; after the last attempt "
+        "(`SELFIE_ATTEMPTS_EXCEEDED`) the customer must visit a branch."
+    ),
+)
+async def verify_registration_selfie(
+    payload: RegistrationSelfieRequest,
+    request: Request,
+    db: DbSession,
+    redis: RedisClient,
+):
+    return await _auth_service(db, redis).verify_registration_selfie(
+        payload.registration_token, payload.selfie_image, meta=request_meta(request), device=payload.device
     )
 
 
@@ -92,8 +120,13 @@ async def request_login_otp(
 
 @router.post(
     "/login/verify-otp",
-    response_model=AuthTokenResponse,
+    response_model=AuthTokenResponse | DeviceApprovalRequiredResponse,
     summary="Verify login OTP",
+    description=(
+        "Signs the phone in (`status: signed_in`), unless it's a new phone and another one is "
+        "signed in: then `status: approval_required` and the sign-in waits for the customer to "
+        "approve it on the other phone (see `/auth/device-approvals`)."
+    ),
 )
 async def verify_login_otp(
     payload: VerifyLoginOtpRequest,
@@ -142,8 +175,16 @@ async def refresh_token(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Sign out this device")
-async def logout(request: Request, customer: CurrentCustomer, db: DbSession, redis: RedisClient):
-    await _auth_service(db, redis).logout(customer, request.state.session_id)
+async def logout(
+    request: Request,
+    customer: CurrentCustomer,
+    db: DbSession,
+    redis: RedisClient,
+    forget_device: bool = Query(
+        False, description="Also stop trusting this phone (\"Not you?\"): next time needs an SMS code."
+    ),
+):
+    await _auth_service(db, redis).logout(customer, request.state.session_id, forget_device=forget_device)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -166,9 +207,9 @@ async def list_sessions(request: Request, customer: CurrentCustomer, db: DbSessi
     summary="Sign out a specific device",
 )
 async def revoke_session(
-    session_id: str, customer: CurrentCustomer, db: DbSession, redis: RedisClient
+    session_id: str, request: Request, customer: CurrentCustomer, db: DbSession, redis: RedisClient
 ):
-    await _auth_service(db, redis).revoke_session(customer, session_id)
+    await _auth_service(db, redis).revoke_session(customer, session_id, request.state.session_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

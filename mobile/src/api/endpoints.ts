@@ -6,6 +6,9 @@ import type {
   AppConfig,
   Application,
   ApplicationSummary,
+  ApprovalRequired,
+  ApprovalStatus,
+  ApproveResult,
   AuthTokens,
   Bank,
   DeviceInfo,
@@ -14,9 +17,11 @@ import type {
   LoanProduct,
   OtpSent,
   Page,
+  PendingApproval,
   Profile,
   Repayment,
   ResolvedAccount,
+  SelfieRequired,
   Session,
   StepUpdate,
   Wallet,
@@ -28,18 +33,70 @@ export const appConfig = () =>
 
 export const auth = {
   registerBvn: (bvn: string) => api.post<OtpSent>('/auth/register/bvn', { bvn }, { auth: false }),
+  /** With selfie checks on, returns `selfie_required` instead of tokens. */
   verifyRegistration: (bvn: string, otp: string, device: DeviceInfo) =>
-    api.post<AuthTokens>('/auth/register/verify-otp', { bvn, otp, device }, { auth: false }),
+    api.post<AuthTokens | SelfieRequired>('/auth/register/verify-otp', { bvn, otp, device }, { auth: false }),
+  registrationSelfie: (registration_token: string, selfie_image: string, device: DeviceInfo) =>
+    api.post<AuthTokens>(
+      '/auth/register/selfie',
+      { registration_token, selfie_image, device },
+      { auth: false, timeoutMs: 60_000 },
+    ),
   resendRegistration: (bvn: string) => api.post<OtpSent>('/auth/register/resend-otp', { bvn }, { auth: false }),
   requestLogin: (phone: string) => api.post<OtpSent>('/auth/login/request-otp', { phone }, { auth: false }),
+  /** A new phone while another is signed in gets `approval_required` instead of tokens. */
   verifyLogin: (phone: string, otp: string, device: DeviceInfo) =>
-    api.post<AuthTokens>('/auth/login/verify-otp', { phone, otp, device }, { auth: false }),
+    api.post<AuthTokens | ApprovalRequired>('/auth/login/verify-otp', { phone, otp, device }, { auth: false }),
+  pinSignIn: (device: DeviceInfo, pin: string) =>
+    api.post<AuthTokens>(
+      '/auth/login/pin',
+      { device_id: device.device_id, device_token: device.device_token, pin, device },
+      { auth: false },
+    ),
   resendLogin: (phone: string) => api.post<OtpSent>('/auth/login/resend-otp', { phone }, { auth: false }),
   me: () => api.get<Profile>('/auth/me'),
   sessions: () => api.get<Session[]>('/auth/sessions'),
   revokeSession: (id: string) => api.delete<void>(`/auth/sessions/${id}`),
-  logout: () => api.post<void>('/auth/logout'),
+  logout: (forgetDevice = false) =>
+    api.post<void>('/auth/logout', undefined, { query: { forget_device: forgetDevice || undefined } }),
   logoutAll: () => api.post<void>('/auth/logout-all'),
+};
+
+export const security = {
+  setPin: (pin: string) => api.post<Profile>('/auth/pin', { pin }),
+  changePin: (current_pin: string, new_pin: string) => api.post<void>('/auth/pin/change', { current_pin, new_pin }),
+  verifyPin: (pin: string) => api.post<void>('/auth/pin/verify', { pin }),
+  resetPin: (bvn: string, new_pin: string) => api.post<Profile>('/auth/pin/reset', { bvn, new_pin }),
+  setTransactionPin: (pin: string) => api.post<Profile>('/auth/transaction-pin', { pin }),
+  changeTransactionPin: (current_pin: string, new_pin: string) =>
+    api.post<void>('/auth/transaction-pin/change', { current_pin, new_pin }),
+  resetTransactionPin: (login_pin: string, new_pin: string) =>
+    api.post<void>('/auth/transaction-pin/reset', { login_pin, new_pin }),
+  setBiometrics: (enabled: boolean, pin?: string) => api.post<void>('/auth/biometrics', { enabled, pin }),
+};
+
+/** Approving a sign-in on a new phone. */
+export const approvals = {
+  // On the signed-in phone
+  pending: () => api.get<PendingApproval[]>('/auth/device-approvals/pending'),
+  approve: (id: string, proof: { pin?: string; biometric?: boolean }) =>
+    api.post<ApproveResult>(`/auth/device-approvals/${id}/approve`, proof),
+  deny: (id: string) => api.post<void>(`/auth/device-approvals/${id}/deny`),
+  // On the new phone
+  status: (id: string, approval_secret: string) =>
+    api.post<ApprovalStatus>(`/auth/device-approvals/${id}/status`, { approval_secret }, { auth: false }),
+  complete: (id: string, approval_secret: string, code: string, device: DeviceInfo) =>
+    api.post<AuthTokens>(
+      `/auth/device-approvals/${id}/complete`,
+      { approval_secret, code, device },
+      { auth: false },
+    ),
+  lostPhone: (id: string, approval_secret: string, bvn: string, pin: string | undefined, device: DeviceInfo) =>
+    api.post<AuthTokens>(
+      `/auth/device-approvals/${id}/lost-phone`,
+      { approval_secret, bvn, pin, device },
+      { auth: false },
+    ),
 };
 
 export const loans = {
@@ -67,8 +124,12 @@ export const loans = {
   submit: (id: string) => api.post<Application>(`/loans/me/applications/${id}/submit`),
   list: () => api.get<Page<Loan>>('/loans/me/loans', { query: { limit: 50 } }),
   detail: (id: string) => api.get<LoanDetail>(`/loans/me/loans/${id}`),
-  repay: (id: string, amount: string, idempotencyKey: string) =>
-    api.post<Repayment>(`/loans/me/loans/${id}/repayments`, { amount }, { idempotencyKey }),
+  repay: (id: string, amount: string, transactionPin: string, idempotencyKey: string) =>
+    api.post<Repayment>(
+      `/loans/me/loans/${id}/repayments`,
+      { amount, transaction_pin: transactionPin },
+      { idempotencyKey },
+    ),
 };
 
 export const wallet = {

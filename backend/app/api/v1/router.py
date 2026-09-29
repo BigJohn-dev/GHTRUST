@@ -10,6 +10,7 @@ from app.core.deps import DbSession, RedisClient
 from app.modules.admin.router import router as admin_router
 from app.modules.app_config.router import router as app_config_router
 from app.modules.auth.router import router as auth_router
+from app.modules.auth.security_router import router as auth_security_router
 from app.modules.loans.admin_router import router as admin_loans_router
 from app.modules.contributions.router import router as contributions_router
 from app.modules.food_basket.router import router as food_basket_router
@@ -27,6 +28,7 @@ api_v1_router = APIRouter()
 
 api_v1_router.include_router(app_config_router)
 api_v1_router.include_router(auth_router)
+api_v1_router.include_router(auth_security_router)
 api_v1_router.include_router(admin_router)
 api_v1_router.include_router(admin_settings_router)
 api_v1_router.include_router(admin_customers_router)

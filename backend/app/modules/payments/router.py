@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Header
 
 from app.core.deps import CurrentCustomer, DbSession
+from app.modules.auth.security_service import SecurityService
 from app.modules.payments.ledger_service import LedgerError, raise_ledger_http
 from app.modules.payments.schemas import (
     UpdatePayoutAccountRequest,
@@ -38,6 +39,8 @@ async def update_payout_account(
     customer: CurrentCustomer,
     db: DbSession,
 ):
+    # Changing where withdrawals go is as sensitive as a withdrawal.
+    await SecurityService(db).authorize_transaction(customer, payload.transaction_pin)
     updated = await WalletService(db).update_payout_account(
         customer,
         bank_code=payload.bank_code,
@@ -66,6 +69,7 @@ async def request_withdrawal(
     db: DbSession,
     idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=64),
 ) -> WithdrawalResponse:
+    await SecurityService(db).authorize_transaction(customer, payload.transaction_pin)
     try:
         withdrawal = await WalletService(db).request_withdrawal(customer, payload.amount)
     except LedgerError as exc:

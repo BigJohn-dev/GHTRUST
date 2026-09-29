@@ -13,7 +13,8 @@ class DojahBvnEntity(BaseModel):
     middle_name: str | None = None
     gender: str | None = None
     date_of_birth: str | None = None  # YYYY-MM-DD
-    phone_number1: str
+    # Some BVN records have no phone; registration then can't send a code.
+    phone_number1: str | None = None
     phone_number2: str | None = None
     image: str | None = None
     email: str | None = None
@@ -35,6 +36,23 @@ class DojahBvnEntity(BaseModel):
 
 class DojahBvnResponse(BaseModel):
     entity: DojahBvnEntity
+
+
+class DojahSelfieVerification(BaseModel):
+    confidence_value: float = 0.0
+    match: bool = False
+
+
+class DojahSelfieEntity(BaseModel):
+    """Response entity of POST /api/v1/kyc/bvn/verify (only what we use)."""
+
+    first_name: str | None = None
+    last_name: str | None = None
+    selfie_verification: DojahSelfieVerification = DojahSelfieVerification()
+
+
+class DojahSelfieResponse(BaseModel):
+    entity: DojahSelfieEntity
 
 
 class DojahError(Exception):

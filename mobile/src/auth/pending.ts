@@ -25,3 +25,39 @@ export const pendingOtp = {
     pending = null;
   },
 };
+
+/** A sign-in on this (new) phone waiting for approval on the customer's other phone. */
+export type PendingApproval = {
+  id: string;
+  secret: string;
+  approverDevices: string[];
+  fallbackNeedsPin: boolean;
+  expiresAt: number;
+};
+
+let approval: PendingApproval | null = null;
+
+export const pendingApproval = {
+  get: () => approval,
+  set: (value: PendingApproval) => {
+    approval = value;
+  },
+  clear: () => {
+    approval = null;
+  },
+};
+
+/** Sign-up waiting for a selfie that matches the BVN photo (after the SMS code). */
+export type PendingSelfie = { token: string; firstName: string; attemptsLeft: number; expiresAt: number };
+
+let selfie: PendingSelfie | null = null;
+
+export const pendingSelfie = {
+  get: () => selfie,
+  set: (value: PendingSelfie) => {
+    selfie = value;
+  },
+  clear: () => {
+    selfie = null;
+  },
+};

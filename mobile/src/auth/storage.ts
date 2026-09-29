@@ -12,6 +12,9 @@ import { Platform } from 'react-native';
 const REFRESH_KEY = 'ghtrust.refresh_token';
 const DEVICE_KEY = 'ghtrust.device_id';
 const NAME_KEY = 'ghtrust.first_name';
+const INTRO_KEY = 'ghtrust.intro_seen';
+const DEVICE_TOKEN_KEY = 'ghtrust.device_token';
+const BIOMETRIC_KEY = 'ghtrust.biometric';
 
 const OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
@@ -48,13 +51,35 @@ async function remove(key: string): Promise<void> {
 export const tokenStore = {
   getRefresh: () => get(REFRESH_KEY),
   setRefresh: (token: string) => set(REFRESH_KEY, token),
+  /** End the session. The name stays for "Welcome back" while the phone is still trusted. */
   clear: async () => {
     await remove(REFRESH_KEY);
-    await remove(NAME_KEY);
   },
   /** First name for the "Welcome back" unlock screen (not sensitive). */
   getName: () => get(NAME_KEY),
   setName: (name: string) => set(NAME_KEY, name),
+
+  /**
+   * Proof this phone is trusted: with it, the customer signs back in here with their PIN
+   * instead of an SMS code. Survives sign-out; only "Not you?" (forget) removes it.
+   */
+  getDeviceToken: () => get(DEVICE_TOKEN_KEY),
+  setDeviceToken: (token: string) => set(DEVICE_TOKEN_KEY, token),
+  forgetDevice: async () => {
+    await remove(DEVICE_TOKEN_KEY);
+    await remove(NAME_KEY);
+    await remove(BIOMETRIC_KEY);
+  },
+
+  /** The customer chose to unlock with Face ID / fingerprint on this phone. */
+  getBiometric: async () => (await get(BIOMETRIC_KEY)) === '1',
+  setBiometric: (on: boolean) => (on ? set(BIOMETRIC_KEY, '1') : remove(BIOMETRIC_KEY)),
+};
+
+/** Whether this install has seen the first-launch intro (kept across sign-outs). */
+export const introFlag = {
+  get: async () => (await get(INTRO_KEY)) === '1',
+  set: () => set(INTRO_KEY, '1'),
 };
 
 let deviceId: string | null = null;

@@ -82,11 +82,20 @@ class TestIdempotencyKeys:
         ).json()
         customer_id = verify["customer"]["id"]
         headers = _auth(verify["access_token"])
-        await api_client.post(
+        from tests.conftest import TEST_TXN_PIN, set_transaction_pin
+
+        await set_transaction_pin(api_client, headers)
+        payout = await api_client.post(
             "/api/v1/wallet/payout-account",
-            json={"bank_code": "058", "account_number": "0123456789", "account_name": "Ada Okafor"},
+            json={
+                "bank_code": "058",
+                "account_number": "0123456789",
+                "account_name": "Ada Okafor",
+                "transaction_pin": TEST_TXN_PIN,
+            },
             headers=headers,
         )
+        assert payout.status_code == 200, payout.text
         ledger = LedgerService(db_session)
         funding = PaymentTransaction(
             provider=PaymentProvider.MONNIFY, provider_reference="F-W-1", direction=PaymentDirection.INBOUND,
@@ -100,12 +109,13 @@ class TestIdempotencyKeys:
         )
         await db_session.commit()
 
-        no_key = await api_client.post("/api/v1/wallet/withdraw", json={"amount": "1000"}, headers=headers)
+        body = {"amount": "1000", "transaction_pin": TEST_TXN_PIN}
+        no_key = await api_client.post("/api/v1/wallet/withdraw", json=body, headers=headers)
         assert no_key.status_code == 422
 
         keyed = {**headers, "Idempotency-Key": "withdraw-000001"}
-        a = await api_client.post("/api/v1/wallet/withdraw", json={"amount": "1000"}, headers=keyed)
-        b = await api_client.post("/api/v1/wallet/withdraw", json={"amount": "1000"}, headers=keyed)
+        a = await api_client.post("/api/v1/wallet/withdraw", json=body, headers=keyed)
+        b = await api_client.post("/api/v1/wallet/withdraw", json=body, headers=keyed)
         assert a.status_code == 200, a.text
         assert a.json()["id"] == b.json()["id"]
         assert await db_session.scalar(select(func.count()).select_from(WithdrawalRequest)) == 1

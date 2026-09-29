@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     # Mock mode only: the phone number the sandbox BVN identity reports, so you can
     # register in development and receive/enter codes for your own number.
     dojah_mock_phone: str = ""
+    # Account opening also matches a selfie against the BVN photo (after the SMS code).
+    dojah_selfie_required: bool = True
+    # Dojah's match cutoff, 50–100 (Dojah's own default is 90).
+    dojah_selfie_threshold: int = Field(default=90, ge=50, le=100)
+    dojah_selfie_max_attempts: int = 3
 
     # Payment rail: monnify (default), stanbic, paystack, or zest
     payment_provider: str = "monnify"

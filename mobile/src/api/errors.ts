@@ -7,9 +7,17 @@ export class ApiError extends Error {
     readonly errors: string[] = [],
     readonly requestId?: string,
     readonly retryAfter?: number,
+    /** The structured `errors` entries, e.g. `{attempts_left: 3}`. */
+    readonly details: Record<string, unknown>[] = [],
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+
+  /** Wrong PIN / code: how many tries remain, when the server says. */
+  get attemptsLeft(): number | undefined {
+    const n = this.details.find((d) => typeof d?.attempts_left === 'number')?.attempts_left;
+    return typeof n === 'number' ? n : undefined;
   }
 }
 
@@ -41,12 +49,35 @@ const COPY: Record<string, string> = {
   ACCOUNT_INACTIVE: 'Your account is not active. Please contact GH Trust.',
   BVN_NOT_FOUND: "We couldn't find that BVN. Check the 11 digits and try again.",
   KYC_UNAVAILABLE: "We couldn't verify your BVN right now. Please try again shortly.",
+  BVN_NO_PHONE: "There's no phone number on your BVN record, so we can't send you a code. Please visit a GH Trust branch.",
+  REGISTRATION_EXPIRED: 'This sign-up has expired. Please start again with your BVN.',
+  SELFIE_UNREADABLE: "We couldn't see your face clearly. Retake it facing the camera in good light.",
+  SELFIE_NO_MATCH: "Your selfie didn't match your BVN photo. Try again in good light, without glasses or a cap.",
+  SELFIE_ATTEMPTS_EXCEEDED: "We couldn't match your selfie to your BVN photo. Please visit a GH Trust branch to open your account.",
   TOKEN_INVALID: 'Please sign in again to continue.',
   SESSION_REVOKED: 'You were signed out. Please sign in again.',
   SESSION_IDLE_TIMEOUT: 'You were signed out after a period of inactivity. Please sign in again.',
   REFRESH_TOKEN_INVALID: 'Please sign in again to continue.',
   REFRESH_TOKEN_REUSED: 'For your security you were signed out. Please sign in again.',
   PERMISSION_DENIED: "This isn't available on your account.",
+  // PINs and phones
+  PIN_INVALID: "That PIN isn't right.",
+  PIN_ATTEMPTS_EXCEEDED: 'Too many wrong PINs. For your security, sign in again with a code sent to your phone.',
+  PIN_TOO_WEAK: 'That PIN is too easy to guess. Avoid repeated digits, counting (1234) and your date of birth.',
+  PIN_ALREADY_SET: 'You already have this PIN. Change it from Security settings.',
+  LOGIN_PIN_NOT_SET: 'Create your sign-in PIN first.',
+  REAUTH_REQUIRED: 'For your security, confirm it’s you with your PIN.',
+  BVN_MISMATCH: "That BVN doesn't match this account.",
+  DEVICE_NOT_TRUSTED: 'Sign in with a code sent to your phone.',
+  APPROVAL_NOT_FOUND: 'This sign-in request has ended. Start again.',
+  APPROVAL_NOT_ACTIVE: 'This sign-in request has ended. Start again.',
+  APPROVAL_CODE_INVALID: "That code isn't right. Check your other phone and try again.",
+  BIOMETRIC_CANCELLED: "That wasn't confirmed. Try again, or keep using your PIN.",
+  TRANSACTION_PIN_INVALID: "That transaction PIN isn't right.",
+  TRANSACTION_PIN_LOCKED: 'Your transaction PIN is locked after too many wrong tries. Reset it in Security settings.',
+  TRANSACTION_PIN_NOT_SET: 'Create your 4-digit transaction PIN to move money.',
+  TRANSFERS_ON_HOLD:
+    "For your security, money can't leave your account for 24 hours after signing in without your old phone.",
   // Platform
   RATE_LIMITED: 'Too many attempts. Please wait a moment and try again.',
   APP_UPDATE_REQUIRED: 'Please update GH Trust to continue.',
@@ -104,5 +135,7 @@ function logForDevelopers(error: unknown) {
 export function messageFor(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
   logForDevelopers(error);
   if (!(error instanceof ApiError)) return fallback;
-  return COPY[error.code] ?? byStatus(error.status) ?? fallback;
+  const base = COPY[error.code] ?? byStatus(error.status) ?? fallback;
+  const left = error.attemptsLeft;
+  return left !== undefined && left > 0 ? `${base} ${left} ${left === 1 ? 'try' : 'tries'} left.` : base;
 }
