@@ -52,3 +52,26 @@ async def test_codes_are_never_echoed_outside_development(api_client):
         await api_client.post("/api/v1/auth/register/bvn", json={"bvn": TEST_BVN})
     ).json()
     assert res["dev_code"] is None
+
+
+async def test_test_deployment_can_opt_in_to_echo(api_client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("OTP_TEST_ECHO", "true")
+    refresh_settings()
+    res = (await api_client.post("/api/v1/auth/register/bvn", json={"bvn": TEST_BVN})).json()
+    assert res["dev_code"] == TEST_OTP
+
+
+async def test_echo_never_happens_with_real_sms_or_in_production(monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("OTP_TEST_ECHO", "true")
+    monkeypatch.setenv("SMS_MOCK", "false")
+    refresh_settings()
+    assert get_settings().expose_dev_otp is False
+
+    monkeypatch.setenv("SMS_MOCK", "true")
+    monkeypatch.setenv("APP_ENV", "production")
+    refresh_settings()
+    assert get_settings().expose_dev_otp is False

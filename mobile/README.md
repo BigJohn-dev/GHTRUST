@@ -96,6 +96,19 @@ readable by anyone with the app, so the app holds no API keys; provider credenti
 backend. A `preview` or `production` build **fails** if `EXPO_PUBLIC_API_URL` is missing, or isn't
 `https://` for production (`app.config.js`).
 
+The `preview` profile is already pointed at the test API on Railway
+(`eas.json` → `build.preview.env`); change it there to use another server.
+
+### Testing against the Railway API
+
+- **Expo Go / dev build:** `npm run start:railway` (any OS) runs Metro with
+  `EXPO_PUBLIC_API_URL` set to Railway. `API_URL=https://… npm run start:railway` picks another host.
+- **Sign-in codes without SMS:** on the Railway service set `SMS_MOCK=true`,
+  `OTP_TEST_ECHO=true` and a non-production `APP_ENV` (e.g. `staging`). The server then returns
+  each code to the app, which fills it in. It never does this in production.
+- **BVN without Dojah keys:** `DOJAH_MOCK=true` (any BVN works), and `DOJAH_MOCK_PHONE=<your
+  number>` if you want the mock identity to use your phone.
+
 ```bash
 npx eas-cli@latest env:create --environment production --name EXPO_PUBLIC_API_URL --value https://<api host> --visibility plaintext
 npx eas-cli@latest build --profile preview --platform android     # installable APK

@@ -147,6 +147,10 @@ class Settings(BaseSettings):
     # Development test mode (APP_ENV=development with SMS_MOCK=true only): OTP
     # responses include the code so a dev build of the app can fill it in.
     otp_dev_echo: bool = True
+    # Test deployments (e.g. a staging server the mobile team tests against): with SMS
+    # mocked, no text is ever sent, so return the code to the app instead. Opt-in, and
+    # ignored in production (which refuses SMS_MOCK anyway).
+    otp_test_echo: bool = False
 
     # Rate limits (requests per window). Disabled automatically when APP_ENV=development.
     rate_limit_enabled: bool = True
@@ -245,8 +249,16 @@ class Settings(BaseSettings):
 
     @property
     def expose_dev_otp(self) -> bool:
-        """Echo OTP codes to the client: local development with mocked SMS only."""
-        return self.app_env == "development" and self.sms_mock and self.otp_dev_echo
+        """
+        Echo OTP codes to the client. Only ever with mocked SMS (the code reaches no phone
+        anyway), never in production: local development by default, or a test deployment
+        that opts in with OTP_TEST_ECHO=true.
+        """
+        if not self.sms_mock or self.is_production:
+            return False
+        if self.app_env == "development":
+            return self.otp_dev_echo
+        return self.otp_test_echo
 
     @property
     def rate_limits_active(self) -> bool:

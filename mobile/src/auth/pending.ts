@@ -11,8 +11,11 @@ type Common = {
 
 export type PendingOtp = ({ mode: 'register'; bvn: string } | { mode: 'login'; phone: string }) & Common;
 
-/** The server only echoes codes in local development; the app only uses them in dev builds. */
-export const testModeCode = (code: string | null | undefined) => (__DEV__ && code ? code : null);
+/**
+ * The server only returns the code when texts are mocked and it isn't production (local
+ * development, or a test server with OTP_TEST_ECHO on), so any build may use it.
+ */
+export const testModeCode = (code: string | null | undefined) => code || null;
 
 let pending: PendingOtp | null = null;
 

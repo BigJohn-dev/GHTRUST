@@ -51,7 +51,8 @@
     "web": "expo start --web",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "gen:api": "node scripts/gen-api.mjs"
+    "gen:api": "node scripts/gen-api.mjs",
+    "start:railway": "node scripts/start-remote.mjs"
   },
   "private": true
 }
