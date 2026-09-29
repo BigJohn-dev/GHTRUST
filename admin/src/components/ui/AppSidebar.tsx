@@ -5,6 +5,7 @@ import {
   HandCoins,
   LayoutDashboard,
   LogOut,
+  Pin,
   Search,
   Settings,
   UserCog,
@@ -57,8 +58,13 @@ function buildSections(canManageTeam: boolean, canViewCustomers: boolean, canVie
 }
 
 interface AppSidebarProps {
+  /** Showing only the icon rail. */
   collapsed: boolean
-  onToggleCollapse: () => void
+  /** Kept open by the user (otherwise it only opens while hovered). */
+  pinned: boolean
+  /** Open as a peek, overlaying the page. */
+  floating?: boolean
+  onTogglePin: () => void
   onNavigate?: () => void
 }
 
@@ -83,7 +89,7 @@ function GhLogo({ compact }: { compact?: boolean }) {
   )
 }
 
-export function AppSidebar({ collapsed, onToggleCollapse, onNavigate }: AppSidebarProps) {
+export function AppSidebar({ collapsed, pinned, floating, onTogglePin, onNavigate }: AppSidebarProps) {
   const { staff, logout } = useAuth()
   const [search, setSearch] = useState('')
   const firstName = staff?.full_name?.split(' ')[0] ?? 'Admin'
@@ -98,6 +104,7 @@ export function AppSidebar({ collapsed, onToggleCollapse, onNavigate }: AppSideb
       className={clsx(
         'flex flex-col h-screen bg-navy border-r border-white/10 transition-[width] duration-500 overflow-hidden',
         collapsed ? 'w-[72px]' : 'w-[272px]',
+        floating && 'shadow-2xl shadow-black/30',
       )}
       style={{ transitionTimingFunction: softSpring }}
     >
@@ -107,14 +114,22 @@ export function AppSidebar({ collapsed, onToggleCollapse, onNavigate }: AppSideb
           <GhLogo compact={collapsed} />
           <button
             type="button"
-            onClick={onToggleCollapse}
+            onClick={onTogglePin}
             className={clsx(
               'rounded-lg flex items-center justify-center shrink-0 text-white/55 hover:text-white hover:bg-white/10 transition-colors',
               collapsed ? 'h-7 w-6' : 'h-8 w-8',
             )}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={pinned ? 'Collapse sidebar' : 'Keep sidebar open'}
+            aria-pressed={pinned}
+            title={pinned ? 'Collapse sidebar' : 'Keep sidebar open'}
           >
-            <ChevronLeft size={collapsed ? 14 : 16} className={clsx(collapsed && 'rotate-180')} />
+            {collapsed ? (
+              <ChevronLeft size={14} className="rotate-180" />
+            ) : pinned ? (
+              <ChevronLeft size={16} />
+            ) : (
+              <Pin size={15} />
+            )}
           </button>
         </div>
       </div>
