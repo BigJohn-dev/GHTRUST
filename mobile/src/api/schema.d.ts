@@ -74,8 +74,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Match a selfie to the BVN photo and open the account
-         * @description Dojah compares the selfie with the BVN photo. A match opens the account and signs the device in; `SELFIE_NO_MATCH` includes `attempts_left`. After the last attempt the BVN cools down (`SELFIE_COOLDOWN`, 429 with `Retry-After` and `retry_after` seconds): sign-up can start again once it ends.
+         * Check a live face capture and match it to the BVN photo, then open the account
+         * @description The app sends frames from its live camera. Dojah first checks the main frame is a live person (`LIVENESS_FAILED` otherwise), then compares it with the BVN photo. A match opens the account and signs the device in; `LIVENESS_FAILED` and `SELFIE_NO_MATCH` include `attempts_left`. After the last attempt the BVN cools down (`SELFIE_COOLDOWN`, 429 with `Retry-After` and `retry_after` seconds): sign-up can start again once it ends.
          */
         post: operations["verify_registration_selfie_api_v1_auth_register_selfie_post"];
         delete?: never;
@@ -3357,9 +3357,14 @@ export interface components {
             registration_token: string;
             /**
              * Selfie Image
-             * @description JPEG/PNG, base64 (a data: URL prefix is accepted and removed). Face the camera in good light.
+             * @description JPEG/PNG, base64 (a data: URL prefix is accepted and removed): the frame taken while the customer looks straight at the live camera, in good light.
              */
             selfie_image: string;
+            /**
+             * Liveness Frames
+             * @description Other frames from the same live capture (e.g. after a blink or a slight turn). They must differ from each other and from `selfie_image`, which a replayed still photo can't do.
+             */
+            liveness_frames?: string[];
             device?: components["schemas"]["DeviceInfo"] | null;
         };
         /**

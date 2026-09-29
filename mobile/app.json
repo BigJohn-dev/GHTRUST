@@ -62,6 +62,14 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "GH Trust uses the camera to check it's really you when you open your account, and to photograph loan documents.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-font"
     ],
     "experiments": {

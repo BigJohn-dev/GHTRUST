@@ -70,10 +70,12 @@ async def verify_registration_otp(
 @router.post(
     "/register/selfie",
     response_model=AuthTokenResponse,
-    summary="Match a selfie to the BVN photo and open the account",
+    summary="Check a live face capture and match it to the BVN photo, then open the account",
     description=(
-        "Dojah compares the selfie with the BVN photo. A match opens the account and signs the "
-        "device in; `SELFIE_NO_MATCH` includes `attempts_left`. After the last attempt the BVN "
+        "The app sends frames from its live camera. Dojah first checks the main frame is a live "
+        "person (`LIVENESS_FAILED` otherwise), then compares it with the BVN photo. A match opens "
+        "the account and signs the device in; `LIVENESS_FAILED` and `SELFIE_NO_MATCH` include "
+        "`attempts_left`. After the last attempt the BVN "
         "cools down (`SELFIE_COOLDOWN`, 429 with `Retry-After` and `retry_after` seconds): "
         "sign-up can start again once it ends."
     ),
@@ -85,7 +87,11 @@ async def verify_registration_selfie(
     redis: RedisClient,
 ):
     return await _auth_service(db, redis).verify_registration_selfie(
-        payload.registration_token, payload.selfie_image, meta=request_meta(request), device=payload.device
+        payload.registration_token,
+        payload.selfie_image,
+        meta=request_meta(request),
+        device=payload.device,
+        liveness_frames=payload.liveness_frames,
     )
 
 

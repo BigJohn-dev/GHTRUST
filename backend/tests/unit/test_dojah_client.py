@@ -189,3 +189,30 @@ class TestDojahSelfie:
             with pytest.raises(DojahError) as exc:
                 await DojahClient().verify_bvn_selfie(TEST_BVN, "abc123", 90)
         assert exc.value.status_code == 400
+
+
+class TestDojahLiveness:
+    async def test_mock_mode_passes(self):
+        assert (await DojahClient().check_liveness("abc", 0.5)).live is True
+
+    @pytest.mark.parametrize(
+        ("entity", "live", "reason"),
+        [
+            ({"liveness": {"liveness_check": True, "liveness_probability": 0.92}, "face": {"face_detected": True}}, True, None),
+            ({"liveness": {"liveness_check": False, "liveness_probability": 0.01}, "face": {"face_detected": True}}, False, "spoof"),
+            ({"liveness": {"liveness_check": True, "liveness_probability": 0.3}, "face": {"face_detected": True}}, False, "low_probability"),
+            ({"liveness": {"liveness_check": True, "liveness_probability": 88.0}}, True, None),  # percentage
+            ({"liveness": {}, "face": {"face_detected": False}}, False, "no_face"),
+            ({"liveness": {"liveness_check": True}, "face": {"multiface_detected": True}}, False, "several_faces"),
+            ({"liveness": {}}, False, "no_result"),
+        ],
+    )
+    async def test_result_reading(self, monkeypatch, entity, live, reason):
+        _live(monkeypatch)
+        mock_client = _client_returning(httpx.Response(200, json={"entity": entity}))
+        with patch("app.integrations.dojah.client.httpx.AsyncClient", return_value=mock_client):
+            result = await DojahClient().check_liveness("abc123", 0.5)
+        assert (result.live, result.reason) == (live, reason)
+        method, url = mock_client.request.call_args[0]
+        assert (method, url.endswith("/api/v1/ml/liveness")) == ("POST", True)
+        assert mock_client.request.call_args[1]["json"] == {"image": "abc123"}

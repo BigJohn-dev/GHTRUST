@@ -36,7 +36,7 @@ def _is_local(url: str) -> bool:
     return (urlparse(url).hostname or "") in {"localhost", "127.0.0.1", "::1"}
 
 
-async def check_redis_on_startup() -> bool:
+async def check_redis_on_startup(client: aioredis.Redis | None = None) -> bool:
     """
     Ping Redis once at boot and say loudly if it's missing.
 
@@ -45,9 +45,10 @@ async def check_redis_on_startup() -> bool:
     fail. On a hosted deploy the usual cause is REDIS_URL never being set, which leaves
     it on the localhost default.
     """
-    local_default = _is_local(settings.redis_url) and settings.app_env != "development"
+    # An injected client (tests, the in-memory dev server) isn't the configured URL.
+    local_default = client is None and _is_local(settings.redis_url) and settings.app_env != "development"
     try:
-        await asyncio.wait_for(get_redis_pool().ping(), timeout=3)
+        await asyncio.wait_for((client or get_redis_pool()).ping(), timeout=3)
     except Exception as exc:  # noqa: BLE001 - any failure here means "not reachable"
         logger.error(
             "redis_unreachable",

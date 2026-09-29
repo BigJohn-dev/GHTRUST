@@ -5,13 +5,16 @@ from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import select
 
-from app.integrations.dojah.schemas import DojahError, DojahSelfieVerification
+from app.integrations.dojah.schemas import DojahError, DojahSelfieVerification, LivenessResult
 from app.modules.users.models import Customer, CustomerStatus
 from tests.conftest import TEST_BVN, TEST_OTP, refresh_settings
 
 # A tiny but valid-looking JPEG: the right magic bytes and a plausible size.
 SELFIE = base64.b64encode(b"\xff\xd8\xff\xe0" + b"\x00" * 8000).decode()
+# Other frames from the same live capture: valid images, each one different.
+FRAMES = [base64.b64encode(b"\xff\xd8\xff\xe0" + bytes([n]) * 8000).decode() for n in (1, 2)]
 VERIFY = "app.integrations.dojah.client.DojahClient.verify_bvn_selfie"
+LIVENESS = "app.integrations.dojah.client.DojahClient.check_liveness"
 
 
 def _selfie_on(monkeypatch, attempts: int = 3):
@@ -27,10 +30,15 @@ async def _start(api_client) -> dict:
     return res.json()
 
 
-async def _selfie(api_client, token: str, image: str = SELFIE):
+async def _selfie(api_client, token: str, image: str = SELFIE, frames: list[str] | None = None):
     return await api_client.post(
         "/api/v1/auth/register/selfie",
-        json={"registration_token": token, "selfie_image": image, "device": {"device_id": "phone-1"}},
+        json={
+            "registration_token": token,
+            "selfie_image": image,
+            "liveness_frames": FRAMES if frames is None else frames,
+            "device": {"device_id": "phone-1"},
+        },
     )
 
 
@@ -145,6 +153,58 @@ class TestSelfieStep:
         assert res.json()["code"] == "KYC_UNAVAILABLE"
         with patch(VERIFY, AsyncMock(return_value=DojahSelfieVerification(confidence_value=95, match=True))):
             assert (await _selfie(api_client, token)).status_code == 200
+
+    async def test_liveness_runs_before_the_match(self, api_client, monkeypatch):
+        _selfie_on(monkeypatch)
+        token = (await _start(api_client))["registration_token"]
+        live = AsyncMock(return_value=LivenessResult(live=True, probability=0.97))
+        with (
+            patch(LIVENESS, live),
+            patch(VERIFY, AsyncMock(return_value=DojahSelfieVerification(confidence_value=95, match=True))),
+        ):
+            assert (await _selfie(api_client, token)).status_code == 200
+        assert live.await_args.args == (SELFIE, 0.5)
+
+    async def test_failed_liveness_uses_an_attempt_and_skips_the_match(self, api_client, monkeypatch):
+        _selfie_on(monkeypatch, attempts=2)
+        token = (await _start(api_client))["registration_token"]
+        spoof = AsyncMock(return_value=LivenessResult(live=False, probability=0.02, reason="spoof"))
+        with patch(LIVENESS, spoof), patch(VERIFY, AsyncMock()) as match:
+            first = await _selfie(api_client, token)
+            assert first.status_code == 400
+            assert first.json()["code"] == "LIVENESS_FAILED"
+            assert first.json()["errors"] == [{"attempts_left": 1}]
+            last = await _selfie(api_client, token)
+        match.assert_not_awaited()
+        assert last.status_code == 429
+        assert last.json()["code"] == "SELFIE_COOLDOWN"
+
+    async def test_a_still_photo_is_not_a_live_capture(self, api_client, monkeypatch):
+        _selfie_on(monkeypatch)
+        token = (await _start(api_client))["registration_token"]
+        with patch(LIVENESS, AsyncMock()) as live, patch(VERIFY, AsyncMock()) as match:
+            no_frames = await _selfie(api_client, token, frames=[])
+            same_frames = await _selfie(api_client, token, frames=[SELFIE, SELFIE])
+        for res in (no_frames, same_frames):
+            assert res.status_code == 400
+            assert res.json()["code"] == "SELFIE_UNREADABLE"
+        live.assert_not_awaited()
+        match.assert_not_awaited()
+        # Rejected before Dojah: no attempt was used.
+        with patch(VERIFY, AsyncMock(return_value=DojahSelfieVerification(confidence_value=40, match=False))):
+            assert (await _selfie(api_client, token)).json()["errors"] == [{"attempts_left": 2}]
+
+    async def test_liveness_can_be_switched_off(self, api_client, monkeypatch):
+        _selfie_on(monkeypatch)
+        monkeypatch.setenv("DOJAH_LIVENESS_REQUIRED", "false")
+        refresh_settings()
+        token = (await _start(api_client))["registration_token"]
+        with (
+            patch(LIVENESS, AsyncMock()) as live,
+            patch(VERIFY, AsyncMock(return_value=DojahSelfieVerification(confidence_value=95, match=True))),
+        ):
+            assert (await _selfie(api_client, token, frames=[])).status_code == 200
+        live.assert_not_awaited()
 
     async def test_selfie_off_opens_on_the_code(self, api_client):
         body = await _start(api_client)

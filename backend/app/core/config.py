@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     # Dojah's match cutoff, 50–100 (Dojah's own default is 90).
     dojah_selfie_threshold: int = Field(default=90, ge=50, le=100)
     dojah_selfie_max_attempts: int = 3
+    # Before matching, the capture must pass Dojah's liveness check (a real face, not a
+    # photo of a photo or a screen). A failed check uses up a selfie attempt.
+    dojah_liveness_required: bool = True
+    dojah_liveness_min_probability: float = Field(default=0.5, ge=0, le=1)
     # After the last failed selfie, that BVN can't start sign-up again for this long.
     dojah_selfie_cooldown_minutes: int = 60
 

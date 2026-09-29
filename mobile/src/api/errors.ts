@@ -57,8 +57,10 @@ const COPY: Record<string, string> = {
   KYC_UNAVAILABLE: "We couldn't verify your BVN right now. Please try again shortly.",
   BVN_NO_PHONE: "There's no phone number on your BVN record, so we can't send you a code. Please visit a GH Trust branch.",
   REGISTRATION_EXPIRED: 'This sign-up has expired. Please start again with your BVN.',
-  SELFIE_UNREADABLE: "We couldn't see your face clearly. Retake it facing the camera in good light.",
-  SELFIE_NO_MATCH: "Your selfie didn't match your BVN photo. Try again in good light, without glasses or a cap.",
+  SELFIE_UNREADABLE: "We couldn't see your face clearly. Try again facing the camera in good light.",
+  LIVENESS_FAILED:
+    "We couldn't confirm it's you live on camera. Face a light, remove glasses or a cap, and follow the prompts.",
+  SELFIE_NO_MATCH: "Your face didn't match your BVN photo. Try again in good light, without glasses or a cap.",
   SELFIE_COOLDOWN: "Too many selfie attempts with this BVN. For your security, please wait before trying again.",
   TOKEN_INVALID: 'Please sign in again to continue.',
   SESSION_REVOKED: 'You were signed out. Please sign in again.',
