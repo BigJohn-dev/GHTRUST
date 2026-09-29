@@ -299,9 +299,23 @@ function ApplicationDetailContent() {
                       </>
                     )}
                     {canDisburseNow && (
+                      <span
+                        className={
+                          app.offer_accepted_at
+                            ? 'text-[12px] font-medium text-emerald-700'
+                            : 'text-[12px] font-medium text-amber-700'
+                        }
+                      >
+                        {app.offer_accepted_at
+                          ? `Customer accepted the offer ${new Date(app.offer_accepted_at).toLocaleString()}`
+                          : 'Waiting for the customer to accept the offer in the app'}
+                      </span>
+                    )}
+                    {canDisburseNow && (
                       <button
                         type="button"
-                        disabled={acting}
+                        disabled={acting || !app.offer_accepted_at}
+                        title={app.offer_accepted_at ? undefined : 'The customer must accept the loan offer first'}
                         onClick={disburse}
                         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#1b2f6b] text-white text-[13px] font-semibold hover:bg-[#141f45] disabled:opacity-50 transition-colors"
                       >

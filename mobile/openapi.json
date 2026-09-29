@@ -5283,6 +5283,504 @@
     ]
    }
   },
+  "/api/v1/legal": {
+   "get": {
+    "tags": [
+     "Legal"
+    ],
+    "summary": "Legal documents and their current versions",
+    "operationId": "list_documents_api_v1_legal_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/DocumentSummary"
+         },
+         "type": "array",
+         "title": "Response List Documents Api V1 Legal Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/legal/{slug}": {
+   "get": {
+    "tags": [
+     "Legal"
+    ],
+    "summary": "One legal document",
+    "operationId": "get_document_api_v1_legal__slug__get",
+    "parameters": [
+     {
+      "name": "slug",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Slug"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DocumentResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/legal/accept": {
+   "post": {
+    "tags": [
+     "Legal"
+    ],
+    "summary": "Accept legal documents",
+    "operationId": "accept_documents_api_v1_legal_accept_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AcceptDocumentsRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LegalPendingResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/loans/me/applications/{application_id}/offer": {
+   "get": {
+    "tags": [
+     "Legal"
+    ],
+    "summary": "The loan offer to review before payout",
+    "operationId": "get_offer_api_v1_loans_me_applications__application_id__offer_get",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "application_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Application Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LoanOfferResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/loans/me/applications/{application_id}/offer/accept": {
+   "post": {
+    "tags": [
+     "Legal"
+    ],
+    "summary": "Accept the loan offer (e-signature with the transaction PIN)",
+    "operationId": "accept_offer_api_v1_loans_me_applications__application_id__offer_accept_post",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "application_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Application Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AcceptOfferRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LoanOfferResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/support/faqs": {
+   "get": {
+    "tags": [
+     "Support"
+    ],
+    "summary": "Help centre questions",
+    "operationId": "list_faqs_api_v1_support_faqs_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FaqsResponse"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/support/tickets": {
+   "get": {
+    "tags": [
+     "Support"
+    ],
+    "summary": "My requests",
+    "operationId": "my_tickets_api_v1_support_tickets_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/TicketResponse"
+         },
+         "type": "array",
+         "title": "Response My Tickets Api V1 Support Tickets Get"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   },
+   "post": {
+    "tags": [
+     "Support"
+    ],
+    "summary": "Report a problem or send a request",
+    "operationId": "create_ticket_api_v1_support_tickets_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateTicketRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TicketResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/support/tickets/{ticket_id}": {
+   "get": {
+    "tags": [
+     "Support"
+    ],
+    "summary": "One of my requests",
+    "operationId": "my_ticket_api_v1_support_tickets__ticket_id__get",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "ticket_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ticket Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TicketResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/support/tickets": {
+   "get": {
+    "tags": [
+     "Support"
+    ],
+    "summary": "Customer support requests",
+    "operationId": "admin_tickets_api_v1_admin_support_tickets_get",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "status",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "enum": [
+          "open",
+          "in_progress",
+          "resolved"
+         ],
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 200,
+       "minimum": 1,
+       "default": 50,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 0,
+       "default": 0,
+       "title": "Offset"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AdminTicketPage"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/admin/support/tickets/{ticket_id}": {
+   "patch": {
+    "tags": [
+     "Support"
+    ],
+    "summary": "Reply or update",
+    "operationId": "update_ticket_api_v1_admin_support_tickets__ticket_id__patch",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "ticket_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ticket Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateTicketRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AdminTicketResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/webhooks/monnify": {
    "post": {
     "tags": [
@@ -5471,6 +5969,48 @@
  },
  "components": {
   "schemas": {
+   "AcceptDocumentsRequest": {
+    "properties": {
+     "documents": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "maxProperties": 5,
+      "minProperties": 1,
+      "title": "Documents"
+     }
+    },
+    "type": "object",
+    "required": [
+     "documents"
+    ],
+    "title": "AcceptDocumentsRequest"
+   },
+   "AcceptOfferRequest": {
+    "properties": {
+     "terms_hash": {
+      "type": "string",
+      "maxLength": 64,
+      "minLength": 64,
+      "title": "Terms Hash",
+      "description": "`terms_hash` from the offer shown"
+     },
+     "transaction_pin": {
+      "type": "string",
+      "maxLength": 4,
+      "minLength": 4,
+      "pattern": "^\\d+$",
+      "title": "Transaction Pin"
+     }
+    },
+    "type": "object",
+    "required": [
+     "terms_hash",
+     "transaction_pin"
+    ],
+    "title": "AcceptOfferRequest"
+   },
    "AdminDashboardResponse": {
     "properties": {
      "total_applications": {
@@ -5600,6 +6140,184 @@
      "max_upload_size_mb"
     ],
     "title": "AdminSettingsResponse"
+   },
+   "AdminTicketPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/AdminTicketResponse"
+      },
+      "type": "array",
+      "title": "Items"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     },
+     "open": {
+      "type": "integer",
+      "title": "Open"
+     }
+    },
+    "type": "object",
+    "required": [
+     "items",
+     "total",
+     "open"
+    ],
+    "title": "AdminTicketPage"
+   },
+   "AdminTicketResponse": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "reference": {
+      "type": "string",
+      "title": "Reference"
+     },
+     "category": {
+      "type": "string",
+      "title": "Category"
+     },
+     "message": {
+      "type": "string",
+      "title": "Message"
+     },
+     "related_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Related Type"
+     },
+     "related_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Related Id"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "reply": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reply"
+     },
+     "replied_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Replied At"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     },
+     "customer_id": {
+      "type": "string",
+      "title": "Customer Id"
+     },
+     "customer_name": {
+      "type": "string",
+      "title": "Customer Name"
+     },
+     "customer_phone": {
+      "type": "string",
+      "title": "Customer Phone"
+     },
+     "app_version": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "App Version"
+     },
+     "platform": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Platform"
+     },
+     "device_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Device Name"
+     },
+     "resolved_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Resolved At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "reference",
+     "category",
+     "message",
+     "related_type",
+     "related_id",
+     "status",
+     "reply",
+     "replied_at",
+     "created_at",
+     "customer_id",
+     "customer_name",
+     "customer_phone",
+     "app_version",
+     "platform",
+     "device_name",
+     "resolved_at"
+    ],
+    "title": "AdminTicketResponse"
    },
    "AdminTransactionResponse": {
     "properties": {
@@ -6958,6 +7676,62 @@
     "title": "CreateLoanProductRequest",
     "description": "A new product, created switched off. Steps, documents and cadences are limited to the\nones the customer app and servicing engine understand; switching it on requires a\npublished approval workflow."
    },
+   "CreateTicketRequest": {
+    "properties": {
+     "category": {
+      "type": "string",
+      "enum": [
+       "payments",
+       "loans",
+       "account",
+       "app",
+       "data",
+       "other"
+      ],
+      "title": "Category"
+     },
+     "message": {
+      "type": "string",
+      "maxLength": 2000,
+      "minLength": 10,
+      "title": "Message"
+     },
+     "related_type": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "transaction",
+         "loan",
+         "application"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Related Type"
+     },
+     "related_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 64
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Related Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "category",
+     "message"
+    ],
+    "title": "CreateTicketRequest"
+   },
    "CreateWorkflowRequest": {
     "properties": {
      "stages": {
@@ -7438,6 +8212,14 @@
       ],
       "title": "Transfers Blocked Until",
       "description": "Money can't leave the account before this time (set after a lost-phone sign-in)."
+     },
+     "legal_pending": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Legal Pending",
+      "description": "Legal documents (e.g. 'terms', 'privacy') to accept at their current version before continuing."
      }
     },
     "type": "object",
@@ -7936,6 +8718,52 @@
     ],
     "title": "DocumentChecklistItem"
    },
+   "DocumentResponse": {
+    "properties": {
+     "slug": {
+      "type": "string",
+      "title": "Slug"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "version": {
+      "type": "string",
+      "title": "Version"
+     },
+     "effective_date": {
+      "type": "string",
+      "title": "Effective Date"
+     },
+     "summary": {
+      "type": "string",
+      "title": "Summary"
+     },
+     "draft": {
+      "type": "boolean",
+      "title": "Draft"
+     },
+     "sections": {
+      "items": {
+       "$ref": "#/components/schemas/SectionResponse"
+      },
+      "type": "array",
+      "title": "Sections"
+     }
+    },
+    "type": "object",
+    "required": [
+     "slug",
+     "title",
+     "version",
+     "effective_date",
+     "summary",
+     "draft",
+     "sections"
+    ],
+    "title": "DocumentResponse"
+   },
    "DocumentStatus": {
     "type": "string",
     "enum": [
@@ -7944,6 +8772,96 @@
      "rejected"
     ],
     "title": "DocumentStatus"
+   },
+   "DocumentSummary": {
+    "properties": {
+     "slug": {
+      "type": "string",
+      "title": "Slug"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "version": {
+      "type": "string",
+      "title": "Version"
+     },
+     "effective_date": {
+      "type": "string",
+      "title": "Effective Date"
+     },
+     "summary": {
+      "type": "string",
+      "title": "Summary"
+     },
+     "draft": {
+      "type": "boolean",
+      "title": "Draft"
+     }
+    },
+    "type": "object",
+    "required": [
+     "slug",
+     "title",
+     "version",
+     "effective_date",
+     "summary",
+     "draft"
+    ],
+    "title": "DocumentSummary"
+   },
+   "FaqResponse": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "topic": {
+      "type": "string",
+      "title": "Topic"
+     },
+     "question": {
+      "type": "string",
+      "title": "Question"
+     },
+     "answer": {
+      "type": "string",
+      "title": "Answer"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "topic",
+     "question",
+     "answer"
+    ],
+    "title": "FaqResponse"
+   },
+   "FaqsResponse": {
+    "properties": {
+     "topics": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Topics"
+     },
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/FaqResponse"
+      },
+      "type": "array",
+      "title": "Items"
+     }
+    },
+    "type": "object",
+    "required": [
+     "topics",
+     "items"
+    ],
+    "title": "FaqsResponse"
    },
    "FoodBasketPlanResponse": {
     "properties": {
@@ -8559,6 +9477,22 @@
     ],
     "title": "InvestmentResponse"
    },
+   "LegalPendingResponse": {
+    "properties": {
+     "legal_pending": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Legal Pending"
+     }
+    },
+    "type": "object",
+    "required": [
+     "legal_pending"
+    ],
+    "title": "LegalPendingResponse"
+   },
    "LoanApplicationDetailResponse": {
     "properties": {
      "id": {
@@ -8670,6 +9604,18 @@
        }
       ],
       "title": "Submitted At"
+     },
+     "offer_accepted_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Offer Accepted At"
      },
      "assigned_officer_id": {
       "anyOf": [
@@ -8886,6 +9832,18 @@
       ],
       "title": "Submitted At"
      },
+     "offer_accepted_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Offer Accepted At"
+     },
      "created_at": {
       "type": "string",
       "format": "date-time",
@@ -9062,6 +10020,177 @@
      "repayments"
     ],
     "title": "LoanDetailResponse"
+   },
+   "LoanOfferResponse": {
+    "properties": {
+     "application_id": {
+      "type": "string",
+      "title": "Application Id"
+     },
+     "product_name": {
+      "type": "string",
+      "title": "Product Name"
+     },
+     "principal": {
+      "type": "string",
+      "title": "Principal"
+     },
+     "tenure_months": {
+      "type": "integer",
+      "title": "Tenure Months"
+     },
+     "cadence": {
+      "type": "string",
+      "title": "Cadence"
+     },
+     "installments": {
+      "type": "integer",
+      "title": "Installments"
+     },
+     "interest_rate_pct_monthly": {
+      "type": "string",
+      "title": "Interest Rate Pct Monthly"
+     },
+     "interest_method": {
+      "type": "string",
+      "title": "Interest Method"
+     },
+     "total_interest": {
+      "type": "string",
+      "title": "Total Interest"
+     },
+     "processing_fee_pct": {
+      "type": "string",
+      "title": "Processing Fee Pct"
+     },
+     "processing_fee": {
+      "type": "string",
+      "title": "Processing Fee"
+     },
+     "total_repayable": {
+      "type": "string",
+      "title": "Total Repayable"
+     },
+     "total_cost_of_credit": {
+      "type": "string",
+      "title": "Total Cost Of Credit"
+     },
+     "late_charge_pct_daily": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Late Charge Pct Daily"
+     },
+     "first_payment": {
+      "type": "string",
+      "title": "First Payment"
+     },
+     "schedule": {
+      "items": {
+       "$ref": "#/components/schemas/OfferInstallment"
+      },
+      "type": "array",
+      "title": "Schedule",
+      "description": "Estimated from today; final dates are set from the day the loan is paid out."
+     },
+     "payout_bank": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Payout Bank"
+     },
+     "payout_account_masked": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Payout Account Masked"
+     },
+     "payout_account_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Payout Account Name"
+     },
+     "agreement_version": {
+      "type": "string",
+      "title": "Agreement Version"
+     },
+     "agreement": {
+      "items": {
+       "$ref": "#/components/schemas/SectionResponse"
+      },
+      "type": "array",
+      "title": "Agreement"
+     },
+     "terms_hash": {
+      "type": "string",
+      "title": "Terms Hash"
+     },
+     "accepted_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Accepted At"
+     },
+     "draft": {
+      "type": "boolean",
+      "title": "Draft"
+     }
+    },
+    "type": "object",
+    "required": [
+     "application_id",
+     "product_name",
+     "principal",
+     "tenure_months",
+     "cadence",
+     "installments",
+     "interest_rate_pct_monthly",
+     "interest_method",
+     "total_interest",
+     "processing_fee_pct",
+     "processing_fee",
+     "total_repayable",
+     "total_cost_of_credit",
+     "late_charge_pct_daily",
+     "first_payment",
+     "schedule",
+     "payout_bank",
+     "payout_account_masked",
+     "payout_account_name",
+     "agreement_version",
+     "agreement",
+     "terms_hash",
+     "accepted_at",
+     "draft"
+    ],
+    "title": "LoanOfferResponse"
    },
    "LoanProductResponse": {
     "properties": {
@@ -9561,6 +10690,30 @@
      "created_at"
     ],
     "title": "NotificationResponse"
+   },
+   "OfferInstallment": {
+    "properties": {
+     "installment": {
+      "type": "integer",
+      "title": "Installment"
+     },
+     "due_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Due Date"
+     },
+     "amount": {
+      "type": "string",
+      "title": "Amount"
+     }
+    },
+    "type": "object",
+    "required": [
+     "installment",
+     "due_date",
+     "amount"
+    ],
+    "title": "OfferInstallment"
    },
    "OpenSavingsAccountRequest": {
     "properties": {
@@ -10611,6 +11764,24 @@
     ],
     "title": "SavingsSummaryResponse"
    },
+   "SectionResponse": {
+    "properties": {
+     "heading": {
+      "type": "string",
+      "title": "Heading"
+     },
+     "body": {
+      "type": "string",
+      "title": "Body"
+     }
+    },
+    "type": "object",
+    "required": [
+     "heading",
+     "body"
+    ],
+    "title": "SectionResponse"
+   },
    "SelfieRequiredResponse": {
     "properties": {
      "status": {
@@ -11279,10 +12450,120 @@
        }
       ],
       "title": "Email"
+     },
+     "whatsapp": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Whatsapp"
+     },
+     "hours": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hours"
      }
     },
     "type": "object",
     "title": "SupportInfo"
+   },
+   "TicketResponse": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "reference": {
+      "type": "string",
+      "title": "Reference"
+     },
+     "category": {
+      "type": "string",
+      "title": "Category"
+     },
+     "message": {
+      "type": "string",
+      "title": "Message"
+     },
+     "related_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Related Type"
+     },
+     "related_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Related Id"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "reply": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reply"
+     },
+     "replied_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Replied At"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "reference",
+     "category",
+     "message",
+     "related_type",
+     "related_id",
+     "status",
+     "reply",
+     "replied_at",
+     "created_at"
+    ],
+    "title": "TicketResponse"
    },
    "TokenPair": {
     "properties": {
@@ -11934,6 +13215,41 @@
      "transaction_pin"
     ],
     "title": "UpdatePayoutAccountRequest"
+   },
+   "UpdateTicketRequest": {
+    "properties": {
+     "status": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "open",
+         "in_progress",
+         "resolved"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Status"
+     },
+     "reply": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 2000,
+        "minLength": 2
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reply"
+     }
+    },
+    "type": "object",
+    "title": "UpdateTicketRequest"
    },
    "UpdateWorkflowStagesRequest": {
     "properties": {

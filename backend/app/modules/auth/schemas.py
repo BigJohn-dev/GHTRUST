@@ -160,6 +160,10 @@ class CustomerProfileResponse(BaseModel):
     transfers_blocked_until: datetime | None = Field(
         None, description="Money can't leave the account before this time (set after a lost-phone sign-in)."
     )
+    legal_pending: list[str] = Field(
+        default_factory=list,
+        description="Legal documents (e.g. 'terms', 'privacy') to accept at their current version before continuing.",
+    )
 
     @classmethod
     def from_customer(cls, customer) -> "CustomerProfileResponse":
@@ -188,6 +192,7 @@ class CustomerProfileResponse(BaseModel):
             login_pin_set=bool(customer.login_pin_hash),
             transaction_pin_set=bool(customer.transaction_pin_hash),
             transfers_blocked_until=customer.transfers_blocked_until,
+            legal_pending=_legal_pending(customer),
         )
 
 
@@ -321,3 +326,9 @@ class ApproveDeviceRequest(BaseModel):
 class ApproveDeviceResponse(BaseModel):
     code: str = Field(description="Show on this phone; the customer types it on the new one.")
     expires_in: int
+
+
+def _legal_pending(customer) -> list[str]:
+    from app.modules.legal.service import legal_pending
+
+    return legal_pending(customer)

@@ -20,7 +20,7 @@ import { BlockingScreen } from '@/components/BlockingScreen';
 import { loadIntro, useIntroSeen } from '@/lib/intro';
 import { makeQueryClient, useAppConfig } from '@/lib/queries';
 import { hideSplash, holdSplash } from '@/lib/splash';
-import { colors } from '@/theme/tokens';
+import { colors, font } from '@/theme/tokens';
 
 holdSplash();
 loadIntro();
@@ -122,6 +122,19 @@ function Screens({
       <Stack.Protected guard={status === 'signedOut'}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
+      {/* Terms and Privacy open from sign-up as well as from inside the app. */}
+      <Stack.Screen
+        name="legal/[slug]"
+        options={{
+          headerShown: true,
+          animation: 'slide_from_right',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.navy,
+          headerTitleStyle: { fontFamily: font.bold, fontSize: 17 },
+          headerBackButtonDisplayMode: 'minimal',
+        }}
+      />
     </Stack>
   );
 }

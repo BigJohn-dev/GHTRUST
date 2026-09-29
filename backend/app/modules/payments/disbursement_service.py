@@ -107,6 +107,9 @@ class DisbursementService:
             raise _conflict("Approved amount is required for disbursement")
         validate_terms(application)  # fail before any money moves
         ensure_documents_verified(application, action="disbursement")
+        from app.modules.legal.service import ensure_offer_accepted
+
+        ensure_offer_accepted(application)
 
         existing = await self._by_application(application.id)
         if existing and existing.status == TransactionStatus.PENDING:

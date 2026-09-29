@@ -1824,6 +1824,177 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/legal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Legal documents and their current versions */
+        get: operations["list_documents_api_v1_legal_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/legal/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One legal document */
+        get: operations["get_document_api_v1_legal__slug__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/legal/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept legal documents */
+        post: operations["accept_documents_api_v1_legal_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loans/me/applications/{application_id}/offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The loan offer to review before payout */
+        get: operations["get_offer_api_v1_loans_me_applications__application_id__offer_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loans/me/applications/{application_id}/offer/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept the loan offer (e-signature with the transaction PIN) */
+        post: operations["accept_offer_api_v1_loans_me_applications__application_id__offer_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/support/faqs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Help centre questions */
+        get: operations["list_faqs_api_v1_support_faqs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/support/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My requests */
+        get: operations["my_tickets_api_v1_support_tickets_get"];
+        put?: never;
+        /** Report a problem or send a request */
+        post: operations["create_ticket_api_v1_support_tickets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/support/tickets/{ticket_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of my requests */
+        get: operations["my_ticket_api_v1_support_tickets__ticket_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/support/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Customer support requests */
+        get: operations["admin_tickets_api_v1_admin_support_tickets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/support/tickets/{ticket_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Reply or update */
+        patch: operations["update_ticket_api_v1_admin_support_tickets__ticket_id__patch"];
+        trace?: never;
+    };
     "/api/v1/webhooks/monnify": {
         parameters: {
             query?: never;
@@ -1999,6 +2170,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptDocumentsRequest */
+        AcceptDocumentsRequest: {
+            /** Documents */
+            documents: {
+                [key: string]: string;
+            };
+        };
+        /** AcceptOfferRequest */
+        AcceptOfferRequest: {
+            /**
+             * Terms Hash
+             * @description `terms_hash` from the offer shown
+             */
+            terms_hash: string;
+            /** Transaction Pin */
+            transaction_pin: string;
+        };
         /** AdminDashboardResponse */
         AdminDashboardResponse: {
             /** Total Applications */
@@ -2043,6 +2231,55 @@ export interface components {
             otp_expire_seconds: number;
             /** Max Upload Size Mb */
             max_upload_size_mb: number;
+        };
+        /** AdminTicketPage */
+        AdminTicketPage: {
+            /** Items */
+            items: components["schemas"]["AdminTicketResponse"][];
+            /** Total */
+            total: number;
+            /** Open */
+            open: number;
+        };
+        /** AdminTicketResponse */
+        AdminTicketResponse: {
+            /** Id */
+            id: string;
+            /** Reference */
+            reference: string;
+            /** Category */
+            category: string;
+            /** Message */
+            message: string;
+            /** Related Type */
+            related_type: string | null;
+            /** Related Id */
+            related_id: string | null;
+            /** Status */
+            status: string;
+            /** Reply */
+            reply: string | null;
+            /** Replied At */
+            replied_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Customer Id */
+            customer_id: string;
+            /** Customer Name */
+            customer_name: string;
+            /** Customer Phone */
+            customer_phone: string;
+            /** App Version */
+            app_version: string | null;
+            /** Platform */
+            platform: string | null;
+            /** Device Name */
+            device_name: string | null;
+            /** Resolved At */
+            resolved_at: string | null;
         };
         /** AdminTransactionResponse */
         AdminTransactionResponse: {
@@ -2512,6 +2749,20 @@ export interface components {
             /** Workflow Steps */
             workflow_steps: string[];
         };
+        /** CreateTicketRequest */
+        CreateTicketRequest: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "payments" | "loans" | "account" | "app" | "data" | "other";
+            /** Message */
+            message: string;
+            /** Related Type */
+            related_type?: ("transaction" | "loan" | "application") | null;
+            /** Related Id */
+            related_id?: string | null;
+        };
         /** CreateWorkflowRequest */
         CreateWorkflowRequest: {
             /** Stages */
@@ -2639,6 +2890,11 @@ export interface components {
              * @description Money can't leave the account before this time (set after a lost-phone sign-in).
              */
             transfers_blocked_until?: string | null;
+            /**
+             * Legal Pending
+             * @description Legal documents (e.g. 'terms', 'privacy') to accept at their current version before continuing.
+             */
+            legal_pending?: string[];
         };
         /** CustomerRepayRequest */
         CustomerRepayRequest: {
@@ -2821,11 +3077,61 @@ export interface components {
             /** Document Id */
             document_id?: string | null;
         };
+        /** DocumentResponse */
+        DocumentResponse: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
+            /** Effective Date */
+            effective_date: string;
+            /** Summary */
+            summary: string;
+            /** Draft */
+            draft: boolean;
+            /** Sections */
+            sections: components["schemas"]["SectionResponse"][];
+        };
         /**
          * DocumentStatus
          * @enum {string}
          */
         DocumentStatus: "pending" | "verified" | "rejected";
+        /** DocumentSummary */
+        DocumentSummary: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
+            /** Effective Date */
+            effective_date: string;
+            /** Summary */
+            summary: string;
+            /** Draft */
+            draft: boolean;
+        };
+        /** FaqResponse */
+        FaqResponse: {
+            /** Id */
+            id: string;
+            /** Topic */
+            topic: string;
+            /** Question */
+            question: string;
+            /** Answer */
+            answer: string;
+        };
+        /** FaqsResponse */
+        FaqsResponse: {
+            /** Topics */
+            topics: string[];
+            /** Items */
+            items: components["schemas"]["FaqResponse"][];
+        };
         /** FoodBasketPlanResponse */
         FoodBasketPlanResponse: {
             /** Id */
@@ -3027,6 +3333,11 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** LegalPendingResponse */
+        LegalPendingResponse: {
+            /** Legal Pending */
+            legal_pending: string[];
+        };
         /** LoanApplicationDetailResponse */
         LoanApplicationDetailResponse: {
             /** Id */
@@ -3064,6 +3375,8 @@ export interface components {
             product_data: Record<string, never>;
             /** Submitted At */
             submitted_at: string | null;
+            /** Offer Accepted At */
+            offer_accepted_at?: string | null;
             /** Assigned Officer Id */
             assigned_officer_id: string | null;
             /** Rejection Reason */
@@ -3109,6 +3422,8 @@ export interface components {
             approved_amount: string | null;
             /** Submitted At */
             submitted_at: string | null;
+            /** Offer Accepted At */
+            offer_accepted_at?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -3173,6 +3488,60 @@ export interface components {
             schedule: components["schemas"]["RepaymentScheduleItem"][];
             /** Repayments */
             repayments: components["schemas"]["LoanRepaymentResponse"][];
+        };
+        /** LoanOfferResponse */
+        LoanOfferResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Product Name */
+            product_name: string;
+            /** Principal */
+            principal: string;
+            /** Tenure Months */
+            tenure_months: number;
+            /** Cadence */
+            cadence: string;
+            /** Installments */
+            installments: number;
+            /** Interest Rate Pct Monthly */
+            interest_rate_pct_monthly: string;
+            /** Interest Method */
+            interest_method: string;
+            /** Total Interest */
+            total_interest: string;
+            /** Processing Fee Pct */
+            processing_fee_pct: string;
+            /** Processing Fee */
+            processing_fee: string;
+            /** Total Repayable */
+            total_repayable: string;
+            /** Total Cost Of Credit */
+            total_cost_of_credit: string;
+            /** Late Charge Pct Daily */
+            late_charge_pct_daily: string | null;
+            /** First Payment */
+            first_payment: string;
+            /**
+             * Schedule
+             * @description Estimated from today; final dates are set from the day the loan is paid out.
+             */
+            schedule: components["schemas"]["OfferInstallment"][];
+            /** Payout Bank */
+            payout_bank: string | null;
+            /** Payout Account Masked */
+            payout_account_masked: string | null;
+            /** Payout Account Name */
+            payout_account_name: string | null;
+            /** Agreement Version */
+            agreement_version: string;
+            /** Agreement */
+            agreement: components["schemas"]["SectionResponse"][];
+            /** Terms Hash */
+            terms_hash: string;
+            /** Accepted At */
+            accepted_at: string | null;
+            /** Draft */
+            draft: boolean;
         };
         /** LoanProductResponse */
         LoanProductResponse: {
@@ -3353,6 +3722,18 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** OfferInstallment */
+        OfferInstallment: {
+            /** Installment */
+            installment: number;
+            /**
+             * Due Date
+             * Format: date
+             */
+            due_date: string;
+            /** Amount */
+            amount: string;
         };
         /** OpenSavingsAccountRequest */
         OpenSavingsAccountRequest: {
@@ -3726,6 +4107,13 @@ export interface components {
             /** Accounts */
             accounts: components["schemas"]["SavingsAccountResponse"][];
         };
+        /** SectionResponse */
+        SectionResponse: {
+            /** Heading */
+            heading: string;
+            /** Body */
+            body: string;
+        };
         /**
          * SelfieRequiredResponse
          * @description SMS code accepted; the account opens once a selfie matches the BVN photo.
@@ -3983,6 +4371,36 @@ export interface components {
             phone?: string | null;
             /** Email */
             email?: string | null;
+            /** Whatsapp */
+            whatsapp?: string | null;
+            /** Hours */
+            hours?: string | null;
+        };
+        /** TicketResponse */
+        TicketResponse: {
+            /** Id */
+            id: string;
+            /** Reference */
+            reference: string;
+            /** Category */
+            category: string;
+            /** Message */
+            message: string;
+            /** Related Type */
+            related_type: string | null;
+            /** Related Id */
+            related_id: string | null;
+            /** Status */
+            status: string;
+            /** Reply */
+            reply: string | null;
+            /** Replied At */
+            replied_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** TokenPair */
         TokenPair: {
@@ -4139,6 +4557,13 @@ export interface components {
              * @description Customer's 4-digit transaction PIN
              */
             transaction_pin: string;
+        };
+        /** UpdateTicketRequest */
+        UpdateTicketRequest: {
+            /** Status */
+            status?: ("open" | "in_progress" | "resolved") | null;
+            /** Reply */
+            reply?: string | null;
         };
         /** UpdateWorkflowStagesRequest */
         UpdateWorkflowStagesRequest: {
@@ -7753,6 +8178,328 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_documents_api_v1_legal_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
+                };
+            };
+        };
+    };
+    get_document_api_v1_legal__slug__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_documents_api_v1_legal_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalPendingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_offer_api_v1_loans_me_applications__application_id__offer_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanOfferResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_offer_api_v1_loans_me_applications__application_id__offer_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptOfferRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanOfferResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_faqs_api_v1_support_faqs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaqsResponse"];
+                };
+            };
+        };
+    };
+    my_tickets_api_v1_support_tickets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"][];
+                };
+            };
+        };
+    };
+    create_ticket_api_v1_support_tickets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_ticket_api_v1_support_tickets__ticket_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_tickets_api_v1_admin_support_tickets_get: {
+        parameters: {
+            query?: {
+                status?: ("open" | "in_progress" | "resolved") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTicketPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_ticket_api_v1_admin_support_tickets__ticket_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTicketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

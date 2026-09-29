@@ -64,6 +64,7 @@ export interface ApplicationSummary {
   requested_amount: string | null
   approved_amount: string | null
   submitted_at: string | null
+  offer_accepted_at?: string | null
   created_at: string
 }
 
@@ -110,6 +111,7 @@ export interface ApplicationWorkflowState {
   stage_decisions: StageDecision[]
   processing_duration_seconds: number | null
   submitted_at: string | null
+  offer_accepted_at?: string | null
   approved_at: string | null
   rejected_at: string | null
   disbursed_at: string | null

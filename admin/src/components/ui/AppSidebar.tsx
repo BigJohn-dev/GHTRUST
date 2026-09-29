@@ -4,6 +4,7 @@ import {
   FileText,
   HandCoins,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   Pin,
   Search,
@@ -26,7 +27,12 @@ type NavItem = {
   disabled?: boolean
 }
 
-function buildSections(canManageTeam: boolean, canViewCustomers: boolean, canViewSettings: boolean): { title: string; items: NavItem[] }[] {
+function buildSections(
+  canManageTeam: boolean,
+  canViewCustomers: boolean,
+  canViewSettings: boolean,
+  canViewSupport: boolean,
+): { title: string; items: NavItem[] }[] {
   const systemItems: NavItem[] = []
   if (canManageTeam) {
     systemItems.push({ to: '/team', label: 'Team', icon: <UserCog size={16} /> })
@@ -35,6 +41,9 @@ function buildSections(canManageTeam: boolean, canViewCustomers: boolean, canVie
     systemItems.push({ to: '/customers', label: 'Customers', icon: <Users size={16} /> })
   } else {
     systemItems.push({ to: '/dashboard', label: 'Customers', icon: <Users size={16} />, disabled: true })
+  }
+  if (canViewSupport) {
+    systemItems.push({ to: '/support', label: 'Support', icon: <LifeBuoy size={16} /> })
   }
   if (canViewSettings) {
     systemItems.push({ to: '/settings', label: 'Settings', icon: <Settings size={16} /> })
@@ -93,6 +102,7 @@ export function AppSidebar({ collapsed, pinned, floating, onTogglePin, onNavigat
     hasAnyPermission(staff, ['staff:read', 'role:read']),
     hasPermission(staff, 'loan:read'),
     hasPermission(staff, 'loan:read'),
+    hasPermission(staff, 'support:read'),
   )
 
   // Geometry: 72px rail. Nav rows start 12px in with 16px left padding, so every icon is

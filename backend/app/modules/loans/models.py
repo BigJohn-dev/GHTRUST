@@ -103,6 +103,10 @@ class LoanApplication(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     disbursed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     applicant_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The customer accepted the final loan offer (the key facts and agreement) with their
+    # transaction PIN. Cleared if staff change the terms afterwards.
+    offer_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    offer_terms_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     workflow_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("loan_workflows.id"), nullable=True, index=True

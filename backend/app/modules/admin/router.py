@@ -247,6 +247,7 @@ PERMISSION_GROUPS: list[tuple[str, tuple[str, ...]]] = [
         ),
     ),
     ("Payments", ("payment:read",)),
+    ("Customer support", ("support:read", "support:respond")),
 ]
 
 

@@ -377,6 +377,8 @@ class LoanApplicationDetailResponse(BaseModel):
     universal_form: dict
     product_data: dict
     submitted_at: datetime | None
+    # When the customer accepted the loan offer (needed before payout); null if not (or terms changed).
+    offer_accepted_at: datetime | None = None
     assigned_officer_id: str | None
     rejection_reason: str | None
     guarantors: list[GuarantorResponse]
@@ -409,6 +411,7 @@ class LoanApplicationSummaryResponse(BaseModel):
     requested_amount: Decimal | None
     approved_amount: Decimal | None
     submitted_at: datetime | None
+    offer_accepted_at: datetime | None = None
     created_at: datetime
 
 

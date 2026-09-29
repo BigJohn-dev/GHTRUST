@@ -824,6 +824,12 @@ class LoanService:
             }
             application.approved_tenure_months = payload.tenure_months
 
+        if changes and application.offer_accepted_at:
+            # The customer accepted different terms: they must see and accept the new ones.
+            application.offer_accepted_at = None
+            application.offer_terms_hash = None
+            changes["offer_acceptance"] = {"from": "accepted", "to": "cleared"}
+
         if target == ApplicationStatus.REJECTED and current != ApplicationStatus.REJECTED:
             now = datetime.now(timezone.utc)
             application.status = ApplicationStatus.REJECTED
@@ -1120,6 +1126,7 @@ class LoanService:
             requested_amount=application.requested_amount,
             approved_amount=application.approved_amount,
             submitted_at=application.submitted_at,
+            offer_accepted_at=application.offer_accepted_at,
             created_at=application.created_at,
         )
 
@@ -1308,6 +1315,7 @@ class LoanService:
             universal_form=application.universal_form or {},
             product_data=application.product_data or {},
             submitted_at=application.submitted_at,
+            offer_accepted_at=application.offer_accepted_at,
             assigned_officer_id=application.assigned_officer_id,
             rejection_reason=application.rejection_reason,
             guarantors=[GuarantorResponse.model_validate(g) for g in application.guarantors],

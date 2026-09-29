@@ -116,6 +116,12 @@ class ErrorCode:
     DOCUMENT_INVALID = "DOCUMENT_INVALID"
     DOCUMENTS_NOT_VERIFIED = "DOCUMENTS_NOT_VERIFIED"
     LOAN_NOT_REPAYABLE = "LOAN_NOT_REPAYABLE"
+    OFFER_NOT_AVAILABLE = "OFFER_NOT_AVAILABLE"  # not approved yet, or already paid out / closed
+    OFFER_CHANGED = "OFFER_CHANGED"  # terms changed since the customer loaded them
+    OFFER_NOT_ACCEPTED = "OFFER_NOT_ACCEPTED"  # staff tried to disburse before the customer accepted
+
+    # Legal
+    LEGAL_VERSION_OUTDATED = "LEGAL_VERSION_OUTDATED"
 
 
 class AppError(HTTPException):

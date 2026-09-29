@@ -19,6 +19,9 @@ LOAN_RECORD_REPAYMENT = "loan:record_repayment"
 
 PAYMENT_READ = "payment:read"
 
+SUPPORT_READ = "support:read"
+SUPPORT_RESPOND = "support:respond"
+
 ALL_PERMISSIONS: tuple[str, ...] = (
     STAFF_READ,
     STAFF_CREATE,
@@ -35,6 +38,8 @@ ALL_PERMISSIONS: tuple[str, ...] = (
     LOAN_CONFIGURE_WORKFLOW,
     LOAN_RECORD_REPAYMENT,
     PAYMENT_READ,
+    SUPPORT_READ,
+    SUPPORT_RESPOND,
 )
 
 SUPER_ADMIN_ROLE_NAME = "Super Admin"
