@@ -55,6 +55,33 @@ class DojahSelfieResponse(BaseModel):
     entity: DojahSelfieEntity
 
 
+class DojahLiveness(BaseModel):
+    """POST /api/v1/ml/liveness: is this a live person in front of the camera?"""
+
+    liveness_check: bool | None = None
+    liveness_probability: float | None = None
+
+
+class DojahFace(BaseModel):
+    face_detected: bool | None = None
+    multiface_detected: bool | None = None
+
+
+class DojahLivenessEntity(BaseModel):
+    liveness: DojahLiveness = DojahLiveness()
+    face: DojahFace = DojahFace()
+
+
+class DojahLivenessResponse(BaseModel):
+    entity: DojahLivenessEntity
+
+
+class LivenessResult(BaseModel):
+    live: bool
+    probability: float | None = None
+    reason: str | None = None  # why it failed, for logs only
+
+
 class DojahError(Exception):
     def __init__(self, message: str, status_code: int = 400):
         self.message = message

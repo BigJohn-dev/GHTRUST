@@ -9,7 +9,9 @@ from app.integrations.dojah.schemas import (
     DojahError,
     DojahSelfieEntity,
     DojahSelfieResponse,
+    DojahLivenessResponse,
     DojahSelfieVerification,
+    LivenessResult,
     TransientDojahError,
 )
 
@@ -59,7 +61,7 @@ def _error_text(response: httpx.Response) -> str:
 
 class DojahClient:
     """
-    Dojah KYC (Nigeria): BVN Advanced lookup and BVN selfie verification.
+    Dojah KYC (Nigeria): BVN Advanced lookup, liveness check and BVN selfie verification.
 
     Auth: ``Authorization: <secret key>`` (sent as-is, no ``Bearer``) and ``AppId``.
     Sandbox: DOJAH_BASE_URL=https://sandbox.dojah.io with BVN 22222222222.
@@ -143,3 +145,30 @@ class DojahClient:
         )
         entity: DojahSelfieEntity = DojahSelfieResponse.model_validate(data).entity
         return entity.selfie_verification
+
+    @transient_retry()
+    async def check_liveness(self, image_base64: str, min_probability: float) -> LivenessResult:
+        """
+        POST /api/v1/ml/liveness: was this image taken of a live person (not a printed
+        photo, a screen or a mask)? Exactly one face must be in the picture.
+        """
+        if self._mock:
+            logger.info("dojah_mock_liveness")
+            return LivenessResult(live=True, probability=0.99)
+
+        data = await self._send("POST", "/api/v1/ml/liveness", json={"image": image_base64})
+        entity = DojahLivenessResponse.model_validate(data).entity
+        if entity.face.face_detected is False:
+            return LivenessResult(live=False, reason="no_face")
+        if entity.face.multiface_detected:
+            return LivenessResult(live=False, reason="several_faces")
+        probability = entity.liveness.liveness_probability
+        if probability is not None and probability > 1:
+            probability = probability / 100  # some responses give a percentage
+        if entity.liveness.liveness_check is False:
+            return LivenessResult(live=False, probability=probability, reason="spoof")
+        if probability is not None and probability < min_probability:
+            return LivenessResult(live=False, probability=probability, reason="low_probability")
+        if entity.liveness.liveness_check is None and probability is None:
+            return LivenessResult(live=False, reason="no_result")
+        return LivenessResult(live=True, probability=probability)

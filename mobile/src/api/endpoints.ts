@@ -36,10 +36,16 @@ export const auth = {
   /** With selfie checks on, returns `selfie_required` instead of tokens. */
   verifyRegistration: (bvn: string, otp: string, device: DeviceInfo) =>
     api.post<AuthTokens | SelfieRequired>('/auth/register/verify-otp', { bvn, otp, device }, { auth: false }),
-  registrationSelfie: (registration_token: string, selfie_image: string, device: DeviceInfo) =>
+  /** The live face capture: the main frame plus other frames from the same capture. */
+  registrationSelfie: (
+    registration_token: string,
+    selfie_image: string,
+    liveness_frames: string[],
+    device: DeviceInfo,
+  ) =>
     api.post<AuthTokens>(
       '/auth/register/selfie',
-      { registration_token, selfie_image, device },
+      { registration_token, selfie_image, liveness_frames, device },
       { auth: false, timeoutMs: 60_000 },
     ),
   resendRegistration: (bvn: string) => api.post<OtpSent>('/auth/register/resend-otp', { bvn }, { auth: false }),

@@ -1,35 +1,38 @@
+import type { CameraView } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import * as ImagePicker from 'expo-image-picker';
 
 export class SelfieError extends Error {}
 
-export type Selfie = { uri: string; base64: string };
+/** One frame of the live capture, shrunk to what liveness and face matching need. */
+export type Frame = { uri: string; base64: string };
+
+/** The steps the customer follows in front of the live camera. */
+export type LivenessStep = { key: string; prompt: string; hint: string; holdMs: number };
 
 /**
- * Take a selfie with the front camera (never from the photo library: it must be the
- * person holding the phone) and shrink it to what face matching needs.
- * Returns null when the customer cancels.
+ * Different poses give frames that differ from each other, which a photo held up to
+ * the camera can't do. The last step (looking straight) gives the frame Dojah checks
+ * for liveness and matches to the BVN photo.
  */
-export async function takeSelfie(): Promise<Selfie | null> {
-  const permission = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permission.granted) {
-    throw new SelfieError('Camera access is off. Allow it in Settings to take your selfie.');
-  }
-  const res = await ImagePicker.launchCameraAsync({
-    mediaTypes: ['images'],
-    cameraType: ImagePicker.CameraType.front,
-    allowsEditing: false,
-    quality: 1,
-    exif: false,
-  });
-  if (res.canceled || !res.assets?.[0]) return null;
-  const a = res.assets[0];
-  const context = ImageManipulator.manipulate(a.uri);
-  if (Math.max(a.width, a.height) > 960) {
-    context.resize(a.width >= a.height ? { width: 960, height: null } : { width: null, height: 960 });
+export const LIVENESS_STEPS: LivenessStep[] = [
+  { key: 'blink', prompt: 'Blink slowly', hint: 'Keep your face inside the oval', holdMs: 1800 },
+  { key: 'turn', prompt: 'Turn your head slightly to the left', hint: 'Just a little, then hold', holdMs: 2000 },
+  { key: 'straight', prompt: 'Look straight at the camera', hint: 'Hold still', holdMs: 1800 },
+];
+
+/** Seconds for "position your face" before the first prompt. */
+export const SETTLE_MS = 1500;
+
+/** Take one frame from the live camera, silently, and prepare it for upload. */
+export async function captureFrame(camera: CameraView): Promise<Frame> {
+  const shot = await camera.takePictureAsync({ quality: 0.8, shutterSound: false, exif: false });
+  if (!shot?.uri) throw new SelfieError("We couldn't read the camera. Please try again.");
+  const context = ImageManipulator.manipulate(shot.uri);
+  if (Math.max(shot.width, shot.height) > 960) {
+    context.resize(shot.width >= shot.height ? { width: 960, height: null } : { width: null, height: 960 });
   }
   const image = await context.renderAsync();
   const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.8, base64: true });
-  if (!saved.base64) throw new SelfieError("We couldn't process that photo. Please try again.");
+  if (!saved.base64) throw new SelfieError("We couldn't read the camera. Please try again.");
   return { uri: saved.uri, base64: saved.base64 };
 }

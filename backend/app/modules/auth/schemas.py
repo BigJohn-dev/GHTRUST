@@ -100,7 +100,19 @@ class RegistrationSelfieRequest(BaseModel):
         ...,
         min_length=1000,
         max_length=4_000_000,
-        description="JPEG/PNG, base64 (a data: URL prefix is accepted and removed). Face the camera in good light.",
+        description=(
+            "JPEG/PNG, base64 (a data: URL prefix is accepted and removed): the frame taken "
+            "while the customer looks straight at the live camera, in good light."
+        ),
+    )
+    liveness_frames: list[str] = Field(
+        default_factory=list,
+        max_length=3,
+        description=(
+            "Other frames from the same live capture (e.g. after a blink or a slight turn). "
+            "They must differ from each other and from `selfie_image`, which a replayed "
+            "still photo can't do."
+        ),
     )
     device: DeviceInfo | None = None
 
