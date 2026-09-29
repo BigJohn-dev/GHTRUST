@@ -20,9 +20,10 @@ const RESEND_AFTER_S = 60;
 export default function Verify() {
   const { signIn } = useSession();
   const pending = pendingOtp.get();
-  // Test mode (dev build, no SMS provider yet): the code arrives with the response.
-  const [otp, setOtp] = useState(pending?.devCode ?? '');
-  const testMode = !!pending?.devCode;
+  const [otp, setOtp] = useState('');
+  // Test servers with texts switched off send the code back so it can be read here.
+  // It is shown, never typed in for the customer: they always enter the code themselves.
+  const [testCode, setTestCode] = useState(pending?.devCode ?? null);
   const [cooldown, setCooldown] = useState(RESEND_AFTER_S);
   const [notice, setNotice] = useState<string | null>(null);
   const submitted = useRef('');
@@ -80,7 +81,8 @@ export default function Verify() {
       return pending.mode === 'register' ? auth.resendRegistration(pending.bvn) : auth.resendLogin(pending.phone);
     },
     onSuccess: (res) => {
-      setOtp(testModeCode(res.dev_code) ?? '');
+      setOtp('');
+      setTestCode(testModeCode(res.dev_code));
       verify.reset();
       setCooldown(RESEND_AFTER_S);
       setNotice(`A new code was sent to ${res.phone_masked}.`);
@@ -122,8 +124,8 @@ export default function Verify() {
       </Text>
 
       {error ? <Banner message={messageFor(error)} /> : notice ? <Banner tone="info" message={notice} /> : null}
-      {testMode && !error ? (
-        <Banner tone="info" message="Test mode: text messages aren't switched on yet, so your code was filled in for you." />
+      {testCode && !error ? (
+        <Banner tone="info" message={`Test mode: text messages aren't switched on yet. Your code is ${testCode}.`} />
       ) : null}
 
       <View style={styles.otp}>

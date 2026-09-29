@@ -35,7 +35,7 @@ export default function Register() {
   });
 
   const error = submit.error;
-  const exists = error instanceof ApiError && error.code === 'ACCOUNT_EXISTS';
+  const exists = error instanceof ApiError && ['ACCOUNT_EXISTS', 'PHONE_IN_USE'].includes(error.code);
 
   return (
     <Screen

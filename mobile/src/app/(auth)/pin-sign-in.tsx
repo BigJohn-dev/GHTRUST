@@ -79,14 +79,8 @@ export default function PinSignIn() {
             router.push('/sign-in');
           }}
         />
-        <Button title="Use an SMS code" variant="ghost" size="sm" onPress={() => router.push('/sign-in')} />
+        <Button title="Switch account" variant="ghost" size="sm" onPress={() => forget()} />
       </View>
-      <Button
-        title={firstName ? `Not ${firstName}? Use another account` : 'Use another account'}
-        variant="ghost"
-        size="sm"
-        onPress={() => forget()}
-      />
     </Screen>
   );
 }
