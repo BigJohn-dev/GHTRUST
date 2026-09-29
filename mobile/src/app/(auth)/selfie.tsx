@@ -6,7 +6,7 @@ import { Linking, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { auth } from '@/api/endpoints';
-import { ApiError, messageFor } from '@/api/errors';
+import { ApiError, messageFor, waitPhrase } from '@/api/errors';
 import { deviceInfo } from '@/auth/device';
 import { pendingSelfie } from '@/auth/pending';
 import { useSession } from '@/auth/session';
@@ -35,7 +35,8 @@ export default function SelfieStep() {
   const [error, setError] = useState<string | null>(null);
   const [cameraOff, setCameraOff] = useState(false);
   const [left, setLeft] = useState(pending?.attemptsLeft ?? 0);
-  const [ended, setEnded] = useState<'branch' | 'expired' | null>(null);
+  const [ended, setEnded] = useState<'cooldown' | 'expired' | null>(null);
+  const [wait, setWait] = useState(0);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -65,7 +66,10 @@ export default function SelfieStep() {
       await signIn(tokens); // the app then asks them to create their PINs
     } catch (err) {
       setPhoto(null);
-      if (err instanceof ApiError && err.code === 'SELFIE_ATTEMPTS_EXCEEDED') setEnded('branch');
+      if (err instanceof ApiError && err.code === 'SELFIE_COOLDOWN') {
+        setWait(err.waitSeconds ?? 3600);
+        setEnded('cooldown');
+      }
       else if (err instanceof ApiError && err.code === 'REGISTRATION_EXPIRED') setEnded('expired');
       else {
         if (err instanceof ApiError && err.attemptsLeft !== undefined) setLeft(err.attemptsLeft);
@@ -92,15 +96,15 @@ export default function SelfieStep() {
         }>
         <View style={styles.center}>
           <View style={[styles.badge, { backgroundColor: colors.warningBg }]}>
-            <Ionicons name={ended === 'expired' ? 'time-outline' : 'business-outline'} size={34} color={colors.warning} />
+            <Ionicons name={ended === 'expired' ? 'time-outline' : 'hourglass-outline'} size={34} color={colors.warning} />
           </View>
           <Text variant="title" align="center">
-            {ended === 'expired' ? 'Sign-up expired' : 'Visit a branch to finish'}
+            {ended === 'expired' ? 'Sign-up expired' : 'Take a short break'}
           </Text>
           <Text muted align="center">
             {ended === 'expired'
               ? 'For your security, this sign-up timed out. Start again with your BVN.'
-              : "We couldn't match your selfie to your BVN photo. Bring a valid ID to any GH Trust branch and we'll open your account there."}
+              : `We couldn't match your selfie to your BVN photo after ${pending.attemptsLeft} tries. For your security, you can start again with your BVN ${waitPhrase(wait)}. Use good light and look straight at the camera.`}
           </Text>
         </View>
       </Screen>

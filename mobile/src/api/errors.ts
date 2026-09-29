@@ -14,6 +14,12 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 
+  /** Seconds until a cooldown ends (Retry-After header, or `retry_after` in the body). */
+  get waitSeconds(): number | undefined {
+    const n = this.details.find((d) => typeof d?.retry_after === 'number')?.retry_after;
+    return typeof n === 'number' ? n : this.retryAfter;
+  }
+
   /** Wrong PIN / code: how many tries remain, when the server says. */
   get attemptsLeft(): number | undefined {
     const n = this.details.find((d) => typeof d?.attempts_left === 'number')?.attempts_left;
@@ -53,7 +59,7 @@ const COPY: Record<string, string> = {
   REGISTRATION_EXPIRED: 'This sign-up has expired. Please start again with your BVN.',
   SELFIE_UNREADABLE: "We couldn't see your face clearly. Retake it facing the camera in good light.",
   SELFIE_NO_MATCH: "Your selfie didn't match your BVN photo. Try again in good light, without glasses or a cap.",
-  SELFIE_ATTEMPTS_EXCEEDED: "We couldn't match your selfie to your BVN photo. Please visit a GH Trust branch to open your account.",
+  SELFIE_COOLDOWN: "Too many selfie attempts with this BVN. For your security, please wait before trying again.",
   TOKEN_INVALID: 'Please sign in again to continue.',
   SESSION_REVOKED: 'You were signed out. Please sign in again.',
   SESSION_IDLE_TIMEOUT: 'You were signed out after a period of inactivity. Please sign in again.',
@@ -131,10 +137,21 @@ function logForDevelopers(error: unknown) {
   }
 }
 
+/** "in 45 minutes" / "in about an hour" / "at 3:40 PM" style phrasing for a wait. */
+export function waitPhrase(seconds: number): string {
+  const minutes = Math.max(1, Math.ceil(seconds / 60));
+  if (minutes < 60) return `in ${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const at = new Date(Date.now() + seconds * 1000);
+  return `after ${at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
 /** A message that is safe to show a customer, whatever went wrong. */
 export function messageFor(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
   logForDevelopers(error);
   if (!(error instanceof ApiError)) return fallback;
+  if (error.code === 'SELFIE_COOLDOWN' && error.waitSeconds) {
+    return `Too many selfie attempts with this BVN. For your security, you can try again ${waitPhrase(error.waitSeconds)}.`;
+  }
   const base = COPY[error.code] ?? byStatus(error.status) ?? fallback;
   const left = error.attemptsLeft;
   return left !== undefined && left > 0 ? `${base} ${left} ${left === 1 ? 'try' : 'tries'} left.` : base;
