@@ -73,8 +73,9 @@ async def verify_registration_otp(
     summary="Match a selfie to the BVN photo and open the account",
     description=(
         "Dojah compares the selfie with the BVN photo. A match opens the account and signs the "
-        "device in; `SELFIE_NO_MATCH` includes `attempts_left`; after the last attempt "
-        "(`SELFIE_ATTEMPTS_EXCEEDED`) the customer must visit a branch."
+        "device in; `SELFIE_NO_MATCH` includes `attempts_left`. After the last attempt the BVN "
+        "cools down (`SELFIE_COOLDOWN`, 429 with `Retry-After` and `retry_after` seconds): "
+        "sign-up can start again once it ends."
     ),
 )
 async def verify_registration_selfie(

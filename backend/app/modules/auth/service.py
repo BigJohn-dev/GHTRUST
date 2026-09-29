@@ -59,6 +59,21 @@ def _selfie_key(token: str) -> str:
     return f"register:selfie:{hash_token(token)}"
 
 
+def _selfie_cooldown_key(bvn: str) -> str:
+    return f"register:selfie:cooldown:{hash_token(bvn)}"
+
+
+def _cooldown_error(seconds: int) -> AppError:
+    minutes = max(1, -(-seconds // 60))
+    return AppError(
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        ErrorCode.SELFIE_COOLDOWN,
+        f"Too many selfie attempts. Please try again in {minutes} minute(s).",
+        errors=[{"retry_after": seconds}],
+        headers={"Retry-After": str(seconds)},
+    )
+
+
 def _clean_selfie(image: str) -> str:
     """Base64 without a data: URL prefix, checked to be a JPEG or PNG of sensible size."""
     image = image.strip()
@@ -89,10 +104,18 @@ class AuthService:
         self.dojah = DojahClient()
         self.otp = OtpService(redis)
 
+    async def _check_selfie_cooldown(self, bvn: str) -> None:
+        """After too many failed selfies a BVN waits out a cooldown before trying again."""
+        ttl = await self.redis.ttl(_selfie_cooldown_key(bvn))
+        if ttl and ttl > 0:
+            raise _cooldown_error(ttl)
+
     async def register_with_bvn(self, bvn: str, *, ip: str) -> OtpSentResponse:
         bvn = _validate_bvn(bvn)
         limiter = RateLimiter(self.redis)
         await limiter.check_bvn_registration(ip, bvn)
+        # Checked before the (paid) BVN lookup.
+        await self._check_selfie_cooldown(bvn)
 
         existing = await self.db.execute(select(Customer).where(Customer.bvn == bvn))
         customer = existing.scalar_one_or_none()
@@ -204,6 +227,7 @@ class AuthService:
             raise AppError(status.HTTP_403_FORBIDDEN, ErrorCode.ACCOUNT_RESTRICTED, "Account cannot be opened at this time. Please visit a branch.")
 
         if settings.dojah_selfie_required:
+            await self._check_selfie_cooldown(bvn)
             # The code proves they hold the BVN's phone; a selfie proves they're its owner.
             token = secrets.token_urlsafe(32)
             await self.redis.set(
@@ -270,12 +294,12 @@ class AuthService:
                 attempts_left=left,
             )
             if left <= 0:
+                # Out of tries: this BVN cools down before sign-up can start again.
+                cooldown = settings.dojah_selfie_cooldown_minutes * 60
                 await self.redis.delete(key)
-                raise AppError(
-                    status.HTTP_403_FORBIDDEN,
-                    ErrorCode.SELFIE_ATTEMPTS_EXCEEDED,
-                    "Your selfie didn't match your BVN photo. Please visit a branch to open your account.",
-                )
+                await self.redis.set(_selfie_cooldown_key(ticket["bvn"]), "1", ex=cooldown)
+                logger.warning("registration_selfie_cooldown", customer_id=customer.id, seconds=cooldown)
+                raise _cooldown_error(cooldown)
             ttl = await self.redis.ttl(key)
             await self.redis.set(key, json.dumps(ticket), ex=max(ttl, 1))
             raise AppError(

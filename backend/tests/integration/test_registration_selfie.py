@@ -74,7 +74,9 @@ class TestSelfieStep:
         assert again.status_code == 410
         assert again.json()["code"] == "REGISTRATION_EXPIRED"
 
-    async def test_no_match_counts_down_then_sends_to_branch(self, api_client, db_session, monkeypatch):
+    async def test_no_match_counts_down_then_cools_down_for_an_hour(
+        self, api_client, db_session, fake_redis, monkeypatch
+    ):
         _selfie_on(monkeypatch, attempts=2)
         token = (await _start(api_client))["registration_token"]
         with patch(VERIFY, AsyncMock(return_value=DojahSelfieVerification(confidence_value=41.0, match=False))):
@@ -83,11 +85,36 @@ class TestSelfieStep:
             assert first.json()["code"] == "SELFIE_NO_MATCH"
             assert first.json()["errors"] == [{"attempts_left": 1}]
             last = await _selfie(api_client, token)
-            assert last.status_code == 403
-            assert last.json()["code"] == "SELFIE_ATTEMPTS_EXCEEDED"
-            gone = await _selfie(api_client, token)
-            assert gone.json()["code"] == "REGISTRATION_EXPIRED"
+        assert last.status_code == 429
+        assert last.json()["code"] == "SELFIE_COOLDOWN"
+        assert last.json()["errors"] == [{"retry_after": 3600}]
+        assert last.headers["Retry-After"] == "3600"
         assert (await _customer(db_session)).status == CustomerStatus.PENDING_OTP
+
+        # The ticket is spent, and the BVN can't start sign-up again (no paid lookup) until it ends.
+        assert (await _selfie(api_client, token)).json()["code"] == "REGISTRATION_EXPIRED"
+        with patch("app.integrations.dojah.client.DojahClient.lookup_bvn_advanced", AsyncMock()) as lookup:
+            again = await api_client.post("/api/v1/auth/register/bvn", json={"bvn": TEST_BVN})
+        assert again.status_code == 429
+        assert again.json()["code"] == "SELFIE_COOLDOWN"
+        assert 3500 < again.json()["errors"][0]["retry_after"] <= 3600
+        lookup.assert_not_awaited()
+
+        # Once the hour is up, they can start again.
+        for key in await fake_redis.keys("register:selfie:cooldown:*"):
+            await fake_redis.delete(key)
+        restarted = await _start(api_client)
+        assert restarted["status"] == "selfie_required"
+        assert restarted["attempts_left"] == 2
+
+    async def test_cooldown_length_is_configurable(self, api_client, monkeypatch):
+        _selfie_on(monkeypatch, attempts=1)
+        monkeypatch.setenv("DOJAH_SELFIE_COOLDOWN_MINUTES", "15")
+        refresh_settings()
+        token = (await _start(api_client))["registration_token"]
+        with patch(VERIFY, AsyncMock(return_value=DojahSelfieVerification(confidence_value=10, match=False))):
+            res = await _selfie(api_client, token)
+        assert res.json()["errors"] == [{"retry_after": 900}]
 
     async def test_unreadable_images_are_rejected_before_dojah(self, api_client, monkeypatch):
         _selfie_on(monkeypatch)
