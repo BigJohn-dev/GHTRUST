@@ -13,7 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { Loan, Wallet } from '@/api/types';
-import { productName } from '@/components/loans';
+import { productName } from '@/lib/products';
 import { Skeleton } from '@/components/States';
 import { Text } from '@/components/Text';
 import { naira, relativeDue } from '@/lib/format';

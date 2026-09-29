@@ -1,0 +1,17 @@
+# Start a business loan application and leave it as a draft; Home then nudges to finish it.
+appId: ng.ghtrust.app
+name: Start an application
+---
+- tapOn: "Apply for a loan"
+- extendedWaitUntil:
+    visible: "Business [Ll]oan"
+    timeout: 20000
+- tapOn: "Business [Ll]oan"
+- extendedWaitUntil:
+    visible: "About you"
+    timeout: 20000
+- back
+- back
+- extendedWaitUntil:
+    visible: "Finish your application"
+    timeout: 20000

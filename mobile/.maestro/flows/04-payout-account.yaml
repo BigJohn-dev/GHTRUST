@@ -1,0 +1,32 @@
+# Withdraw with no bank account saved → add one (name check) → create the transaction PIN.
+appId: ng.ghtrust.app
+name: Add a payout account
+env:
+  TXN_PIN: "2580"
+---
+- tapOn: "Wallet"
+- tapOn: "Withdraw"
+- tapOn: "Add bank account"
+- tapOn: "Choose your bank"
+- tapOn: "Search"
+- inputText: "Guaranty"
+- tapOn: "Guaranty Trust Bank"
+- tapOn: "10-digit NUBAN"
+- inputText: "0123456789"
+- extendedWaitUntil:
+    visible: "Account name"
+    timeout: 20000
+- tapOn: "Save account"
+# First money action: the transaction PIN is created here, then the save goes through.
+- runFlow:
+    file: ../subflows/enter-pin.yaml
+    env:
+      PIN: ${TXN_PIN}
+- runFlow:
+    file: ../subflows/enter-pin.yaml
+    env:
+      PIN: ${TXN_PIN}
+- extendedWaitUntil:
+    visible: "Available to withdraw"
+    timeout: 20000
+- back

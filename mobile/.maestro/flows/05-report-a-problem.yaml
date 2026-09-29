@@ -1,0 +1,17 @@
+# Help & support → report a problem → see the request.
+appId: ng.ghtrust.app
+name: Report a problem
+---
+- tapOn: "Home"
+- tapOn: "Help & support"
+- tapOn: "Report a problem"
+- tapOn: "Payments.*"
+- tapOn: "Tell us what happened"
+- inputText: "Test report from the end-to-end suite."
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "We've got it"
+    timeout: 20000
+- tapOn: "View request"
+- assertVisible: "GHT-.*"

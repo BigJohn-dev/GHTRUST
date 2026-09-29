@@ -1,0 +1,10 @@
+# Types ${PIN} on the PIN pad, one key at a time.
+appId: ng.ghtrust.app
+---
+- evalScript: ${output.digits = PIN.split('')}
+- repeat:
+    times: ${output.digits.length}
+    commands:
+      - evalScript: ${output.key = output.digits.shift()}
+      - tapOn:
+          text: ${output.key}

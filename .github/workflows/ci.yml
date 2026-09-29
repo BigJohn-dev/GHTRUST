@@ -126,6 +126,7 @@ jobs:
       - run: pip install -r ../backend/requirements.txt
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm test -- --ci
       # The app's types are generated from the backend. If an API change isn't
       # reflected here (npm run gen:api), the app would be built against a stale contract.
       - name: API types match the backend

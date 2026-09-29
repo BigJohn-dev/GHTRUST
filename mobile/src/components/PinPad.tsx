@@ -14,6 +14,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { useSecureScreen } from '@/lib/useSecureScreen';
 import { colors, font, space } from '@/theme/tokens';
 
 import { Text } from './Text';
@@ -42,6 +43,7 @@ function tap() {
 }
 
 export function PinPad({ value, onChange, length, onComplete, error, shakeKey, disabled, sideKey }: Props) {
+  useSecureScreen('pin-pad');
   const shake = useSharedValue(0);
 
   useEffect(() => {

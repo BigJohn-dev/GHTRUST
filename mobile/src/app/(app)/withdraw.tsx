@@ -18,10 +18,11 @@ import { Text } from '@/components/Text';
 import { TransactionPinSheet } from '@/components/TransactionPinSheet';
 import { shortAccount } from '@/lib/activity';
 import { dateTime, naira } from '@/lib/format';
+import { MIN_WITHDRAWAL, withdrawalError } from '@/lib/loans';
 import { keys, useWallet } from '@/lib/queries';
 import { colors, font, radius, space } from '@/theme/tokens';
 
-const MIN = 100;
+const MIN = MIN_WITHDRAWAL;
 
 /** Move money from the wallet to the customer's saved bank account. */
 export default function Withdraw() {
@@ -119,9 +120,7 @@ export default function Withdraw() {
   // Wrong or locked PINs are shown in the PIN sheet itself.
   const pinError = send.error instanceof ApiError && send.error.code.startsWith('TRANSACTION_PIN_');
 
-  let error: string | null = null;
-  if (amount && value < MIN) error = `The least you can withdraw is ${naira(MIN)}.`;
-  else if (value > balance) error = `You have ${naira(balance, { kobo: true })} available.`;
+  const error = withdrawalError(amount, balance);
 
   return (
     <Screen

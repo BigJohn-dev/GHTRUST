@@ -17,11 +17,11 @@ import { Banner, CardSkeleton, ErrorState } from '@/components/States';
 import { Text } from '@/components/Text';
 import { TransactionPinSheet } from '@/components/TransactionPinSheet';
 import { naira } from '@/lib/format';
-import { nextInstallment } from '@/lib/loans';
+import { nextInstallment, repaymentAmount, repaymentError, walletShortfall, type RepayChoice } from '@/lib/loans';
 import { keys, useLoan, useWallet } from '@/lib/queries';
 import { colors, font, radius, space } from '@/theme/tokens';
 
-type Choice = 'next' | 'all' | 'custom';
+type Choice = RepayChoice;
 
 export default function Repay() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,15 +36,10 @@ export default function Repay() {
 
   const l = loan.data;
   const next = l ? nextInstallment(l.schedule) : undefined;
-  const amount =
-    choice === 'next' ? (next?.amount_due ?? '0') : choice === 'all' ? (l?.outstanding ?? '0') : custom || '0';
-  const value = Number(amount);
+  const value = repaymentAmount(choice, l, custom);
   const balance = wallet.data?.available_balance ?? 0;
   const outstanding = Number(l?.outstanding ?? 0);
-
-  let error: string | null = null;
-  if (choice === 'custom' && custom && value <= 0) error = 'Enter an amount.';
-  else if (value > outstanding) error = `You only owe ${naira(outstanding)}.`;
+  const error = repaymentError(choice, custom, value, outstanding);
 
   const pay = useMutation({
     mutationFn: (pin: string) => loans.repay(id, value.toFixed(2), pin, key.current),
@@ -109,9 +104,9 @@ export default function Repay() {
       footer={
         short ? (
           <Button
-            title={`Add ${naira(Math.ceil(value - balance))} to wallet`}
+            title={`Add ${naira(walletShortfall(value, balance))} to wallet`}
             icon="add"
-            onPress={() => router.push({ pathname: '/fund', params: { amount: String(Math.ceil(value - balance)) } })}
+            onPress={() => router.push({ pathname: '/fund', params: { amount: String(walletShortfall(value, balance)) } })}
           />
         ) : (
           <Button

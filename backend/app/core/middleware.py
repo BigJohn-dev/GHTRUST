@@ -3,6 +3,7 @@
 import re
 import uuid
 
+import sentry_sdk
 import structlog
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -44,6 +45,8 @@ class RequestIDMiddleware:
         structlog.contextvars.bind_contextvars(
             request_id=request_id, path=scope.get("path"), method=scope.get("method")
         )
+        # Errors reported to Sentry carry the same ID as the logs and the app's crash report.
+        sentry_sdk.get_isolation_scope().set_tag("request_id", request_id)
 
         async def send_with_id(message: Message) -> None:
             if message["type"] == "http.response.start":

@@ -1,0 +1,19 @@
+# The optional setup offers (transaction PIN, biometrics, notifications) depend on the
+# phone; skip whichever appear.
+appId: ng.ghtrust.app
+---
+- runFlow:
+    when:
+      visible: "I'll do it later"
+    commands:
+      - tapOn: "I'll do it later"
+- runFlow:
+    when:
+      visible: "Not now"
+    commands:
+      - tapOn: "Not now"
+- runFlow:
+    when:
+      visible: "Not now"
+    commands:
+      - tapOn: "Not now"

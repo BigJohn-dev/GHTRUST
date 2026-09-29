@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { reportError } from '@/lib/monitoring';
 import { hideSplash } from '@/lib/splash';
 import { colors, HIT, radius, space } from '@/theme/tokens';
 
@@ -15,6 +16,7 @@ export function CrashScreen({ error, retry }: ErrorBoundaryProps) {
   useEffect(() => {
     hideSplash(); // a crash during start-up must not leave the splash stuck
     if (__DEV__) console.log('[app] screen crashed', error); // terminal only
+    reportError(error, { where: 'screen' });
   }, [error]);
 
   return (

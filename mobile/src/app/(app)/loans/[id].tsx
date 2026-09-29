@@ -5,7 +5,7 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Card, Row, SectionHeader } from '@/components/Card';
-import { productName } from '@/components/loans';
+import { productName } from '@/lib/products';
 import { Screen } from '@/components/Screen';
 import { CardSkeleton, ErrorState, ProgressBar } from '@/components/States';
 import { Text } from '@/components/Text';
