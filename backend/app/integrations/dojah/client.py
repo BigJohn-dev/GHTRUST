@@ -7,6 +7,9 @@ from app.integrations.dojah.schemas import (
     DojahBvnEntity,
     DojahBvnResponse,
     DojahError,
+    DojahSelfieEntity,
+    DojahSelfieResponse,
+    DojahSelfieVerification,
     TransientDojahError,
 )
 
@@ -41,11 +44,32 @@ MOCK_ENTITY = DojahBvnEntity(
     image=None,
 )
 
+UNAVAILABLE = "BVN verification is temporarily unavailable. Please try again shortly."
+
+
+def _error_text(response: httpx.Response) -> str:
+    try:
+        body = response.json()
+    except ValueError:
+        return response.text[:200]
+    if isinstance(body, dict):
+        return str(body.get("error") or body.get("message") or body)[:200]
+    return str(body)[:200]
+
 
 class DojahClient:
     """
-    Dojah BVN Advanced lookup.
-    Docs: https://docs.dojah.io/docs/nigeria/lookup-bvn#bvn-advanced
+    Dojah KYC (Nigeria): BVN Advanced lookup and BVN selfie verification.
+
+    Auth: ``Authorization: <secret key>`` (sent as-is, no ``Bearer``) and ``AppId``.
+    Sandbox: DOJAH_BASE_URL=https://sandbox.dojah.io with BVN 22222222222.
+
+    How Dojah's statuses are handled:
+      400  their answer: "BVN not found" → not found; otherwise a bad request (e.g. image)
+      401  our keys are wrong · 402 our Dojah wallet is empty → ops alert, customer told
+           to try later (not their fault, and retrying can't fix it)
+      404  no record for that BVN
+      424  upstream (NIBSS) unavailable · 429 rate limited · 5xx → retried, then "try later"
     """
 
     def __init__(self):
@@ -53,42 +77,69 @@ class DojahClient:
         self.app_id = settings.dojah_app_id
         self.secret_key = settings.dojah_secret_key
 
+    @property
+    def _mock(self) -> bool:
+        return settings.dojah_mock or not settings.dojah_enabled
+
+    async def _send(self, method: str, path: str, **kwargs) -> dict:
+        headers = {"AppId": self.app_id, "Authorization": self.secret_key}
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.request(method, f"{self.base_url}{path}", headers=headers, **kwargs)
+        except httpx.HTTPError as exc:
+            logger.warning("dojah_transport_error", path=path, error=str(exc))
+            raise TransientDojahError(UNAVAILABLE, status_code=503) from exc
+
+        status = response.status_code
+        if status < 400:
+            return response.json()
+
+        text = _error_text(response)
+        if status == 404 or (status == 400 and "not found" in text.lower()):
+            raise DojahError("BVN not found or invalid", status_code=404)
+        if status == 400:
+            raise DojahError(text or "Bad request", status_code=400)
+        if status in (401, 403):
+            logger.critical("dojah_auth_failed", path=path, status=status, detail=text)
+            raise DojahError(UNAVAILABLE, status_code=503)
+        if status == 402:
+            logger.critical("dojah_wallet_insufficient", path=path, detail=text)
+            raise DojahError(UNAVAILABLE, status_code=503)
+        if status in (424, 429) or status >= 500:
+            logger.error("dojah_unavailable", path=path, status=status, detail=text)
+            raise TransientDojahError(UNAVAILABLE, status_code=503)
+        logger.error("dojah_api_error", path=path, status=status, detail=text)
+        raise DojahError(UNAVAILABLE, status_code=503)
+
     @transient_retry()
     async def lookup_bvn_advanced(self, bvn: str) -> DojahBvnEntity:
-        if settings.dojah_mock or not settings.dojah_enabled:
+        """GET /api/v1/kyc/bvn/advance: the full record incl. enrollment, residence and origin."""
+        if self._mock:
             logger.info("dojah_mock_lookup", bvn=bvn[:3] + "****")
             update = {"bvn": bvn}
             if settings.dojah_mock_phone:
                 update["phone_number1"] = settings.dojah_mock_phone
-            entity = MOCK_ENTITY.model_copy(update=update)
-            return entity
+            return MOCK_ENTITY.model_copy(update=update)
 
-        url = f"{self.base_url}/api/v1/kyc/bvn/advance"
-        headers = {
-            "AppId": self.app_id,
-            "Authorization": self.secret_key,
-        }
-        params = {"bvn": bvn}
+        data = await self._send("GET", "/api/v1/kyc/bvn/advance", params={"bvn": bvn})
+        entity = DojahBvnResponse.model_validate(data).entity
+        # Dojah masks the BVN in the response; keep the one we asked about.
+        return entity.model_copy(update={"bvn": bvn})
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, headers=headers, params=params)
-        except httpx.HTTPError as exc:
-            logger.warning("dojah_transport_error", error=str(exc))
-            raise TransientDojahError(
-                "BVN verification is temporarily unavailable. Please try again.", status_code=502
-            ) from exc
+    @transient_retry()
+    async def verify_bvn_selfie(self, bvn: str, selfie_base64: str, threshold: int) -> DojahSelfieVerification:
+        """
+        POST /api/v1/kyc/bvn/verify: does this selfie match the BVN photo?
+        ``match`` is true only when the confidence is at or above ``threshold`` (50–100).
+        """
+        if self._mock:
+            logger.info("dojah_mock_selfie", bvn=bvn[:3] + "****")
+            return DojahSelfieVerification(confidence_value=97.5, match=True)
 
-        if response.status_code == 404:
-            raise DojahError("BVN not found or invalid", status_code=404)
-        if response.status_code >= 500:
-            logger.error("dojah_api_unavailable", status=response.status_code)
-            raise TransientDojahError(
-                "BVN verification is temporarily unavailable. Please try again.", status_code=502
-            )
-        if response.status_code >= 400:
-            logger.error("dojah_api_error", status=response.status_code, body=response.text[:200])
-            raise DojahError("BVN verification failed. Please try again.", status_code=502)
-
-        data = DojahBvnResponse.model_validate(response.json())
-        return data.entity
+        data = await self._send(
+            "POST",
+            "/api/v1/kyc/bvn/verify",
+            json={"bvn": bvn, "selfie_image": selfie_base64, "threshold": threshold},
+        )
+        entity: DojahSelfieEntity = DojahSelfieResponse.model_validate(data).entity
+        return entity.selfie_verification

@@ -84,6 +84,8 @@ def _test_env(monkeypatch):
     monkeypatch.setenv("SMS_MOCK", "true")
     # Never inherit a developer's local test-mode phone from backend/.env.
     monkeypatch.setenv("DOJAH_MOCK_PHONE", "")
+    # Most tests open accounts in one step; the selfie step has its own tests.
+    monkeypatch.setenv("DOJAH_SELFIE_REQUIRED", "false")
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-for-jwt-and-otp-hashing")
     monkeypatch.setenv("OTP_LENGTH", "6")
     monkeypatch.setenv("OTP_EXPIRE_SECONDS", "600")

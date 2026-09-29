@@ -55,9 +55,29 @@ export interface paths {
         put?: never;
         /**
          * Verify registration OTP
-         * @description Activates the account and signs the device in. Send `device` from mobile clients.
+         * @description With selfie checks on (the default) returns `status: selfie_required` and a `registration_token` for `/auth/register/selfie`; otherwise opens the account and signs the device in. Send `device` from mobile clients.
          */
         post: operations["verify_registration_otp_api_v1_auth_register_verify_otp_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register/selfie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match a selfie to the BVN photo and open the account
+         * @description Dojah compares the selfie with the BVN photo. A match opens the account and signs the device in; `SELFIE_NO_MATCH` includes `attempts_left`; after the last attempt (`SELFIE_ATTEMPTS_EXCEEDED`) the customer must visit a branch.
+         */
+        post: operations["verify_registration_selfie_api_v1_auth_register_selfie_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3331,6 +3351,17 @@ export interface components {
             /** Refresh Token */
             refresh_token: string;
         };
+        /** RegistrationSelfieRequest */
+        RegistrationSelfieRequest: {
+            /** Registration Token */
+            registration_token: string;
+            /**
+             * Selfie Image
+             * @description JPEG/PNG, base64 (a data: URL prefix is accepted and removed). Face the camera in good light.
+             */
+            selfie_image: string;
+            device?: components["schemas"]["DeviceInfo"] | null;
+        };
         /**
          * RepaymentCadence
          * @enum {string}
@@ -3501,6 +3532,29 @@ export interface components {
             active_accounts: number;
             /** Accounts */
             accounts: components["schemas"]["SavingsAccountResponse"][];
+        };
+        /**
+         * SelfieRequiredResponse
+         * @description SMS code accepted; the account opens once a selfie matches the BVN photo.
+         */
+        SelfieRequiredResponse: {
+            /**
+             * Status
+             * @default selfie_required
+             * @constant
+             */
+            status: "selfie_required";
+            /**
+             * Registration Token
+             * @description Send with the selfie. Single use; keep in memory only.
+             */
+            registration_token: string;
+            /** Expires In */
+            expires_in: number;
+            /** Attempts Left */
+            attempts_left: number;
+            /** First Name */
+            first_name: string;
         };
         /** SessionResponse */
         SessionResponse: {
@@ -4179,6 +4233,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VerifyRegistrationOtpRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokenResponse"] | components["schemas"]["SelfieRequiredResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_registration_selfie_api_v1_auth_register_selfie_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationSelfieRequest"];
             };
         };
         responses: {

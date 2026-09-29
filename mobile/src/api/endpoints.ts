@@ -21,6 +21,7 @@ import type {
   Profile,
   Repayment,
   ResolvedAccount,
+  SelfieRequired,
   Session,
   StepUpdate,
   Wallet,
@@ -32,8 +33,15 @@ export const appConfig = () =>
 
 export const auth = {
   registerBvn: (bvn: string) => api.post<OtpSent>('/auth/register/bvn', { bvn }, { auth: false }),
+  /** With selfie checks on, returns `selfie_required` instead of tokens. */
   verifyRegistration: (bvn: string, otp: string, device: DeviceInfo) =>
-    api.post<AuthTokens>('/auth/register/verify-otp', { bvn, otp, device }, { auth: false }),
+    api.post<AuthTokens | SelfieRequired>('/auth/register/verify-otp', { bvn, otp, device }, { auth: false }),
+  registrationSelfie: (registration_token: string, selfie_image: string, device: DeviceInfo) =>
+    api.post<AuthTokens>(
+      '/auth/register/selfie',
+      { registration_token, selfie_image, device },
+      { auth: false, timeoutMs: 60_000 },
+    ),
   resendRegistration: (bvn: string) => api.post<OtpSent>('/auth/register/resend-otp', { bvn }, { auth: false }),
   requestLogin: (phone: string) => api.post<OtpSent>('/auth/login/request-otp', { phone }, { auth: false }),
   /** A new phone while another is signed in gets `approval_required` instead of tokens. */

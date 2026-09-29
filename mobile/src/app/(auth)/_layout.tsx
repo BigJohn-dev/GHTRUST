@@ -37,6 +37,7 @@ export default function AuthLayout() {
         options={{ title: '', gestureEnabled: false, headerBackVisible: false, headerLeft: () => null }}
       />
       <Stack.Screen name="lost-phone" options={{ title: '' }} />
+      <Stack.Screen name="selfie" options={{ title: '', gestureEnabled: false, headerBackVisible: false, headerLeft: () => null }} />
     </Stack>
   );
 }

@@ -10,6 +10,8 @@ from app.modules.auth.schemas import (
     OtpSentResponse,
     PhoneLoginRequest,
     RefreshTokenRequest,
+    RegistrationSelfieRequest,
+    SelfieRequiredResponse,
     ResendRegistrationOtpRequest,
     SessionResponse,
     TokenPair,
@@ -46,9 +48,13 @@ async def register_with_bvn(
 
 @router.post(
     "/register/verify-otp",
-    response_model=AuthTokenResponse,
+    response_model=AuthTokenResponse | SelfieRequiredResponse,
     summary="Verify registration OTP",
-    description="Activates the account and signs the device in. Send `device` from mobile clients.",
+    description=(
+        "With selfie checks on (the default) returns `status: selfie_required` and a "
+        "`registration_token` for `/auth/register/selfie`; otherwise opens the account and signs "
+        "the device in. Send `device` from mobile clients."
+    ),
 )
 async def verify_registration_otp(
     payload: VerifyRegistrationOtpRequest,
@@ -58,6 +64,27 @@ async def verify_registration_otp(
 ):
     return await _auth_service(db, redis).verify_registration_otp(
         payload.bvn, payload.otp, meta=request_meta(request), device=payload.device
+    )
+
+
+@router.post(
+    "/register/selfie",
+    response_model=AuthTokenResponse,
+    summary="Match a selfie to the BVN photo and open the account",
+    description=(
+        "Dojah compares the selfie with the BVN photo. A match opens the account and signs the "
+        "device in; `SELFIE_NO_MATCH` includes `attempts_left`; after the last attempt "
+        "(`SELFIE_ATTEMPTS_EXCEEDED`) the customer must visit a branch."
+    ),
+)
+async def verify_registration_selfie(
+    payload: RegistrationSelfieRequest,
+    request: Request,
+    db: DbSession,
+    redis: RedisClient,
+):
+    return await _auth_service(db, redis).verify_registration_selfie(
+        payload.registration_token, payload.selfie_image, meta=request_meta(request), device=payload.device
     )
 
 

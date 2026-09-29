@@ -1,3 +1,6 @@
+import base64
+import binascii
+import json
 import re
 import secrets
 from datetime import date, datetime, timezone
@@ -11,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.rate_limit import OtpService, RateLimiter
 from app.core.errors import AppError, ErrorCode
+from app.core.security import hash_token
 from app.integrations.dojah.client import DojahClient
 from app.integrations.dojah.schemas import DojahError
 from app.modules.auth.models import SubjectType
@@ -20,6 +24,7 @@ from app.modules.auth.schemas import (
     DeviceApprovalRequiredResponse,
     DeviceInfo,
     OtpSentResponse,
+    SelfieRequiredResponse,
     SessionResponse,
     TokenPair,
 )
@@ -44,6 +49,33 @@ def _parse_dob(dob_str: str | None) -> date | None:
         return date.fromisoformat(dob_str)
     except ValueError:
         return None
+
+
+SELFIE_TICKET_SECONDS = 30 * 60
+MAX_SELFIE_BYTES = 3 * 1024 * 1024
+
+
+def _selfie_key(token: str) -> str:
+    return f"register:selfie:{hash_token(token)}"
+
+
+def _clean_selfie(image: str) -> str:
+    """Base64 without a data: URL prefix, checked to be a JPEG or PNG of sensible size."""
+    image = image.strip()
+    if image.startswith("data:"):
+        image = image.split(",", 1)[-1]
+    try:
+        raw = base64.b64decode(image, validate=True)
+    except (binascii.Error, ValueError):
+        raw = b""
+    is_image = raw.startswith(b"\xff\xd8") or raw.startswith(b"\x89PNG")
+    if not is_image or not 5_000 <= len(raw) <= MAX_SELFIE_BYTES:
+        raise AppError(
+            status.HTTP_400_BAD_REQUEST,
+            ErrorCode.SELFIE_UNREADABLE,
+            "We couldn't read that photo. Take it again facing the camera in good light.",
+        )
+    return image
 
 
 def _generate_account_number() -> str:
@@ -72,9 +104,17 @@ class AuthService:
         try:
             entity = await self.dojah.lookup_bvn_advanced(bvn)
         except DojahError as e:
-            code = ErrorCode.BVN_NOT_FOUND if e.status_code == 404 else ErrorCode.KYC_UNAVAILABLE
-            raise AppError(e.status_code, code, e.message) from e
+            if e.status_code == 404:
+                raise AppError(status.HTTP_404_NOT_FOUND, ErrorCode.BVN_NOT_FOUND, e.message) from e
+            raise AppError(status.HTTP_503_SERVICE_UNAVAILABLE, ErrorCode.KYC_UNAVAILABLE, e.message) from e
 
+        if not entity.phone_number1:
+            raise AppError(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                ErrorCode.BVN_NO_PHONE,
+                "There's no phone number on this BVN record, so we can't send you a code. "
+                "Please visit a branch to open your account.",
+            )
         phone = Customer.normalize_phone(entity.phone_number1)
 
         # Phone numbers are unique per customer; a second BVN registered to the same
@@ -150,7 +190,7 @@ class AuthService:
         *,
         meta: RequestMeta,
         device: DeviceInfo | None = None,
-    ) -> AuthTokenResponse:
+    ) -> AuthTokenResponse | SelfieRequiredResponse:
         bvn = _validate_bvn(bvn)
         await RateLimiter(self.redis).check_otp_verify(meta.ip or "unknown")
         await self.otp.verify("register", bvn, otp)
@@ -163,6 +203,99 @@ class AuthService:
         if customer.watch_listed and customer.watch_listed.upper() == "YES":
             raise AppError(status.HTTP_403_FORBIDDEN, ErrorCode.ACCOUNT_RESTRICTED, "Account cannot be opened at this time. Please visit a branch.")
 
+        if settings.dojah_selfie_required:
+            # The code proves they hold the BVN's phone; a selfie proves they're its owner.
+            token = secrets.token_urlsafe(32)
+            await self.redis.set(
+                _selfie_key(token),
+                json.dumps({"bvn": bvn, "attempts": 0}),
+                ex=SELFIE_TICKET_SECONDS,
+            )
+            return SelfieRequiredResponse(
+                registration_token=token,
+                expires_in=SELFIE_TICKET_SECONDS,
+                attempts_left=settings.dojah_selfie_max_attempts,
+                first_name=customer.first_name,
+            )
+
+        return await self._open_account(customer, meta=meta, device=device)
+
+    async def verify_registration_selfie(
+        self,
+        token: str,
+        selfie_image: str,
+        *,
+        meta: RequestMeta,
+        device: DeviceInfo | None = None,
+    ) -> AuthTokenResponse:
+        """Last step of sign-up: match a selfie to the BVN photo, then open the account."""
+        await RateLimiter(self.redis).check_otp_verify(meta.ip or "unknown")
+        key = _selfie_key(token)
+        raw = await self.redis.get(key)
+        if not raw:
+            raise AppError(
+                status.HTTP_410_GONE,
+                ErrorCode.REGISTRATION_EXPIRED,
+                "This sign-up has expired. Please start again with your BVN.",
+            )
+        ticket = json.loads(raw)
+        image = _clean_selfie(selfie_image)
+
+        try:
+            result = await DojahClient().verify_bvn_selfie(
+                ticket["bvn"], image, settings.dojah_selfie_threshold
+            )
+        except DojahError as e:
+            if e.status_code == 400:
+                raise AppError(
+                    status.HTTP_400_BAD_REQUEST,
+                    ErrorCode.SELFIE_UNREADABLE,
+                    "We couldn't read that photo. Take it again facing the camera in good light.",
+                ) from e
+            raise AppError(status.HTTP_503_SERVICE_UNAVAILABLE, ErrorCode.KYC_UNAVAILABLE, e.message) from e
+
+        result_customer = await self.db.execute(select(Customer).where(Customer.bvn == ticket["bvn"]))
+        customer = result_customer.scalar_one_or_none()
+        if customer is None:
+            await self.redis.delete(key)
+            raise AppError(status.HTTP_410_GONE, ErrorCode.REGISTRATION_EXPIRED, "Please start again with your BVN.")
+
+        if not result.match:
+            ticket["attempts"] += 1
+            left = settings.dojah_selfie_max_attempts - ticket["attempts"]
+            logger.warning(
+                "registration_selfie_no_match",
+                customer_id=customer.id,
+                confidence=result.confidence_value,
+                attempts_left=left,
+            )
+            if left <= 0:
+                await self.redis.delete(key)
+                raise AppError(
+                    status.HTTP_403_FORBIDDEN,
+                    ErrorCode.SELFIE_ATTEMPTS_EXCEEDED,
+                    "Your selfie didn't match your BVN photo. Please visit a branch to open your account.",
+                )
+            ttl = await self.redis.ttl(key)
+            await self.redis.set(key, json.dumps(ticket), ex=max(ttl, 1))
+            raise AppError(
+                status.HTTP_400_BAD_REQUEST,
+                ErrorCode.SELFIE_NO_MATCH,
+                f"Your selfie didn't match your BVN photo. {left} attempt(s) left.",
+                errors=[{"attempts_left": left}],
+            )
+
+        # Single use: a second request with this ticket finds nothing.
+        if not await self.redis.delete(key):
+            raise AppError(status.HTTP_410_GONE, ErrorCode.REGISTRATION_EXPIRED, "Please start again with your BVN.")
+        customer.selfie_verified_at = datetime.now(timezone.utc)
+        customer.selfie_match_score = result.confidence_value
+        logger.info("registration_selfie_matched", customer_id=customer.id, confidence=result.confidence_value)
+        return await self._open_account(customer, meta=meta, device=device)
+
+    async def _open_account(
+        self, customer: Customer, *, meta: RequestMeta, device: DeviceInfo | None
+    ) -> AuthTokenResponse:
         customer.status = CustomerStatus.ACTIVE
         customer.phone_verified = True
         customer.phone_verified_at = datetime.now(timezone.utc)

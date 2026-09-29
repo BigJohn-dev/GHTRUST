@@ -3,7 +3,7 @@ import re
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, DateTime, Index, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -86,6 +86,9 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     phone_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Selfie matched against the BVN photo at account opening (Dojah), and how closely.
+    selfie_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    selfie_match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # --- PINs (see app/core/pins.py; hashes only, never the PIN) ---
     # 6-digit PIN that opens the app; 4-digit PIN that approves money leaving the account.

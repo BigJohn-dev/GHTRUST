@@ -84,6 +84,27 @@ class VerifyLoginOtpRequest(VerifyOtpRequest):
     phone: str = Field(..., min_length=10, max_length=15)
 
 
+class SelfieRequiredResponse(BaseModel):
+    """SMS code accepted; the account opens once a selfie matches the BVN photo."""
+
+    status: Literal["selfie_required"] = "selfie_required"
+    registration_token: str = Field(description="Send with the selfie. Single use; keep in memory only.")
+    expires_in: int
+    attempts_left: int
+    first_name: str
+
+
+class RegistrationSelfieRequest(BaseModel):
+    registration_token: str = Field(..., min_length=20, max_length=128)
+    selfie_image: str = Field(
+        ...,
+        min_length=1000,
+        max_length=4_000_000,
+        description="JPEG/PNG, base64 (a data: URL prefix is accepted and removed). Face the camera in good light.",
+    )
+    device: DeviceInfo | None = None
+
+
 class ResendRegistrationOtpRequest(BaseModel):
     bvn: str = Field(..., min_length=11, max_length=11)
 

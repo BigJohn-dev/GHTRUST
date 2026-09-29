@@ -121,13 +121,63 @@
      "Authentication"
     ],
     "summary": "Verify registration OTP",
-    "description": "Activates the account and signs the device in. Send `device` from mobile clients.",
+    "description": "With selfie checks on (the default) returns `status: selfie_required` and a `registration_token` for `/auth/register/selfie`; otherwise opens the account and signs the device in. Send `device` from mobile clients.",
     "operationId": "verify_registration_otp_api_v1_auth_register_verify_otp_post",
     "requestBody": {
      "content": {
       "application/json": {
        "schema": {
         "$ref": "#/components/schemas/VerifyRegistrationOtpRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "anyOf": [
+          {
+           "$ref": "#/components/schemas/AuthTokenResponse"
+          },
+          {
+           "$ref": "#/components/schemas/SelfieRequiredResponse"
+          }
+         ],
+         "title": "Response Verify Registration Otp Api V1 Auth Register Verify Otp Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/register/selfie": {
+   "post": {
+    "tags": [
+     "Authentication"
+    ],
+    "summary": "Match a selfie to the BVN photo and open the account",
+    "description": "Dojah compares the selfie with the BVN photo. A match opens the account and signs the device in; `SELFIE_NO_MATCH` includes `attempts_left`; after the last attempt (`SELFIE_ATTEMPTS_EXCEEDED`) the customer must visit a branch.",
+    "operationId": "verify_registration_selfie_api_v1_auth_register_selfie_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RegistrationSelfieRequest"
        }
       }
      },
@@ -9513,6 +9563,39 @@
     ],
     "title": "RefreshTokenRequest"
    },
+   "RegistrationSelfieRequest": {
+    "properties": {
+     "registration_token": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 20,
+      "title": "Registration Token"
+     },
+     "selfie_image": {
+      "type": "string",
+      "maxLength": 4000000,
+      "minLength": 1000,
+      "title": "Selfie Image",
+      "description": "JPEG/PNG, base64 (a data: URL prefix is accepted and removed). Face the camera in good light."
+     },
+     "device": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/DeviceInfo"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "registration_token",
+     "selfie_image"
+    ],
+    "title": "RegistrationSelfieRequest"
+   },
    "RepaymentCadence": {
     "type": "string",
     "enum": [
@@ -9987,6 +10070,42 @@
      "accounts"
     ],
     "title": "SavingsSummaryResponse"
+   },
+   "SelfieRequiredResponse": {
+    "properties": {
+     "status": {
+      "type": "string",
+      "const": "selfie_required",
+      "title": "Status",
+      "default": "selfie_required"
+     },
+     "registration_token": {
+      "type": "string",
+      "title": "Registration Token",
+      "description": "Send with the selfie. Single use; keep in memory only."
+     },
+     "expires_in": {
+      "type": "integer",
+      "title": "Expires In"
+     },
+     "attempts_left": {
+      "type": "integer",
+      "title": "Attempts Left"
+     },
+     "first_name": {
+      "type": "string",
+      "title": "First Name"
+     }
+    },
+    "type": "object",
+    "required": [
+     "registration_token",
+     "expires_in",
+     "attempts_left",
+     "first_name"
+    ],
+    "title": "SelfieRequiredResponse",
+    "description": "SMS code accepted; the account opens once a selfie matches the BVN photo."
    },
    "SessionResponse": {
     "properties": {

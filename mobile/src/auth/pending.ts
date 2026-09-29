@@ -46,3 +46,18 @@ export const pendingApproval = {
     approval = null;
   },
 };
+
+/** Sign-up waiting for a selfie that matches the BVN photo (after the SMS code). */
+export type PendingSelfie = { token: string; firstName: string; attemptsLeft: number; expiresAt: number };
+
+let selfie: PendingSelfie | null = null;
+
+export const pendingSelfie = {
+  get: () => selfie,
+  set: (value: PendingSelfie) => {
+    selfie = value;
+  },
+  clear: () => {
+    selfie = null;
+  },
+};

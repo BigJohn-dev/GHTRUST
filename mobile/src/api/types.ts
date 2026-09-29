@@ -11,6 +11,7 @@ export type DeviceInfo = S['DeviceInfo'];
 export type Profile = S['CustomerProfileResponse'];
 export type Session = S['SessionResponse'];
 export type ApprovalRequired = S['DeviceApprovalRequiredResponse'];
+export type SelfieRequired = S['SelfieRequiredResponse'];
 export type ApprovalStatus = S['ApprovalStatusResponse'];
 export type PendingApproval = S['PendingApprovalResponse'];
 export type ApproveResult = S['ApproveDeviceResponse'];
