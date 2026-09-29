@@ -44,3 +44,6 @@ export type WalletTransactionPage = S['WalletTransactionPage'];
 export type TransactionDirection = 'in' | 'out';
 
 export type Page<T> = { items: T[]; total: number; limit: number; offset: number };
+
+export type AppNotification = S['NotificationResponse'];
+export type NotificationPage = S['NotificationPage'];

@@ -49,6 +49,10 @@ celery_app.conf.update(
             "task": "app.workers.tasks.send_loan_reminders",
             "schedule": crontab(hour=8, minute=0),
         },
+        "deliver-notifications": {
+            "task": "app.workers.tasks.deliver_notifications",
+            "schedule": crontab(minute="*"),
+        },
         "process-pending-withdrawals": {
             "task": "app.workers.tasks.process_pending_withdrawals",
             "schedule": crontab(minute="*/15"),

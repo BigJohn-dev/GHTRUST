@@ -17,17 +17,19 @@ import { Screen } from '@/components/Screen';
 import { Banner } from '@/components/States';
 import { Text } from '@/components/Text';
 import { pinReset, setupFlow, usePinReset } from '@/lib/flags';
+import { enablePush, shouldOfferPush } from '@/lib/push';
 import { digits } from '@/lib/format';
 import { keys, useMe } from '@/lib/queries';
 import { colors, radius, space } from '@/theme/tokens';
 
-type Step = 'bvn' | 'login' | 'offerTransaction' | 'transaction' | 'offerBiometric' | 'done';
+type Step = 'bvn' | 'login' | 'offerTransaction' | 'transaction' | 'offerBiometric' | 'offerPush' | 'done';
 
 /**
  * Right after signing in without a sign-in PIN (new account, or "Forgot PIN?"):
  *   1. sign-in PIN (required)
  *   2. transaction PIN (now or later: it's asked for before money first moves anyway)
  *   3. Face ID / fingerprint (now or later), if the phone has it
+ *   4. notifications (now or later), if the phone can get them and hasn't been asked
  */
 export default function SecuritySetup() {
   const queryClient = useQueryClient();
@@ -38,6 +40,7 @@ export default function SecuritySetup() {
   const [bvn, setBvn] = useState('');
   const [bioError, setBioError] = useState<string | null>(null);
   const [bioBusy, setBioBusy] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
   // Held only for this screen, to turn on biometrics without asking for it again.
   const loginPin = useRef('');
 
@@ -49,6 +52,17 @@ export default function SecuritySetup() {
   };
   const afterTransaction = () => {
     if (biometricAvailable && !biometric) return setStep('offerBiometric');
+    afterBiometric();
+  };
+  const afterBiometric = async () => {
+    if (await shouldOfferPush().catch(() => false)) return setStep('offerPush');
+    finish();
+  };
+  const turnOnPush = async () => {
+    setPushBusy(true);
+    // Whatever they answer in the system prompt, setup carries on; it can be changed in Security.
+    await enablePush().catch(() => undefined);
+    setPushBusy(false);
     finish();
   };
   const finish = () => {
@@ -58,14 +72,14 @@ export default function SecuritySetup() {
   };
 
   const turnOnBiometric = async () => {
-    if (!biometricAvailable) return finish();
+    if (!biometricAvailable) return afterBiometric();
     setBioBusy(true);
     setBioError(null);
     try {
       if (!(await checkBiometric(`Turn on ${biometricName(biometricAvailable)} for GH Trust`))) return;
       await security.setBiometrics(true, loginPin.current);
       await setBiometric(true);
-      finish();
+      await afterBiometric();
     } catch (err) {
       setBioError(messageFor(err));
     } finally {
@@ -165,9 +179,22 @@ export default function SecuritySetup() {
         title={`Unlock with ${name}?`}
         body={`Open GH Trust and approve new phones with ${name} instead of typing your PIN. Your PIN always works too.`}
         primary={{ title: `Turn on ${name}`, onPress: turnOnBiometric, loading: bioBusy }}
-        secondary={{ title: 'Not now', onPress: finish }}
+        secondary={{ title: 'Not now', onPress: afterBiometric }}
         note="You can change this any time in Profile → Security."
         error={bioError}
+      />
+    );
+  }
+
+  if (step === 'offerPush') {
+    return (
+      <Offer
+        icon="notifications-outline"
+        title="Turn on notifications?"
+        body="We'll let you know when money arrives, when your loan is approved or paid out, and a few days before each repayment is due."
+        primary={{ title: 'Turn on notifications', onPress: turnOnPush, loading: pushBusy }}
+        secondary={{ title: 'Not now', onPress: finish }}
+        note="We'll also alert you if someone tries to sign in to your account on another phone."
       />
     );
   }

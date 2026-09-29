@@ -37,6 +37,7 @@ from app.integrations.stanbic.constants import (
     PAYMENT_STATUS_PAID as STANBIC_PAYMENT_STATUS_PAID,
 )
 from app.models.base import TransactionStatus
+from app.modules.notifications import events as notify
 from app.modules.payments.disbursement_service import DisbursementService
 from app.modules.payments.ledger_service import LedgerError, LedgerService
 from app.modules.payments.models import (
@@ -688,6 +689,7 @@ class WebhookService:
                 raise
             withdrawal.status = WithdrawalStatus.COMPLETED
             withdrawal.processed_at = datetime.now(timezone.utc)
+            await notify.withdrawal_completed(self.db, withdrawal)
 
     async def _handle_transfer_failed(self, data: dict[str, Any]) -> None:
         reference = str(data.get("reference") or "")
@@ -746,6 +748,7 @@ class WebhookService:
         withdrawal.status = WithdrawalStatus.FAILED
         withdrawal.failure_reason = reason
         withdrawal.processed_at = datetime.now(timezone.utc)
+        await notify.withdrawal_failed(self.db, withdrawal)
 
     async def _reverse_withdrawal(self, payment_tx: PaymentTransaction, reason: str) -> None:
         """The bank returned money for a withdrawal we had already settled: refund the wallet."""
@@ -763,4 +766,5 @@ class WebhookService:
         )
         withdrawal.status = WithdrawalStatus.FAILED
         withdrawal.failure_reason = f"Reversed after completion: {reason}"
+        await notify.withdrawal_failed(self.db, withdrawal)
         logger.warning("withdrawal_reversed_after_settlement", reference=payment_tx.provider_reference)

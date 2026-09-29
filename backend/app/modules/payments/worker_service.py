@@ -14,7 +14,9 @@ transfers already sent to the bank, would have lost the record of them.
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import select
@@ -191,3 +193,27 @@ async def run_refresh_loan_statuses() -> dict:
         processed = await LoanServicingService(db).refresh_open_loans()
         await db.commit()
     return {"status": "ok", "loans_processed": processed}
+
+
+LAGOS = ZoneInfo("Africa/Lagos")
+
+
+async def run_deliver_notifications() -> dict:
+    """Push queued notifications to customers' phones."""
+    from app.modules.notifications.service import NotificationService
+
+    async with worker_session() as db:
+        counts = await NotificationService(db).deliver_pending()
+        await db.commit()
+    return {"status": "ok", **counts}
+
+
+async def run_send_loan_reminders() -> dict:
+    """Queue today's repayment reminders; the delivery job pushes them."""
+    from app.modules.notifications.events import send_repayment_reminders
+
+    today = datetime.now(LAGOS).date()
+    async with worker_session() as db:
+        queued = await send_repayment_reminders(db, today)
+        await db.commit()
+    return {"status": "ok", "reminders_queued": queued}

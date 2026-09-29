@@ -5091,6 +5091,198 @@
     ]
    }
   },
+  "/api/v1/notifications": {
+   "get": {
+    "tags": [
+     "Notifications"
+    ],
+    "summary": "List Notifications",
+    "description": "The customer's notifications, newest first.",
+    "operationId": "list_notifications_api_v1_notifications_get",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 100,
+       "minimum": 1,
+       "default": 30,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 0,
+       "default": 0,
+       "title": "Offset"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/NotificationPage"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/notifications/unread-count": {
+   "get": {
+    "tags": [
+     "Notifications"
+    ],
+    "summary": "Unread Count",
+    "operationId": "unread_count_api_v1_notifications_unread_count_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UnreadCount"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/notifications/read": {
+   "post": {
+    "tags": [
+     "Notifications"
+    ],
+    "summary": "Mark Read",
+    "operationId": "mark_read_api_v1_notifications_read_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/MarkReadRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UnreadCount"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/notifications/push-token": {
+   "put": {
+    "tags": [
+     "Notifications"
+    ],
+    "summary": "Register Push Token",
+    "description": "Send this signed-in app's push notifications to the given Expo push token.",
+    "operationId": "register_push_token_api_v1_notifications_push_token_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PushTokenRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   },
+   "delete": {
+    "tags": [
+     "Notifications"
+    ],
+    "summary": "Remove Push Token",
+    "description": "Stop push notifications to this signed-in app (the inbox still fills).",
+    "operationId": "remove_push_token_api_v1_notifications_push_token_delete",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
   "/api/v1/webhooks/monnify": {
    "post": {
     "tags": [
@@ -9263,6 +9455,113 @@
     "title": "ManualDisbursementRequest",
     "description": "Funds were sent outside the integrated payment rail (bank app, branch)."
    },
+   "MarkReadRequest": {
+    "properties": {
+     "ids": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array",
+        "maxItems": 200
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ids"
+     }
+    },
+    "type": "object",
+    "title": "MarkReadRequest"
+   },
+   "NotificationPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/NotificationResponse"
+      },
+      "type": "array",
+      "title": "Items"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     },
+     "limit": {
+      "type": "integer",
+      "title": "Limit"
+     },
+     "offset": {
+      "type": "integer",
+      "title": "Offset"
+     },
+     "unread_count": {
+      "type": "integer",
+      "title": "Unread Count"
+     }
+    },
+    "type": "object",
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset",
+     "unread_count"
+    ],
+    "title": "NotificationPage"
+   },
+   "NotificationResponse": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "body": {
+      "type": "string",
+      "title": "Body"
+     },
+     "route": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Route"
+     },
+     "read": {
+      "type": "boolean",
+      "title": "Read"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "title",
+     "body",
+     "read",
+     "created_at"
+    ],
+    "title": "NotificationResponse"
+   },
    "OpenSavingsAccountRequest": {
     "properties": {
      "product_type": {
@@ -9705,6 +10004,22 @@
      "status"
     ],
     "title": "PipelineStageSummary"
+   },
+   "PushTokenRequest": {
+    "properties": {
+     "token": {
+      "type": "string",
+      "maxLength": 255,
+      "minLength": 10,
+      "title": "Token",
+      "description": "Expo push token from the app"
+     }
+    },
+    "type": "object",
+    "required": [
+     "token"
+    ],
+    "title": "PushTokenRequest"
    },
    "RecordRepaymentRequest": {
     "properties": {
@@ -11482,6 +11797,19 @@
     "type": "object",
     "title": "UniversalFormData",
     "description": "Maps to the paper GH Trust loan form."
+   },
+   "UnreadCount": {
+    "properties": {
+     "unread_count": {
+      "type": "integer",
+      "title": "Unread Count"
+     }
+    },
+    "type": "object",
+    "required": [
+     "unread_count"
+    ],
+    "title": "UnreadCount"
    },
    "UpdateApplicationStepRequest": {
     "properties": {

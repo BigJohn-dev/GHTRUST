@@ -24,6 +24,7 @@ import type {
   SelfieRequired,
   Session,
   StepUpdate,
+  NotificationPage,
   PayoutAccountSaved,
   TransactionDirection,
   Wallet,
@@ -156,6 +157,14 @@ export const wallet = {
   ) => api.post<PayoutAccountSaved>('/wallet/payout-account', { ...account, transaction_pin: transactionPin }),
   withdraw: (amount: string, transactionPin: string, idempotencyKey: string) =>
     api.post<Withdrawal>('/wallet/withdraw', { amount, transaction_pin: transactionPin }, { idempotencyKey }),
+};
+
+export const notifications = {
+  list: (offset = 0, limit = 30) => api.get<NotificationPage>('/notifications', { query: { offset, limit } }),
+  unreadCount: () => api.get<{ unread_count: number }>('/notifications/unread-count'),
+  markRead: (ids?: string[]) => api.post<{ unread_count: number }>('/notifications/read', { ids }),
+  setPushToken: (token: string) => api.put<void>('/notifications/push-token', { token }),
+  removePushToken: () => api.delete<void>('/notifications/push-token'),
 };
 
 export const banks = {
