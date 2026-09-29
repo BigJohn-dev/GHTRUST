@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 
 from app.core.deps import CurrentCustomer, DbSession, RedisClient, request_meta
 from app.core.rate_limit import get_client_ip
@@ -6,6 +6,7 @@ from app.modules.auth.schemas import (
     AuthTokenResponse,
     BvnRegisterRequest,
     CustomerProfileResponse,
+    DeviceApprovalRequiredResponse,
     OtpSentResponse,
     PhoneLoginRequest,
     RefreshTokenRequest,
@@ -92,8 +93,13 @@ async def request_login_otp(
 
 @router.post(
     "/login/verify-otp",
-    response_model=AuthTokenResponse,
+    response_model=AuthTokenResponse | DeviceApprovalRequiredResponse,
     summary="Verify login OTP",
+    description=(
+        "Signs the phone in (`status: signed_in`), unless it's a new phone and another one is "
+        "signed in: then `status: approval_required` and the sign-in waits for the customer to "
+        "approve it on the other phone (see `/auth/device-approvals`)."
+    ),
 )
 async def verify_login_otp(
     payload: VerifyLoginOtpRequest,
@@ -142,8 +148,16 @@ async def refresh_token(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Sign out this device")
-async def logout(request: Request, customer: CurrentCustomer, db: DbSession, redis: RedisClient):
-    await _auth_service(db, redis).logout(customer, request.state.session_id)
+async def logout(
+    request: Request,
+    customer: CurrentCustomer,
+    db: DbSession,
+    redis: RedisClient,
+    forget_device: bool = Query(
+        False, description="Also stop trusting this phone (\"Not you?\"): next time needs an SMS code."
+    ),
+):
+    await _auth_service(db, redis).logout(customer, request.state.session_id, forget_device=forget_device)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -166,9 +180,9 @@ async def list_sessions(request: Request, customer: CurrentCustomer, db: DbSessi
     summary="Sign out a specific device",
 )
 async def revoke_session(
-    session_id: str, customer: CurrentCustomer, db: DbSession, redis: RedisClient
+    session_id: str, request: Request, customer: CurrentCustomer, db: DbSession, redis: RedisClient
 ):
-    await _auth_service(db, redis).revoke_session(customer, session_id)
+    await _auth_service(db, redis).revoke_session(customer, session_id, request.state.session_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

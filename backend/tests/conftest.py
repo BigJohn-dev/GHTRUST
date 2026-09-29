@@ -25,6 +25,16 @@ TEST_PHONE = "+2348035794364"
 TEST_ADMIN_EMAIL = "superadmin@example.com"
 TEST_ADMIN_PHONE = "08000000001"
 TEST_ADMIN_NAME = "Test Super Admin"
+TEST_TXN_PIN = "2580"
+TEST_LOGIN_PIN = "250817"
+
+
+async def set_transaction_pin(api_client, headers: dict, pin: str = TEST_TXN_PIN) -> None:
+    """Customers must create a transaction PIN before any money leaves the account."""
+    res = await api_client.post(
+        "/api/v1/auth/transaction-pin", json={"pin": pin}, headers={"Authorization": headers["Authorization"]}
+    )
+    assert res.status_code == 200, res.text
 
 _SETTINGS_CONSUMER_MODULES = (
     "app.core.rate_limit",

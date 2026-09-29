@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -47,3 +47,69 @@ class AuthSession(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # The owner turned on Face ID / fingerprint on this device, so a biometric check there
+    # can stand in for the sign-in PIN (e.g. approving a new device).
+    biometric_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+
+class CustomerDevice(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """
+    A phone the customer has signed in on and trusts.
+
+    The device keeps a random ``device_token`` (only its hash is stored here). With it
+    plus the 6-digit PIN the customer can sign back in on that phone without an SMS code,
+    and a trusted phone that is signed in approves sign-ins on new ones.
+    """
+
+    __tablename__ = "customer_devices"
+    __table_args__ = (UniqueConstraint("customer_id", "device_id", name="uq_customer_devices_device"),)
+
+    customer_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("customers.id", ondelete="CASCADE"), index=True
+    )
+    device_id: Mapped[str] = mapped_column(String(128))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    device_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    platform: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    trusted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeviceApprovalStatus(str, enum.Enum):
+    PENDING = "pending"  # waiting for the customer on a signed-in phone
+    APPROVED = "approved"  # confirmed there; the code it shows is being typed on the new phone
+    DENIED = "denied"  # "No, this wasn't me"
+    COMPLETED = "completed"  # new phone signed in
+    EXPIRED = "expired"
+    FAILED = "failed"  # too many wrong codes
+
+
+class DeviceApproval(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """
+    A sign-in on a new phone, held until the customer confirms it on a phone that's
+    already signed in. That phone then shows a 6-digit code to type on the new one.
+    """
+
+    __tablename__ = "device_approvals"
+
+    customer_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("customers.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default=DeviceApprovalStatus.PENDING.value)
+    # Proves the caller is the phone that started this sign-in (hash of a random secret).
+    secret_hash: Mapped[str] = mapped_column(String(64), unique=True)
+
+    device_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    device_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    platform: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    app_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by_session_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+    code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    code_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    code_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
