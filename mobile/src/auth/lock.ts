@@ -20,8 +20,17 @@ export async function biometricKind(): Promise<BiometricKind | null> {
     ]);
     if (!hardware || !enrolled) return null;
     const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-    if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return 'face';
-    if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) return 'fingerprint';
+    const face = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+    const fingerprint = types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+    if (Platform.OS === 'android') {
+      // Android picks the sensor itself, and on phones with both it shows the fingerprint
+      // prompt; many phones also report camera face unlock that apps can't use at all.
+      // So only call it face unlock when the phone has nothing else.
+      if (fingerprint) return 'fingerprint';
+      return face ? 'face' : null;
+    }
+    if (face) return 'face';
+    if (fingerprint) return 'fingerprint';
     return null;
   } catch {
     return null;

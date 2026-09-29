@@ -31,8 +31,8 @@ const WORDMARK = 'GH Trust';
 const TAGLINE = 'MICROFINANCE BANK';
 // Heights below the tile: gap, wordmark, gap, tagline, gap, progress line.
 const BELOW = 24 + 40 + 6 + 16 + 26 + 3;
-const PLAY_MS = 1900; // the intro always plays this long, however fast start-up is
-const FAILSAFE_MS = 6000; // never hold the app behind the splash longer than this
+const PLAY_MS = 3200; // the intro always plays in full (plus a beat to take it in), however fast start-up is
+const FAILSAFE_MS = 8000; // never hold the app behind the splash longer than this
 const EASE_OUT = Easing.bezier(0.22, 1, 0.36, 1);
 
 type Props = {
@@ -75,7 +75,7 @@ export function AnimatedSplash({ ready, onDone }: Props) {
       progress.value = withDelay(1250, withTiming(1, { duration: PLAY_MS - 1250, easing: Easing.inOut(Easing.cubic) }));
       drift.value = withRepeat(withTiming(1, { duration: 5000, easing: Easing.inOut(Easing.sin) }), -1, true);
     }
-    const play = setTimeout(() => setPlayed(true), reduced ? 700 : PLAY_MS);
+    const play = setTimeout(() => setPlayed(true), reduced ? 1200 : PLAY_MS);
     const failsafe = setTimeout(() => setTimedOut(true), FAILSAFE_MS);
     return () => {
       clearTimeout(play);
@@ -88,7 +88,7 @@ export function AnimatedSplash({ ready, onDone }: Props) {
     if (!leaving) return;
     exit.value = withTiming(
       1,
-      { duration: reduced ? 250 : 560, easing: Easing.bezier(0.32, 0.72, 0, 1) },
+      { duration: reduced ? 250 : 750, easing: Easing.bezier(0.32, 0.72, 0, 1) },
       (finished) => {
         if (finished) scheduleOnRN(onDone);
       },

@@ -149,8 +149,7 @@ class AuthService:
             raise AppError(
                 status.HTTP_409_CONFLICT,
                 ErrorCode.PHONE_IN_USE,
-                "The phone number on this BVN is already linked to another GH Trust account. "
-                "Please visit a branch to open your account.",
+                "BVN phone number already belongs to a customer with a different BVN.",
             )
 
         if customer is None:
