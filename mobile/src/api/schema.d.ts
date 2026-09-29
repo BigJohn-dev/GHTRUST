@@ -107,7 +107,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Verify login OTP */
+        /**
+         * Verify login OTP
+         * @description Signs the phone in (`status: signed_in`), unless it's a new phone and another one is signed in: then `status: approval_required` and the sign-in waits for the customer to approve it on the other phone (see `/auth/device-approvals`).
+         */
         post: operations["verify_login_otp_api_v1_auth_login_verify_otp_post"];
         delete?: never;
         options?: never;
@@ -231,6 +234,291 @@ export interface paths {
         get: operations["get_current_profile_api_v1_auth_me_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create sign-in PIN
+         * @description The 6-digit PIN that opens the app. Separate from the 4-digit transaction PIN.
+         */
+        post: operations["set_login_pin_api_v1_auth_pin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/pin/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change sign-in PIN */
+        post: operations["change_login_pin_api_v1_auth_pin_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/pin/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock with sign-in PIN
+         * @description Checks the PIN when the app is opened after time away. Five wrong in a row signs this phone out (`PIN_ATTEMPTS_EXCEEDED`).
+         */
+        post: operations["verify_login_pin_api_v1_auth_pin_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/pin/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forgot sign-in PIN
+         * @description Within 15 minutes of signing in with an SMS code, set a new PIN with the BVN.
+         */
+        post: operations["reset_login_pin_api_v1_auth_pin_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with PIN on a trusted phone
+         * @description For a phone that signed in before (it holds a `device_token`): the sign-in PIN replaces the SMS code.
+         */
+        post: operations["pin_sign_in_api_v1_auth_login_pin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/transaction-pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create transaction PIN
+         * @description The 4-digit PIN that approves money leaving the account. Required before the first transfer.
+         */
+        post: operations["set_transaction_pin_api_v1_auth_transaction_pin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/transaction-pin/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change transaction PIN */
+        post: operations["change_transaction_pin_api_v1_auth_transaction_pin_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/transaction-pin/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forgot transaction PIN
+         * @description Set a new transaction PIN by confirming the sign-in PIN. Also unlocks a locked one.
+         */
+        post: operations["reset_transaction_pin_api_v1_auth_transaction_pin_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/biometrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn Face ID / fingerprint on or off for this phone
+         * @description The check itself happens on the phone. Turning it on needs the sign-in PIN, and lets a biometric check on this phone stand in for the PIN when approving a new phone.
+         */
+        post: operations["set_biometrics_api_v1_auth_biometrics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/device-approvals/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sign-ins waiting for approval
+         * @description Poll while the app is open; show a prompt for each.
+         */
+        get: operations["pending_approvals_api_v1_auth_device_approvals_pending_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/device-approvals/{approval_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Yes, it's me: approve a new phone
+         * @description Returns a 6-digit code to show here; the customer types it on the new phone.
+         */
+        post: operations["approve_device_api_v1_auth_device_approvals__approval_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/device-approvals/{approval_id}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** No, that wasn't me */
+        post: operations["deny_device_api_v1_auth_device_approvals__approval_id__deny_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/device-approvals/{approval_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Has my other phone approved this sign-in? */
+        post: operations["approval_status_api_v1_auth_device_approvals__approval_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/device-approvals/{approval_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish signing in with the code from the other phone */
+        post: operations["complete_approval_api_v1_auth_device_approvals__approval_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/device-approvals/{approval_id}/lost-phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in without the other phone
+         * @description BVN plus sign-in PIN (if set). Signs every other phone out, and holds money leaving the account for 24 hours.
+         */
+        post: operations["lost_phone_api_v1_auth_device_approvals__approval_id__lost_phone_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1758,6 +2046,55 @@ export interface components {
             /** Disbursed At */
             disbursed_at: string | null;
         };
+        /** ApprovalFallbackRequest */
+        ApprovalFallbackRequest: {
+            /** Approval Secret */
+            approval_secret: string;
+            /** Bvn */
+            bvn: string;
+            /** Pin */
+            pin?: string | null;
+            device?: components["schemas"]["DeviceInfo"] | null;
+        };
+        /** ApprovalSecretRequest */
+        ApprovalSecretRequest: {
+            /** Approval Secret */
+            approval_secret: string;
+        };
+        /** ApprovalStatusResponse */
+        ApprovalStatusResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "denied" | "completed" | "expired" | "failed";
+            /** Expires In */
+            expires_in: number;
+        };
+        /** ApproveDeviceRequest */
+        ApproveDeviceRequest: {
+            /**
+             * Pin
+             * @description Sign-in PIN
+             */
+            pin?: string | null;
+            /**
+             * Biometric
+             * @description The customer passed Face ID / fingerprint on this phone instead. Only accepted where they turned biometrics on.
+             * @default false
+             */
+            biometric: boolean;
+        };
+        /** ApproveDeviceResponse */
+        ApproveDeviceResponse: {
+            /**
+             * Code
+             * @description Show on this phone; the customer types it on the new one.
+             */
+            code: string;
+            /** Expires In */
+            expires_in: number;
+        };
         /**
          * AuditActorType
          * @enum {string}
@@ -1816,7 +2153,18 @@ export interface components {
             refresh_expires_in: number;
             /** Session Id */
             session_id: string;
+            /**
+             * Status
+             * @default signed_in
+             * @constant
+             */
+            status: "signed_in";
             customer: components["schemas"]["CustomerProfileResponse"];
+            /**
+             * Device Token
+             * @description Store securely on this phone and send it in `device` next time: it lets the customer sign back in here with their PIN, and skips new-device approval.
+             */
+            device_token?: string | null;
         };
         /** BankResponse */
         BankResponse: {
@@ -1824,6 +2172,16 @@ export interface components {
             code: string;
             /** Name */
             name: string;
+        };
+        /** BiometricRequest */
+        BiometricRequest: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Pin
+             * @description Sign-in PIN; required to turn it on
+             */
+            pin?: string | null;
         };
         /** Body_upload_my_application_document_api_v1_loans_me_applications__application_id__documents__document_type__post */
         Body_upload_my_application_document_api_v1_loans_me_applications__application_id__documents__document_type__post: {
@@ -1847,6 +2205,32 @@ export interface components {
              * @description 11-digit Bank Verification Number
              */
             bvn: string;
+        };
+        /** ChangeLoginPinRequest */
+        ChangeLoginPinRequest: {
+            /**
+             * Current Pin
+             * @description Current sign-in PIN
+             */
+            current_pin: string;
+            /**
+             * New Pin
+             * @description New sign-in PIN
+             */
+            new_pin: string;
+        };
+        /** ChangeTransactionPinRequest */
+        ChangeTransactionPinRequest: {
+            /**
+             * Current Pin
+             * @description Current transaction PIN
+             */
+            current_pin: string;
+            /**
+             * New Pin
+             * @description New transaction PIN
+             */
+            new_pin: string;
         };
         /**
          * CollateralCustody
@@ -1877,6 +2261,17 @@ export interface components {
             custody_status: components["schemas"]["CollateralCustody"];
             /** Affidavit Reference */
             affidavit_reference: string | null;
+        };
+        /** CompleteApprovalRequest */
+        CompleteApprovalRequest: {
+            /** Approval Secret */
+            approval_secret: string;
+            /**
+             * Code
+             * @description Code shown on the approving phone
+             */
+            code: string;
+            device?: components["schemas"]["DeviceInfo"] | null;
         };
         /** ContributionCreate */
         ContributionCreate: {
@@ -2091,11 +2486,31 @@ export interface components {
             branch: string;
             /** Status */
             status: string;
+            /**
+             * Login Pin Set
+             * @default false
+             */
+            login_pin_set: boolean;
+            /**
+             * Transaction Pin Set
+             * @default false
+             */
+            transaction_pin_set: boolean;
+            /**
+             * Transfers Blocked Until
+             * @description Money can't leave the account before this time (set after a lost-phone sign-in).
+             */
+            transfers_blocked_until?: string | null;
         };
         /** CustomerRepayRequest */
         CustomerRepayRequest: {
             /** Amount */
             amount: number | string;
+            /**
+             * Transaction Pin
+             * @description Customer's 4-digit transaction PIN
+             */
+            transaction_pin: string;
         };
         /** CustomerStatsResponse */
         CustomerStatsResponse: {
@@ -2191,6 +2606,37 @@ export interface components {
             percentage: number;
         };
         /**
+         * DeviceApprovalRequiredResponse
+         * @description Login OTP was right, but this is a new phone: confirm it on a signed-in one first.
+         */
+        DeviceApprovalRequiredResponse: {
+            /**
+             * Status
+             * @default approval_required
+             * @constant
+             */
+            status: "approval_required";
+            /** Approval Id */
+            approval_id: string;
+            /**
+             * Approval Secret
+             * @description Keep in memory; proves this phone started the sign-in.
+             */
+            approval_secret: string;
+            /** Expires In */
+            expires_in: number;
+            /**
+             * Approver Devices
+             * @description Names of the signed-in phones that can approve
+             */
+            approver_devices: string[];
+            /**
+             * Fallback Needs Pin
+             * @description The lost-phone route asks for the sign-in PIN as well as the BVN.
+             */
+            fallback_needs_pin: boolean;
+        };
+        /**
          * DeviceInfo
          * @description Optional client/device metadata. Send it from the mobile app on every OTP verify.
          */
@@ -2212,6 +2658,11 @@ export interface components {
              * @example 1.0.0
              */
             app_version?: string | null;
+            /**
+             * Device Token
+             * @description The `device_token` this phone was given at its last sign-in, if any. Proves it is a phone the customer already trusts, so no approval is needed.
+             */
+            device_token?: string | null;
         };
         /** DisburseApplicationRequest */
         DisburseApplicationRequest: {
@@ -2786,6 +3237,24 @@ export interface components {
          * @enum {string}
          */
         PaymentProvider: "paystack" | "monnify" | "zest" | "stanbic" | "manual";
+        /** PendingApprovalResponse */
+        PendingApprovalResponse: {
+            /** Id */
+            id: string;
+            /** Device Name */
+            device_name?: string | null;
+            /** Platform */
+            platform?: string | null;
+            /** Ip Address */
+            ip_address?: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Expires In */
+            expires_in: number;
+        };
         /** PermissionCatalogResponse */
         PermissionCatalogResponse: {
             /** Groups */
@@ -2805,6 +3274,19 @@ export interface components {
              * @description Phone number linked to BVN account
              */
             phone: string;
+        };
+        /** PinSignInRequest */
+        PinSignInRequest: {
+            /** Device Id */
+            device_id: string;
+            /** Device Token */
+            device_token: string;
+            /**
+             * Pin
+             * @description Sign-in PIN
+             */
+            pin: string;
+            device?: components["schemas"]["DeviceInfo"] | null;
         };
         /** PipelineStageBrief */
         PipelineStageBrief: {
@@ -2888,6 +3370,29 @@ export interface components {
         ResendRegistrationOtpRequest: {
             /** Bvn */
             bvn: string;
+        };
+        /** ResetLoginPinRequest */
+        ResetLoginPinRequest: {
+            /** Bvn */
+            bvn: string;
+            /**
+             * New Pin
+             * @description New sign-in PIN
+             */
+            new_pin: string;
+        };
+        /** ResetTransactionPinRequest */
+        ResetTransactionPinRequest: {
+            /**
+             * Login Pin
+             * @description Sign-in PIN, to prove it's you
+             */
+            login_pin: string;
+            /**
+             * New Pin
+             * @description New transaction PIN
+             */
+            new_pin: string;
         };
         /** ResolveAccountRequest */
         ResolveAccountRequest: {
@@ -3031,6 +3536,22 @@ export interface components {
              * @default false
              */
             current: boolean;
+        };
+        /** SetLoginPinRequest */
+        SetLoginPinRequest: {
+            /**
+             * Pin
+             * @description New 6-digit sign-in PIN
+             */
+            pin: string;
+        };
+        /** SetTransactionPinRequest */
+        SetTransactionPinRequest: {
+            /**
+             * Pin
+             * @description New 4-digit transaction PIN
+             */
+            pin: string;
         };
         /** StaffAuthTokenResponse */
         StaffAuthTokenResponse: {
@@ -3361,6 +3882,11 @@ export interface components {
             account_name?: string | null;
             /** Bank Name */
             bank_name?: string | null;
+            /**
+             * Transaction Pin
+             * @description Customer's 4-digit transaction PIN
+             */
+            transaction_pin: string;
         };
         /** UpdateWorkflowStagesRequest */
         UpdateWorkflowStagesRequest: {
@@ -3389,6 +3915,14 @@ export interface components {
             device?: components["schemas"]["DeviceInfo"] | null;
             /** Phone */
             phone: string;
+        };
+        /** VerifyLoginPinRequest */
+        VerifyLoginPinRequest: {
+            /**
+             * Pin
+             * @description Sign-in PIN
+             */
+            pin: string;
         };
         /** VerifyRegistrationOtpRequest */
         VerifyRegistrationOtpRequest: {
@@ -3466,6 +4000,11 @@ export interface components {
         WithdrawRequest: {
             /** Amount */
             amount: number | string;
+            /**
+             * Transaction Pin
+             * @description Customer's 4-digit transaction PIN
+             */
+            transaction_pin: string;
         };
         /** WithdrawalResponse */
         WithdrawalResponse: {
@@ -3748,7 +4287,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokenResponse"];
+                    "application/json": components["schemas"]["AuthTokenResponse"] | components["schemas"]["DeviceApprovalRequiredResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3830,7 +4369,10 @@ export interface operations {
     };
     logout_api_v1_auth_logout_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also stop trusting this phone ("Not you?"): next time needs an SMS code. */
+                forget_device?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3843,6 +4385,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -3929,6 +4480,482 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerProfileResponse"];
+                };
+            };
+        };
+    };
+    set_login_pin_api_v1_auth_pin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLoginPinRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_login_pin_api_v1_auth_pin_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeLoginPinRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_login_pin_api_v1_auth_pin_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyLoginPinRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_login_pin_api_v1_auth_pin_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetLoginPinRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pin_sign_in_api_v1_auth_login_pin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PinSignInRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_transaction_pin_api_v1_auth_transaction_pin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTransactionPinRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_transaction_pin_api_v1_auth_transaction_pin_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeTransactionPinRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_transaction_pin_api_v1_auth_transaction_pin_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetTransactionPinRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_biometrics_api_v1_auth_biometrics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BiometricRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pending_approvals_api_v1_auth_device_approvals_pending_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingApprovalResponse"][];
+                };
+            };
+        };
+    };
+    approve_device_api_v1_auth_device_approvals__approval_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveDeviceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApproveDeviceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deny_device_api_v1_auth_device_approvals__approval_id__deny_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approval_status_api_v1_auth_device_approvals__approval_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalSecretRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_approval_api_v1_auth_device_approvals__approval_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lost_phone_api_v1_auth_device_approvals__approval_id__lost_phone_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalFallbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -25,3 +25,24 @@ export const pendingOtp = {
     pending = null;
   },
 };
+
+/** A sign-in on this (new) phone waiting for approval on the customer's other phone. */
+export type PendingApproval = {
+  id: string;
+  secret: string;
+  approverDevices: string[];
+  fallbackNeedsPin: boolean;
+  expiresAt: number;
+};
+
+let approval: PendingApproval | null = null;
+
+export const pendingApproval = {
+  get: () => approval,
+  set: (value: PendingApproval) => {
+    approval = value;
+  },
+  clear: () => {
+    approval = null;
+  },
+};

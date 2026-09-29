@@ -245,6 +245,7 @@
      "Authentication"
     ],
     "summary": "Verify login OTP",
+    "description": "Signs the phone in (`status: signed_in`), unless it's a new phone and another one is signed in: then `status: approval_required` and the sign-in waits for the customer to approve it on the other phone (see `/auth/device-approvals`).",
     "operationId": "verify_login_otp_api_v1_auth_login_verify_otp_post",
     "requestBody": {
      "content": {
@@ -262,7 +263,15 @@
       "content": {
        "application/json": {
         "schema": {
-         "$ref": "#/components/schemas/AuthTokenResponse"
+         "anyOf": [
+          {
+           "$ref": "#/components/schemas/AuthTokenResponse"
+          },
+          {
+           "$ref": "#/components/schemas/DeviceApprovalRequiredResponse"
+          }
+         ],
+         "title": "Response Verify Login Otp Api V1 Auth Login Verify Otp Post"
         }
        }
       }
@@ -370,16 +379,40 @@
     ],
     "summary": "Sign out this device",
     "operationId": "logout_api_v1_auth_logout_post",
-    "responses": {
-     "204": {
-      "description": "Successful Response"
-     }
-    },
     "security": [
      {
       "HTTPBearer": []
      }
-    ]
+    ],
+    "parameters": [
+     {
+      "name": "forget_device",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "boolean",
+       "description": "Also stop trusting this phone (\"Not you?\"): next time needs an SMS code.",
+       "default": false,
+       "title": "Forget Device"
+      },
+      "description": "Also stop trusting this phone (\"Not you?\"): next time needs an SMS code."
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
    }
   },
   "/api/v1/auth/logout-all": {
@@ -495,6 +528,673 @@
       "HTTPBearer": []
      }
     ]
+   }
+  },
+  "/api/v1/auth/pin": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Create sign-in PIN",
+    "description": "The 6-digit PIN that opens the app. Separate from the 4-digit transaction PIN.",
+    "operationId": "set_login_pin_api_v1_auth_pin_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SetLoginPinRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CustomerProfileResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/pin/change": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Change sign-in PIN",
+    "operationId": "change_login_pin_api_v1_auth_pin_change_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ChangeLoginPinRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/pin/verify": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Unlock with sign-in PIN",
+    "description": "Checks the PIN when the app is opened after time away. Five wrong in a row signs this phone out (`PIN_ATTEMPTS_EXCEEDED`).",
+    "operationId": "verify_login_pin_api_v1_auth_pin_verify_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VerifyLoginPinRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/pin/reset": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Forgot sign-in PIN",
+    "description": "Within 15 minutes of signing in with an SMS code, set a new PIN with the BVN.",
+    "operationId": "reset_login_pin_api_v1_auth_pin_reset_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ResetLoginPinRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CustomerProfileResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/login/pin": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Sign in with PIN on a trusted phone",
+    "description": "For a phone that signed in before (it holds a `device_token`): the sign-in PIN replaces the SMS code.",
+    "operationId": "pin_sign_in_api_v1_auth_login_pin_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PinSignInRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AuthTokenResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/transaction-pin": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Create transaction PIN",
+    "description": "The 4-digit PIN that approves money leaving the account. Required before the first transfer.",
+    "operationId": "set_transaction_pin_api_v1_auth_transaction_pin_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SetTransactionPinRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CustomerProfileResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/transaction-pin/change": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Change transaction PIN",
+    "operationId": "change_transaction_pin_api_v1_auth_transaction_pin_change_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ChangeTransactionPinRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/transaction-pin/reset": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Forgot transaction PIN",
+    "description": "Set a new transaction PIN by confirming the sign-in PIN. Also unlocks a locked one.",
+    "operationId": "reset_transaction_pin_api_v1_auth_transaction_pin_reset_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ResetTransactionPinRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/biometrics": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Turn Face ID / fingerprint on or off for this phone",
+    "description": "The check itself happens on the phone. Turning it on needs the sign-in PIN, and lets a biometric check on this phone stand in for the PIN when approving a new phone.",
+    "operationId": "set_biometrics_api_v1_auth_biometrics_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/BiometricRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/device-approvals/pending": {
+   "get": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Sign-ins waiting for approval",
+    "description": "Poll while the app is open; show a prompt for each.",
+    "operationId": "pending_approvals_api_v1_auth_device_approvals_pending_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/PendingApprovalResponse"
+         },
+         "type": "array",
+         "title": "Response Pending Approvals Api V1 Auth Device Approvals Pending Get"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/api/v1/auth/device-approvals/{approval_id}/approve": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Yes, it's me: approve a new phone",
+    "description": "Returns a 6-digit code to show here; the customer types it on the new phone.",
+    "operationId": "approve_device_api_v1_auth_device_approvals__approval_id__approve_post",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "approval_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Approval Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApproveDeviceRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApproveDeviceResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/device-approvals/{approval_id}/deny": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "No, that wasn't me",
+    "operationId": "deny_device_api_v1_auth_device_approvals__approval_id__deny_post",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "approval_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Approval Id"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/device-approvals/{approval_id}/status": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Has my other phone approved this sign-in?",
+    "operationId": "approval_status_api_v1_auth_device_approvals__approval_id__status_post",
+    "parameters": [
+     {
+      "name": "approval_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Approval Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApprovalSecretRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApprovalStatusResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/device-approvals/{approval_id}/complete": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Finish signing in with the code from the other phone",
+    "operationId": "complete_approval_api_v1_auth_device_approvals__approval_id__complete_post",
+    "parameters": [
+     {
+      "name": "approval_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Approval Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CompleteApprovalRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AuthTokenResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/device-approvals/{approval_id}/lost-phone": {
+   "post": {
+    "tags": [
+     "Account security"
+    ],
+    "summary": "Sign in without the other phone",
+    "description": "BVN plus sign-in PIN (if set). Signs every other phone out, and holds money leaving the account for 24 hours.",
+    "operationId": "lost_phone_api_v1_auth_device_approvals__approval_id__lost_phone_post",
+    "parameters": [
+     {
+      "name": "approval_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Approval Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApprovalFallbackRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AuthTokenResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
    }
   },
   "/api/v1/admin/auth/login/request-otp": {
@@ -4982,6 +5682,140 @@
     ],
     "title": "ApplicationWorkflowStateResponse"
    },
+   "ApprovalFallbackRequest": {
+    "properties": {
+     "approval_secret": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 20,
+      "title": "Approval Secret"
+     },
+     "bvn": {
+      "type": "string",
+      "maxLength": 11,
+      "minLength": 11,
+      "pattern": "^\\d+$",
+      "title": "Bvn"
+     },
+     "pin": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 6,
+        "minLength": 6,
+        "pattern": "^\\d+$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pin"
+     },
+     "device": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/DeviceInfo"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "approval_secret",
+     "bvn"
+    ],
+    "title": "ApprovalFallbackRequest"
+   },
+   "ApprovalSecretRequest": {
+    "properties": {
+     "approval_secret": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 20,
+      "title": "Approval Secret"
+     }
+    },
+    "type": "object",
+    "required": [
+     "approval_secret"
+    ],
+    "title": "ApprovalSecretRequest"
+   },
+   "ApprovalStatusResponse": {
+    "properties": {
+     "status": {
+      "type": "string",
+      "enum": [
+       "pending",
+       "approved",
+       "denied",
+       "completed",
+       "expired",
+       "failed"
+      ],
+      "title": "Status"
+     },
+     "expires_in": {
+      "type": "integer",
+      "title": "Expires In"
+     }
+    },
+    "type": "object",
+    "required": [
+     "status",
+     "expires_in"
+    ],
+    "title": "ApprovalStatusResponse"
+   },
+   "ApproveDeviceRequest": {
+    "properties": {
+     "pin": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 6,
+        "minLength": 6,
+        "pattern": "^\\d+$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pin",
+      "description": "Sign-in PIN"
+     },
+     "biometric": {
+      "type": "boolean",
+      "title": "Biometric",
+      "description": "The customer passed Face ID / fingerprint on this phone instead. Only accepted where they turned biometrics on.",
+      "default": false
+     }
+    },
+    "type": "object",
+    "title": "ApproveDeviceRequest"
+   },
+   "ApproveDeviceResponse": {
+    "properties": {
+     "code": {
+      "type": "string",
+      "title": "Code",
+      "description": "Show on this phone; the customer types it on the new one."
+     },
+     "expires_in": {
+      "type": "integer",
+      "title": "Expires In"
+     }
+    },
+    "type": "object",
+    "required": [
+     "code",
+     "expires_in"
+    ],
+    "title": "ApproveDeviceResponse"
+   },
    "AuditActorType": {
     "type": "string",
     "enum": [
@@ -5120,8 +5954,26 @@
       "type": "string",
       "title": "Session Id"
      },
+     "status": {
+      "type": "string",
+      "const": "signed_in",
+      "title": "Status",
+      "default": "signed_in"
+     },
      "customer": {
       "$ref": "#/components/schemas/CustomerProfileResponse"
+     },
+     "device_token": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Device Token",
+      "description": "Store securely on this phone and send it in `device` next time: it lets the customer sign back in here with their PIN, and skips new-device approval."
      }
     },
     "type": "object",
@@ -5152,6 +6004,34 @@
      "name"
     ],
     "title": "BankResponse"
+   },
+   "BiometricRequest": {
+    "properties": {
+     "enabled": {
+      "type": "boolean",
+      "title": "Enabled"
+     },
+     "pin": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 6,
+        "minLength": 6,
+        "pattern": "^\\d+$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pin",
+      "description": "Sign-in PIN; required to turn it on"
+     }
+    },
+    "type": "object",
+    "required": [
+     "enabled"
+    ],
+    "title": "BiometricRequest"
    },
    "Body_upload_my_application_document_api_v1_loans_me_applications__application_id__documents__document_type__post": {
     "properties": {
@@ -5200,6 +6080,58 @@
      "bvn"
     ],
     "title": "BvnRegisterRequest"
+   },
+   "ChangeLoginPinRequest": {
+    "properties": {
+     "current_pin": {
+      "type": "string",
+      "maxLength": 6,
+      "minLength": 6,
+      "pattern": "^\\d+$",
+      "title": "Current Pin",
+      "description": "Current sign-in PIN"
+     },
+     "new_pin": {
+      "type": "string",
+      "maxLength": 6,
+      "minLength": 6,
+      "pattern": "^\\d+$",
+      "title": "New Pin",
+      "description": "New sign-in PIN"
+     }
+    },
+    "type": "object",
+    "required": [
+     "current_pin",
+     "new_pin"
+    ],
+    "title": "ChangeLoginPinRequest"
+   },
+   "ChangeTransactionPinRequest": {
+    "properties": {
+     "current_pin": {
+      "type": "string",
+      "maxLength": 4,
+      "minLength": 4,
+      "pattern": "^\\d+$",
+      "title": "Current Pin",
+      "description": "Current transaction PIN"
+     },
+     "new_pin": {
+      "type": "string",
+      "maxLength": 4,
+      "minLength": 4,
+      "pattern": "^\\d+$",
+      "title": "New Pin",
+      "description": "New transaction PIN"
+     }
+    },
+    "type": "object",
+    "required": [
+     "current_pin",
+     "new_pin"
+    ],
+    "title": "ChangeTransactionPinRequest"
    },
    "CollateralCustody": {
     "type": "string",
@@ -5308,6 +6240,40 @@
      "affidavit_reference"
     ],
     "title": "CollateralResponse"
+   },
+   "CompleteApprovalRequest": {
+    "properties": {
+     "approval_secret": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 20,
+      "title": "Approval Secret"
+     },
+     "code": {
+      "type": "string",
+      "maxLength": 6,
+      "minLength": 6,
+      "pattern": "^\\d+$",
+      "title": "Code",
+      "description": "Code shown on the approving phone"
+     },
+     "device": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/DeviceInfo"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "approval_secret",
+     "code"
+    ],
+    "title": "CompleteApprovalRequest"
    },
    "ContributionCreate": {
     "properties": {
@@ -6065,6 +7031,29 @@
      "status": {
       "type": "string",
       "title": "Status"
+     },
+     "login_pin_set": {
+      "type": "boolean",
+      "title": "Login Pin Set",
+      "default": false
+     },
+     "transaction_pin_set": {
+      "type": "boolean",
+      "title": "Transaction Pin Set",
+      "default": false
+     },
+     "transfers_blocked_until": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Transfers Blocked Until",
+      "description": "Money can't leave the account before this time (set after a lost-phone sign-in)."
      }
     },
     "type": "object",
@@ -6094,11 +7083,20 @@
        }
       ],
       "title": "Amount"
+     },
+     "transaction_pin": {
+      "type": "string",
+      "maxLength": 4,
+      "minLength": 4,
+      "pattern": "^\\d+$",
+      "title": "Transaction Pin",
+      "description": "Customer's 4-digit transaction PIN"
      }
     },
     "type": "object",
     "required": [
-     "amount"
+     "amount",
+     "transaction_pin"
     ],
     "title": "CustomerRepayRequest"
    },
@@ -6362,6 +7360,52 @@
     ],
     "title": "DemographicBucket"
    },
+   "DeviceApprovalRequiredResponse": {
+    "properties": {
+     "status": {
+      "type": "string",
+      "const": "approval_required",
+      "title": "Status",
+      "default": "approval_required"
+     },
+     "approval_id": {
+      "type": "string",
+      "title": "Approval Id"
+     },
+     "approval_secret": {
+      "type": "string",
+      "title": "Approval Secret",
+      "description": "Keep in memory; proves this phone started the sign-in."
+     },
+     "expires_in": {
+      "type": "integer",
+      "title": "Expires In"
+     },
+     "approver_devices": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Approver Devices",
+      "description": "Names of the signed-in phones that can approve"
+     },
+     "fallback_needs_pin": {
+      "type": "boolean",
+      "title": "Fallback Needs Pin",
+      "description": "The lost-phone route asks for the sign-in PIN as well as the BVN."
+     }
+    },
+    "type": "object",
+    "required": [
+     "approval_id",
+     "approval_secret",
+     "expires_in",
+     "approver_devices",
+     "fallback_needs_pin"
+    ],
+    "title": "DeviceApprovalRequiredResponse",
+    "description": "Login OTP was right, but this is a new phone: confirm it on a signed-in one first."
+   },
    "DeviceInfo": {
     "properties": {
      "device_id": {
@@ -6422,6 +7466,19 @@
       "examples": [
        "1.0.0"
       ]
+     },
+     "device_token": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 128
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Device Token",
+      "description": "The `device_token` this phone was given at its last sign-in, if any. Proves it is a phone the customer already trusts, so no approval is needed."
      }
     },
     "type": "object",
@@ -8176,6 +9233,63 @@
     ],
     "title": "PaymentProvider"
    },
+   "PendingApprovalResponse": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "device_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Device Name"
+     },
+     "platform": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Platform"
+     },
+     "ip_address": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ip Address"
+     },
+     "requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Requested At"
+     },
+     "expires_in": {
+      "type": "integer",
+      "title": "Expires In"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "requested_at",
+     "expires_in"
+    ],
+    "title": "PendingApprovalResponse"
+   },
    "PermissionCatalogResponse": {
     "properties": {
      "groups": {
@@ -8228,6 +9342,46 @@
      "phone"
     ],
     "title": "PhoneLoginRequest"
+   },
+   "PinSignInRequest": {
+    "properties": {
+     "device_id": {
+      "type": "string",
+      "maxLength": 128,
+      "title": "Device Id"
+     },
+     "device_token": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 20,
+      "title": "Device Token"
+     },
+     "pin": {
+      "type": "string",
+      "maxLength": 6,
+      "minLength": 6,
+      "pattern": "^\\d+$",
+      "title": "Pin",
+      "description": "Sign-in PIN"
+     },
+     "device": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/DeviceInfo"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "device_id",
+     "device_token",
+     "pin"
+    ],
+    "title": "PinSignInRequest"
    },
    "PipelineStageBrief": {
     "properties": {
@@ -8459,6 +9613,57 @@
      "bvn"
     ],
     "title": "ResendRegistrationOtpRequest"
+   },
+   "ResetLoginPinRequest": {
+    "properties": {
+     "bvn": {
+      "type": "string",
+      "maxLength": 11,
+      "minLength": 11,
+      "pattern": "^\\d+$",
+      "title": "Bvn"
+     },
+     "new_pin": {
+      "type": "string",
+      "maxLength": 6,
+      "minLength": 6,
+      "pattern": "^\\d+$",
+      "title": "New Pin",
+      "description": "New sign-in PIN"
+     }
+    },
+    "type": "object",
+    "required": [
+     "bvn",
+     "new_pin"
+    ],
+    "title": "ResetLoginPinRequest"
+   },
+   "ResetTransactionPinRequest": {
+    "properties": {
+     "login_pin": {
+      "type": "string",
+      "maxLength": 6,
+      "minLength": 6,
+      "pattern": "^\\d+$",
+      "title": "Login Pin",
+      "description": "Sign-in PIN, to prove it's you"
+     },
+     "new_pin": {
+      "type": "string",
+      "maxLength": 4,
+      "minLength": 4,
+      "pattern": "^\\d+$",
+      "title": "New Pin",
+      "description": "New transaction PIN"
+     }
+    },
+    "type": "object",
+    "required": [
+     "login_pin",
+     "new_pin"
+    ],
+    "title": "ResetTransactionPinRequest"
    },
    "ResolveAccountRequest": {
     "properties": {
@@ -8873,6 +10078,40 @@
      "expires_at"
     ],
     "title": "SessionResponse"
+   },
+   "SetLoginPinRequest": {
+    "properties": {
+     "pin": {
+      "type": "string",
+      "maxLength": 6,
+      "minLength": 6,
+      "pattern": "^\\d+$",
+      "title": "Pin",
+      "description": "New 6-digit sign-in PIN"
+     }
+    },
+    "type": "object",
+    "required": [
+     "pin"
+    ],
+    "title": "SetLoginPinRequest"
+   },
+   "SetTransactionPinRequest": {
+    "properties": {
+     "pin": {
+      "type": "string",
+      "maxLength": 4,
+      "minLength": 4,
+      "pattern": "^\\d+$",
+      "title": "Pin",
+      "description": "New 4-digit transaction PIN"
+     }
+    },
+    "type": "object",
+    "required": [
+     "pin"
+    ],
+    "title": "SetTransactionPinRequest"
    },
    "StaffAuthTokenResponse": {
     "properties": {
@@ -10006,12 +11245,21 @@
        }
       ],
       "title": "Bank Name"
+     },
+     "transaction_pin": {
+      "type": "string",
+      "maxLength": 4,
+      "minLength": 4,
+      "pattern": "^\\d+$",
+      "title": "Transaction Pin",
+      "description": "Customer's 4-digit transaction PIN"
      }
     },
     "type": "object",
     "required": [
      "bank_code",
-     "account_number"
+     "account_number",
+     "transaction_pin"
     ],
     "title": "UpdatePayoutAccountRequest"
    },
@@ -10120,6 +11368,23 @@
      "phone"
     ],
     "title": "VerifyLoginOtpRequest"
+   },
+   "VerifyLoginPinRequest": {
+    "properties": {
+     "pin": {
+      "type": "string",
+      "maxLength": 6,
+      "minLength": 6,
+      "pattern": "^\\d+$",
+      "title": "Pin",
+      "description": "Sign-in PIN"
+     }
+    },
+    "type": "object",
+    "required": [
+     "pin"
+    ],
+    "title": "VerifyLoginPinRequest"
    },
    "VerifyRegistrationOtpRequest": {
     "properties": {
@@ -10361,11 +11626,20 @@
        }
       ],
       "title": "Amount"
+     },
+     "transaction_pin": {
+      "type": "string",
+      "maxLength": 4,
+      "minLength": 4,
+      "pattern": "^\\d+$",
+      "title": "Transaction Pin",
+      "description": "Customer's 4-digit transaction PIN"
      }
     },
     "type": "object",
     "required": [
-     "amount"
+     "amount",
+     "transaction_pin"
     ],
     "title": "WithdrawRequest"
    },

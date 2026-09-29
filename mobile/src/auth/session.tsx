@@ -1,14 +1,15 @@
 /**
  * Customer session lifecycle.
  *
- *   loading ──► signedOut ──(OTP)──► signedIn ◄──(unlock)── locked
- *                   ▲                    │                     ▲
- *                   └──── sign out / ────┘── 5 min background ─┘
- *                         revoked
+ *   loading ──► signedOut ──(SMS code / PIN)──► signedIn ◄──(PIN / biometrics)── locked
+ *                   ▲                              │                               ▲
+ *                   └────── sign out / revoked ────┘────── 5 min in background ────┘
  *
- * Start-up never waits on the network: a stored refresh token means the app
- * opens to the lock screen (or straight in when the device has no lock set),
- * and the first API call refreshes the access token.
+ * Start-up never waits on the network: a stored refresh token means the app opens to
+ * the lock screen, and the first API call refreshes the access token.
+ *
+ * A phone that signed in before keeps a device token (see storage.ts). While it does,
+ * a signed-out customer can sign back in here with their 6-digit PIN.
  */
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
@@ -18,7 +19,7 @@ import { configureClient, setAccessToken } from '@/api/client';
 import { auth } from '@/api/endpoints';
 import type { AuthTokens } from '@/api/types';
 
-import { lockKind, RELOCK_AFTER_MS, type LockKind } from './lock';
+import { biometricKind, RELOCK_AFTER_MS, type BiometricKind } from './lock';
 import { tokenStore } from './storage';
 
 export type SessionStatus = 'loading' | 'signedOut' | 'locked' | 'signedIn';
@@ -27,13 +28,19 @@ export type Gate = { code: 'APP_UPDATE_REQUIRED' | 'MAINTENANCE_MODE'; message: 
 type SessionValue = {
   status: SessionStatus;
   firstName: string | null;
-  lock: LockKind;
+  /** This phone is trusted: a signed-out customer can sign back in with their PIN. */
+  trusted: boolean;
+  /** Biometrics the customer turned on for this phone and that still work, if any. */
+  biometric: BiometricKind | null;
+  /** What this phone offers, whether or not it's turned on. */
+  biometricAvailable: BiometricKind | null;
+  setBiometric: (on: boolean) => Promise<void>;
   gate: Gate;
   clearGate: () => void;
   signIn: (tokens: AuthTokens) => Promise<void>;
-  signOut: (opts?: { everywhere?: boolean }) => Promise<void>;
+  signOut: (opts?: { everywhere?: boolean; forget?: boolean }) => Promise<void>;
   unlocked: () => void;
-  /** Forget the saved session from the lock screen ("Not you?"). */
+  /** "Not you?": sign out and stop trusting this phone. */
   forget: () => Promise<void>;
 };
 
@@ -49,17 +56,27 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [firstName, setFirstName] = useState<string | null>(null);
-  const [lock, setLock] = useState<LockKind>('none');
+  const [trusted, setTrusted] = useState(false);
+  const [biometricOn, setBiometricOn] = useState(false);
+  const [available, setAvailable] = useState<BiometricKind | null>(null);
   const [gate, setGate] = useState<Gate>(null);
   const backgroundedAt = useRef<number | null>(null);
 
-  const reset = useCallback(async () => {
-    setAccessToken(null);
-    await tokenStore.clear();
-    queryClient.clear();
-    setFirstName(null);
-    setStatus('signedOut');
-  }, [queryClient]);
+  const reset = useCallback(
+    async ({ forget = false } = {}) => {
+      setAccessToken(null);
+      await tokenStore.clear();
+      if (forget) {
+        await tokenStore.forgetDevice();
+        setTrusted(false);
+        setFirstName(null);
+        setBiometricOn(false);
+      }
+      queryClient.clear();
+      setStatus('signedOut');
+    },
+    [queryClient],
+  );
 
   // Boot: decide the first screen from local state only.
   useEffect(() => {
@@ -71,68 +88,88 @@ export function SessionProvider({ children }: PropsWithChildren) {
       onGate: (code, message) => setGate({ code, message }),
     });
     (async () => {
-      const [refresh, name, kind] = await Promise.all([tokenStore.getRefresh(), tokenStore.getName(), lockKind()]);
-      setLock(kind);
+      const [refresh, name, deviceToken, bio, kind] = await Promise.all([
+        tokenStore.getRefresh(),
+        tokenStore.getName(),
+        tokenStore.getDeviceToken(),
+        tokenStore.getBiometric(),
+        biometricKind(),
+      ]);
       setFirstName(name);
-      if (!refresh) setStatus('signedOut');
-      else setStatus(kind === 'none' ? 'signedIn' : 'locked');
+      setTrusted(!!deviceToken);
+      setBiometricOn(bio);
+      setAvailable(kind);
+      setStatus(refresh ? 'locked' : 'signedOut');
     })();
   }, [queryClient]);
 
-  // Re-lock after a long background stint.
+  // Lock again after a long spell in the background; re-check biometrics on return
+  // (the customer may have removed their fingerprints in Settings meanwhile).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'background') {
         backgroundedAt.current = Date.now();
-      } else if (next === 'active' && backgroundedAt.current) {
-        const away = Date.now() - backgroundedAt.current;
-        backgroundedAt.current = null;
-        if (away > RELOCK_AFTER_MS && lock !== 'none') {
-          setStatus((s) => (s === 'signedIn' ? 'locked' : s));
+      } else if (next === 'active') {
+        biometricKind().then(setAvailable);
+        if (backgroundedAt.current) {
+          const away = Date.now() - backgroundedAt.current;
+          backgroundedAt.current = null;
+          if (away > RELOCK_AFTER_MS) setStatus((s) => (s === 'signedIn' ? 'locked' : s));
         }
       }
     });
     return () => sub.remove();
-  }, [lock]);
+  }, []);
 
   const signIn = useCallback(
     async (tokens: AuthTokens) => {
       setAccessToken(tokens.access_token);
       await tokenStore.setRefresh(tokens.refresh_token);
       await tokenStore.setName(tokens.customer.first_name);
+      if (tokens.device_token) {
+        await tokenStore.setDeviceToken(tokens.device_token);
+        setTrusted(true);
+      }
       queryClient.setQueryData(['me'], tokens.customer);
       setFirstName(tokens.customer.first_name);
-      setLock(await lockKind());
       setStatus('signedIn');
     },
     [queryClient],
   );
 
   const signOut = useCallback(
-    async ({ everywhere = false } = {}) => {
+    async ({ everywhere = false, forget = false } = {}) => {
       // Best effort: the local sign-out must succeed even offline.
       await Promise.race([
-        (everywhere ? auth.logoutAll() : auth.logout()).catch(() => undefined),
+        (everywhere ? auth.logoutAll() : auth.logout(forget)).catch(() => undefined),
         new Promise((r) => setTimeout(r, 4000)),
       ]);
-      await reset();
+      await reset({ forget });
     },
     [reset],
   );
+
+  const setBiometric = useCallback(async (on: boolean) => {
+    await tokenStore.setBiometric(on);
+    setBiometricOn(on);
+  }, []);
 
   const value = useMemo<SessionValue>(
     () => ({
       status,
       firstName,
-      lock,
+      trusted,
+      biometric: biometricOn ? available : null,
+      biometricAvailable: available,
+      setBiometric,
       gate,
       clearGate: () => setGate(null),
       signIn,
       signOut,
       unlocked: () => setStatus('signedIn'),
-      forget: () => signOut(),
+      forget: () => signOut({ forget: true }),
     }),
-    [status, firstName, lock, gate, signIn, signOut],
+    [status, firstName, trusted, biometricOn, available, setBiometric, gate, signIn, signOut],
   );
 
   return <SessionContext value={value}>{children}</SessionContext>;

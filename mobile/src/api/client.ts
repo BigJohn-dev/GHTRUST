@@ -82,14 +82,16 @@ async function toApiError(res: Response): Promise<ApiError> {
   const retryAfter = Number(res.headers.get('retry-after')) || undefined;
   const requestId = payload?.request_id ?? res.headers.get('x-request-id') ?? undefined;
   let message: string = typeof payload?.detail === 'string' ? payload.detail : '';
-  let errors: string[] = Array.isArray(payload?.errors) ? payload.errors.map(String) : [];
+  const raw: unknown[] = Array.isArray(payload?.errors) ? payload.errors : [];
+  const details = raw.filter((e): e is Record<string, unknown> => !!e && typeof e === 'object');
+  let errors: string[] = raw.filter((e) => typeof e === 'string') as string[];
   // VALIDATION_ERROR: detail is a list of {loc, msg}
   if (Array.isArray(payload?.detail)) {
     errors = payload.detail.map((d: any) => d?.msg ?? String(d));
     message = errors[0] ?? 'Please check the details and try again.';
   }
   const code = payload?.code ?? (res.status === 401 ? 'TOKEN_INVALID' : `HTTP_${res.status}`);
-  return new ApiError(res.status, code, message || res.statusText, errors, requestId, retryAfter);
+  return new ApiError(res.status, code, message || res.statusText, errors, requestId, retryAfter, details);
 }
 
 async function send(method: Method, path: string, opts: RequestOptions, idempotencyKey?: string) {

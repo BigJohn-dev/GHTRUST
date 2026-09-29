@@ -6,7 +6,7 @@ import { StyleSheet, View } from 'react-native';
 import { auth } from '@/api/endpoints';
 import { ApiError, messageFor } from '@/api/errors';
 import { deviceInfo } from '@/auth/device';
-import { pendingOtp, testModeCode } from '@/auth/pending';
+import { pendingApproval, pendingOtp, testModeCode } from '@/auth/pending';
 import { useSession } from '@/auth/session';
 import { Button } from '@/components/Button';
 import { OtpInput } from '@/components/OtpInput';
@@ -45,9 +45,21 @@ export default function Verify() {
         ? auth.verifyRegistration(pending.bvn, code, device)
         : auth.verifyLogin(pending.phone, code, device);
     },
-    onSuccess: async (tokens) => {
+    onSuccess: async (result) => {
       pendingOtp.clear();
-      await signIn(tokens); // guard switches to the app
+      if (result.status === 'approval_required') {
+        // New phone while another is signed in: approve it there first.
+        pendingApproval.set({
+          id: result.approval_id,
+          secret: result.approval_secret,
+          approverDevices: result.approver_devices,
+          fallbackNeedsPin: result.fallback_needs_pin,
+          expiresAt: Date.now() + result.expires_in * 1000,
+        });
+        router.replace('/approval-wait');
+        return;
+      }
+      await signIn(result); // guard switches to the app
     },
   });
 

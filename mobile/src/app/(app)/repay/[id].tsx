@@ -15,6 +15,7 @@ import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { Banner, CardSkeleton, ErrorState } from '@/components/States';
 import { Text } from '@/components/Text';
+import { TransactionPinSheet } from '@/components/TransactionPinSheet';
 import { naira } from '@/lib/format';
 import { nextInstallment } from '@/lib/loans';
 import { keys, useLoan, useWallet } from '@/lib/queries';
@@ -29,6 +30,7 @@ export default function Repay() {
   const wallet = useWallet();
   const [choice, setChoice] = useState<Choice>('next');
   const [custom, setCustom] = useState('');
+  const [askPin, setAskPin] = useState(false);
   // One key per payment attempt: retries after a timeout replay, never double-charge.
   const key = useRef(newIdempotencyKey());
 
@@ -45,7 +47,7 @@ export default function Repay() {
   else if (value > outstanding) error = `You only owe ${naira(outstanding)}.`;
 
   const pay = useMutation({
-    mutationFn: () => loans.repay(id, value.toFixed(2), key.current),
+    mutationFn: (pin: string) => loans.repay(id, value.toFixed(2), pin, key.current),
     onSuccess: () => {
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       queryClient.invalidateQueries({ queryKey: keys.loans });
@@ -93,6 +95,8 @@ export default function Repay() {
 
   const short = wallet.data && value > balance;
   const insufficient = pay.error instanceof ApiError && pay.error.code === 'INSUFFICIENT_FUNDS';
+  // Wrong or locked PINs are shown in the PIN sheet itself.
+  const pinError = pay.error instanceof ApiError && pay.error.code.startsWith('TRANSACTION_PIN_');
 
   return (
     <Screen
@@ -114,11 +118,20 @@ export default function Repay() {
             title={value > 0 ? `Pay ${naira(value)}` : 'Pay'}
             disabled={!!error || value <= 0}
             loading={pay.isPending}
-            onPress={() => pay.mutate()}
+            onPress={() => {
+              pay.reset();
+              setAskPin(true);
+            }}
           />
         )
       }>
-      {pay.error && !insufficient ? <Banner message={messageFor(pay.error)} /> : null}
+      <TransactionPinSheet
+        visible={askPin}
+        summary={`Pay ${naira(value)} to your loan`}
+        onClose={() => setAskPin(false)}
+        onPin={(pin) => pay.mutateAsync(pin)}
+      />
+      {pay.error && !insufficient && !pinError ? <Banner message={messageFor(pay.error)} /> : null}
 
       <View style={{ gap: space.sm }}>
         {next ? (
