@@ -14,9 +14,9 @@ import {
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
+import { StaffAvatar } from '../StaffAvatar'
 import { hasAnyPermission, hasPermission } from '../../lib/permissions'
-
-const softSpring = 'cubic-bezier(0.25, 1.1, 0.4, 1)'
+import { SIDEBAR_EASE, SIDEBAR_MS } from '../../lib/sidebarPin'
 
 type NavItem = {
   to: string
@@ -68,56 +68,70 @@ interface AppSidebarProps {
   onNavigate?: () => void
 }
 
-function GhLogo({ compact }: { compact?: boolean }) {
+const motion = { transitionTimingFunction: SIDEBAR_EASE, transitionDuration: `${SIDEBAR_MS}ms` }
+
+/**
+ * Text that fades and folds away when the rail collapses. It stays mounted and never wraps,
+ * so nothing reflows mid-animation; icons keep fixed positions and only the width changes.
+ */
+function Fade({ hidden, className, children }: { hidden: boolean; className?: string; children: React.ReactNode }) {
   return (
-    <div className={clsx('flex items-center', compact ? 'justify-center' : 'gap-3 px-1')}>
-      <div
-        className={clsx(
-          'rounded-lg bg-cyan flex items-center justify-center shrink-0 transition-all duration-300',
-          compact ? 'h-7 w-7' : 'h-9 w-9',
-        )}
-      >
-        <span className={clsx('font-bold text-white tracking-tight', compact ? 'text-[10px]' : 'text-[11px]')}>GH</span>
-      </div>
-      {!compact && (
-        <div className="leading-tight min-w-0">
-          <p className="text-[15px] font-semibold text-white tracking-tight">GH Trust</p>
-          <p className="text-[11px] text-white/55 font-medium">Staff operations</p>
-        </div>
-      )}
-    </div>
+    <span
+      aria-hidden={hidden || undefined}
+      className={clsx('whitespace-nowrap transition-opacity', hidden ? 'opacity-0' : 'opacity-100', className)}
+      style={motion}
+    >
+      {children}
+    </span>
   )
 }
 
 export function AppSidebar({ collapsed, pinned, floating, onTogglePin, onNavigate }: AppSidebarProps) {
   const { staff, logout } = useAuth()
   const [search, setSearch] = useState('')
-  const firstName = staff?.full_name?.split(' ')[0] ?? 'Admin'
   const sections = buildSections(
     hasAnyPermission(staff, ['staff:read', 'role:read']),
     hasPermission(staff, 'loan:read'),
     hasPermission(staff, 'loan:read'),
   )
 
+  // Geometry: 72px rail. Nav rows start 12px in with 16px left padding, so every icon is
+  // centred on x=36 whether the sidebar is collapsed or open.
   return (
     <aside
       className={clsx(
-        'flex flex-col h-screen bg-navy border-r border-white/10 transition-[width] duration-500 overflow-hidden',
+        'flex flex-col h-screen bg-navy border-r border-white/10 transition-[width,box-shadow] overflow-hidden',
         collapsed ? 'w-[72px]' : 'w-[272px]',
         floating && 'shadow-2xl shadow-black/30',
       )}
-      style={{ transitionTimingFunction: softSpring }}
+      style={motion}
     >
-      <div className={clsx('pt-5 pb-3', collapsed ? 'px-2' : 'px-4')}>
-        {/* Collapsed, the toggle sits beside a smaller logo (72px rail: 28 + 4 + 24). */}
-        <div className={clsx('flex items-center', collapsed ? 'justify-center gap-1' : 'justify-between')}>
-          <GhLogo compact={collapsed} />
+      <div className="pt-5 pb-3 px-3">
+        <div className="flex items-center h-9">
+          <div
+            className={clsx(
+              'rounded-lg bg-cyan flex items-center justify-center shrink-0 transition-[width,height,margin]',
+              collapsed ? 'h-7 w-7 ml-0' : 'h-9 w-9 ml-1',
+            )}
+            style={motion}
+          >
+            <span className={clsx('font-bold text-white tracking-tight', collapsed ? 'text-[10px]' : 'text-[11px]')}>GH</span>
+          </div>
+          <div
+            className={clsx('leading-tight min-w-0 overflow-hidden transition-[max-width,margin,opacity]', collapsed ? 'max-w-0 ml-0 opacity-0' : 'max-w-[160px] ml-3 opacity-100')}
+            style={motion}
+            aria-hidden={collapsed || undefined}
+          >
+            <p className="text-[15px] font-semibold text-white tracking-tight whitespace-nowrap">GH Trust</p>
+            <p className="text-[11px] text-white/55 font-medium whitespace-nowrap">Staff operations</p>
+          </div>
+          {/* Collapsed, the toggle sits beside the smaller logo (12 + 28 + 4 + 24 = 68 of 72px). */}
           <button
             type="button"
             onClick={onTogglePin}
             className={clsx(
               'rounded-lg flex items-center justify-center shrink-0 text-white/55 hover:text-white hover:bg-white/10 transition-colors',
-              collapsed ? 'h-7 w-6' : 'h-8 w-8',
+              collapsed ? 'h-7 w-6 ml-1' : 'h-8 w-8 ml-auto',
             )}
             aria-label={pinned ? 'Collapse sidebar' : 'Keep sidebar open'}
             aria-pressed={pinned}
@@ -135,57 +149,52 @@ export function AppSidebar({ collapsed, pinned, floating, onTogglePin, onNavigat
       </div>
 
       {/* Search */}
-      <div className={clsx('pb-4', collapsed ? 'px-3 flex justify-center' : 'px-4')}>
-        <div
-          className={clsx(
-            'relative flex items-center h-10 rounded-lg bg-white/10 ring-1 ring-white/10 transition-all duration-500',
-            collapsed ? 'w-10 justify-center' : 'w-full',
-          )}
-          style={{ transitionTimingFunction: softSpring }}
-        >
-          <div className="flex items-center justify-center shrink-0 w-10">
+      <div className="pb-4 px-3">
+        <label className="relative flex items-center h-10 rounded-lg bg-white/10 ring-1 ring-white/10 cursor-text">
+          <span className="flex items-center justify-center shrink-0 w-12">
             <Search size={15} className="text-white/65" />
-          </div>
-          {!collapsed && (
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search…"
-              className="flex-1 bg-transparent border-none outline-none text-[13px] text-white placeholder:text-white/45 pr-3"
-            />
-          )}
-        </div>
+          </span>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search…"
+            tabIndex={collapsed ? -1 : undefined}
+            aria-label="Search"
+            className={clsx(
+              'flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] text-white placeholder:text-white/45 pr-3 transition-opacity',
+              collapsed ? 'opacity-0' : 'opacity-100',
+            )}
+            style={motion}
+          />
+        </label>
       </div>
 
-      <nav className={clsx('flex-1 overflow-y-auto space-y-5', collapsed ? 'px-2' : 'px-3')}>
-        {sections.map((section) => (
-          <div key={section.title}>
-            {!collapsed && (
-              <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-white/50">
-                {section.title}
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3">
+        {sections.map((section, i) => (
+          <div key={section.title} className={clsx(i > 0 && 'mt-3')}>
+            {/* Section titles fold away when collapsing, so the icons glide up; they unfold
+                on opening, so the icons glide back down. */}
+            <div
+              className={clsx('grid transition-[grid-template-rows,opacity]', collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100')}
+              style={motion}
+              aria-hidden={collapsed || undefined}
+            >
+              <p className="overflow-hidden px-4 text-[10px] font-semibold uppercase tracking-widest text-white/50">
+                <span className="block pt-2 pb-2">{section.title}</span>
               </p>
-            )}
+            </div>
             <ul className="space-y-0.5">
               {section.items.map((item) => {
+                const row = 'flex items-center gap-3 h-10 pl-4 pr-3 rounded-lg text-[13px] font-medium'
                 if (item.disabled) {
                   return (
                     <li key={item.label}>
-                      <span
-                        className={clsx(
-                          'flex items-center rounded-lg text-[13px] font-medium text-white/30 cursor-not-allowed',
-                          collapsed ? 'h-10 w-10 justify-center mx-auto' : 'gap-3 px-3 py-2.5',
-                        )}
-                        title={collapsed ? item.label : undefined}
-                      >
-                        {item.icon}
-                        {!collapsed && (
-                          <>
-                            <span className="flex-1">{item.label}</span>
-                            <span className="text-[9px] uppercase tracking-wide font-semibold text-white/30">
-                              Soon
-                            </span>
-                          </>
-                        )}
+                      <span className={clsx(row, 'text-white/30 cursor-not-allowed')} title={collapsed ? item.label : undefined}>
+                        <span className="shrink-0">{item.icon}</span>
+                        <Fade hidden={collapsed} className="flex-1">{item.label}</Fade>
+                        <Fade hidden={collapsed} className="text-[9px] uppercase tracking-wide font-semibold">
+                          Soon
+                        </Fade>
                       </span>
                     </li>
                   )
@@ -199,16 +208,16 @@ export function AppSidebar({ collapsed, pinned, floating, onTogglePin, onNavigat
                       title={collapsed ? item.label : undefined}
                       className={({ isActive }) =>
                         clsx(
-                          'flex items-center rounded-lg text-[13px] font-medium transition-colors duration-200',
-                          collapsed ? 'h-10 w-10 justify-center mx-auto' : 'gap-3 px-3 py-2.5',
+                          row,
+                          'transition-colors duration-200',
                           isActive
                             ? 'bg-white/15 text-white ring-1 ring-white/15'
                             : 'text-white/65 hover:text-white hover:bg-white/10',
                         )
                       }
                     >
-                      {item.icon}
-                      {!collapsed && <span>{item.label}</span>}
+                      <span className="shrink-0">{item.icon}</span>
+                      <Fade hidden={collapsed}>{item.label}</Fade>
                     </NavLink>
                   </li>
                 )
@@ -218,35 +227,41 @@ export function AppSidebar({ collapsed, pinned, floating, onTogglePin, onNavigat
         ))}
       </nav>
 
-      <div className={clsx('mt-auto border-t border-white/10 p-3', collapsed && 'flex justify-center')}>
-        {collapsed ? (
+      <div className="mt-auto border-t border-white/10 p-3">
+        <div className="flex items-center gap-1 rounded-lg">
+          <NavLink
+            to="/profile"
+            onClick={onNavigate}
+            title={collapsed ? 'My profile' : undefined}
+            aria-label="My profile"
+            className={({ isActive }) =>
+              clsx(
+                'flex items-center gap-3 p-1.5 rounded-lg min-w-0 flex-1 transition-colors',
+                isActive ? 'bg-white/15' : 'hover:bg-white/10',
+              )
+            }
+          >
+            <StaffAvatar staff={staff} size="sm" className="ring-1 ring-white/25" />
+            <div
+              className={clsx('min-w-0 flex-1 transition-opacity', collapsed ? 'opacity-0' : 'opacity-100')}
+              style={motion}
+              aria-hidden={collapsed || undefined}
+            >
+              <p className="text-[13px] font-semibold text-white truncate">{staff?.full_name}</p>
+              <p className="text-[11px] text-white/50 truncate">{staff?.job_title || staff?.role?.name || staff?.email || 'Staff'}</p>
+            </div>
+          </NavLink>
           <button
             type="button"
             onClick={logout}
-            className="h-10 w-10 rounded-lg flex items-center justify-center text-white/50 hover:text-rose-300 hover:bg-white/10"
+            tabIndex={collapsed ? -1 : undefined}
+            className="p-2 rounded-lg text-white/50 hover:text-rose-300 hover:bg-white/10 transition-colors shrink-0"
             title="Sign out"
+            aria-label="Sign out"
           >
-            <LogOut size={16} />
+            <LogOut size={15} />
           </button>
-        ) : (
-          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 transition-colors">
-            <div className="h-9 w-9 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[11px] font-bold text-white shrink-0">
-              {firstName.charAt(0)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-semibold text-white truncate">{staff?.full_name}</p>
-              <p className="text-[11px] text-white/50 truncate">{staff?.email ?? 'Staff'}</p>
-            </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="p-2 rounded-lg text-white/50 hover:text-rose-300 hover:bg-white/10 transition-colors"
-              title="Sign out"
-            >
-              <LogOut size={15} />
-            </button>
-          </div>
-        )}
+        </div>
       </div>
     </aside>
   )

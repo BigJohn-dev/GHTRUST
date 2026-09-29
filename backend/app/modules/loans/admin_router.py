@@ -26,6 +26,7 @@ from app.modules.loans.schemas import (
     LoanApplicationDetailResponse,
     LoanApplicationSummaryResponse,
     LoanProductResponse,
+    CreateLoanProductRequest,
     LoanProductToggleRequest,
     VerifyDocumentRequest,
 )
@@ -55,6 +56,21 @@ async def admin_list_products(
     _: Staff = Depends(require_permission(LOAN_READ)),
 ):
     return await LoanService(db).list_products(active_only=False)
+
+
+@router.post(
+    "/products",
+    response_model=LoanProductResponse,
+    status_code=201,
+    summary="Create loan product",
+    description="Created switched off. Publish an approval workflow for it, then switch it on.",
+)
+async def admin_create_product(
+    payload: CreateLoanProductRequest,
+    db: DbSession,
+    _: Staff = Depends(require_permission(LOAN_CONFIGURE_WORKFLOW)),
+):
+    return await LoanService(db).create_product(payload)
 
 
 @router.patch("/products/{product_code}", response_model=LoanProductResponse, summary="Toggle loan product")

@@ -27,7 +27,6 @@ from app.modules.loans.schemas import (
     DocumentStatus,
     InstallmentStatus,
     InterestMethod,
-    LoanProductCode,
     LoanStatus,
     RepaymentChannel,
 )
@@ -216,7 +215,7 @@ class LoanDraft(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "loan_drafts"
 
     customer_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("customers.id"), index=True)
-    product_type: Mapped[LoanProductCode] = mapped_column(StrEnum(LoanProductCode))
+    product_type: Mapped[str] = mapped_column(String(50))  # a loan_products.code
     step: Mapped[int] = mapped_column(Integer, default=1)
     total_steps: Mapped[int] = mapped_column(Integer, default=5)
     data: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -244,7 +243,7 @@ class Loan(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     application_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("loan_applications.id"), unique=True, nullable=True
     )
-    product_type: Mapped[LoanProductCode] = mapped_column(StrEnum(LoanProductCode))
+    product_type: Mapped[str] = mapped_column(String(50))  # a loan_products.code
     principal: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     disbursed_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     outstanding: Mapped[Decimal] = mapped_column(Numeric(18, 2))

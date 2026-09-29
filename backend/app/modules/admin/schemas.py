@@ -75,6 +75,34 @@ class StaffUpdateRequest(BaseModel):
     role_id: str | None = Field(None, max_length=36)
 
 
+# Avatar colours staff can pick for their profile (brand palette).
+AVATAR_COLORS = ("navy", "cyan", "emerald", "amber", "rose", "violet", "slate")
+
+
+class StaffSelfUpdateRequest(BaseModel):
+    """
+    What staff may change on their own profile. Phone (the sign-in factor) and email are
+    not self-service: changing them from a signed-in session would let a stolen session
+    take over the account. Administrators change them on the Team page.
+    """
+
+    full_name: str | None = Field(None, min_length=2, max_length=200)
+    job_title: str | None = Field(None, max_length=100)
+    avatar_color: str | None = Field(None, description=f"One of: {', '.join(AVATAR_COLORS)}")
+
+    @field_validator("full_name", "job_title")
+    @classmethod
+    def _strip(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else value
+
+    @field_validator("avatar_color")
+    @classmethod
+    def _known_color(cls, value: str | None) -> str | None:
+        if value is not None and value not in AVATAR_COLORS:
+            raise ValueError(f"avatar_color must be one of: {', '.join(AVATAR_COLORS)}")
+        return value
+
+
 class StaffResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -86,6 +114,8 @@ class StaffResponse(BaseModel):
     is_super_admin: bool
     role: RoleResponse | None = None
     permissions: list[str]
+    job_title: str | None = None
+    avatar_color: str | None = None
 
     @classmethod
     def from_staff(cls, staff: Staff) -> "StaffResponse":
@@ -98,6 +128,8 @@ class StaffResponse(BaseModel):
             is_super_admin=staff.is_super_admin,
             role=RoleResponse.from_role(staff.role) if staff.role else None,
             permissions=sorted(staff.effective_permissions),
+            job_title=staff.job_title,
+            avatar_color=staff.avatar_color,
         )
 
 

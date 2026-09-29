@@ -29,6 +29,9 @@ class Staff(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     full_name: Mapped[str] = mapped_column(String(200))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     phone: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    # Self-service profile (PATCH /admin/auth/me).
+    job_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    avatar_color: Mapped[str | None] = mapped_column(String(20), nullable=True)
     role_id: Mapped[str | None] = mapped_column(
         ForeignKey("roles.id", ondelete="SET NULL"), nullable=True, index=True
     )

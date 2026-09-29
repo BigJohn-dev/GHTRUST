@@ -107,51 +107,39 @@ function ApplicationsPageContent() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState(() => searchParams.get('status') ?? '')
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const status = searchParams.get('status') ?? ''
     setFilter(status)
   }, [searchParams])
 
+  // Load the queue once (newest 500, the API's maximum); tabs filter it here, so switching
+  // is instant and the charts always have every status to draw.
   useEffect(() => {
     if (!token) return
     setLoading(true)
     loansApi
-      .listApplications(token, filter ? { status: filter } : undefined)
+      .listApplications(token, { limit: 500 })
       .then(setApps)
       .finally(() => setLoading(false))
-  }, [token, filter])
+  }, [token])
 
   const filtered = useMemo(() => {
+    const inTab = filter ? apps.filter((app) => app.status === filter) : apps
     const q = search.trim().toLowerCase()
-    if (!q) return apps
-    return apps.filter((app) => {
+    if (!q) return inTab
+    return inTab.filter((app) => {
       const name = (app.applicant_name ?? '').toLowerCase()
       const product = app.product_name.toLowerCase()
       const id = app.id.toLowerCase()
       const acct = (app.account_number ?? '').toLowerCase()
       return name.includes(q) || product.includes(q) || id.includes(q) || acct.includes(q)
     })
-  }, [apps, search])
-
-  const toggleAll = () => {
-    if (selected.size === filtered.length) setSelected(new Set())
-    else setSelected(new Set(filtered.map((a) => a.id)))
-  }
-
-  const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  }, [apps, filter, search])
 
   return (
     <AdminLayout title="Loan queue" subtitle="Active pipeline — review and action applications">
-      {!loading && apps.length > 0 && <LoanQueueCharts applications={apps} />}
+      <LoanQueueCharts applications={apps} status={filter} />
 
       {/* Toolbar */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-5">
@@ -210,14 +198,6 @@ function ApplicationsPageContent() {
             <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 bg-slate-50/80">
-                  <th className="px-4 py-3 w-10">
-                    <input
-                      type="checkbox"
-                      checked={selected.size === filtered.length && filtered.length > 0}
-                      onChange={toggleAll}
-                      className="rounded border-slate-300"
-                    />
-                  </th>
                   <th className="px-4 py-3 min-w-[220px]">Applicant</th>
                   <th className="px-4 py-3 min-w-[160px]">Loan detail</th>
                   <th className="px-4 py-3 min-w-[180px]">Stage & progress</th>
@@ -245,14 +225,6 @@ function ApplicationsPageContent() {
                       key={app.id}
                       className="border-t border-slate-100 hover:bg-sky-50/30 transition-colors group"
                     >
-                      <td className="px-4 py-5 align-top">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(app.id)}
-                          onChange={() => toggleOne(app.id)}
-                          className="rounded border-slate-300 mt-1"
-                        />
-                      </td>
                       <td className="px-4 py-5 align-top">
                         <Link to={`/applications/${app.id}`} className="flex gap-3 min-w-0">
                           <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center text-[11px] font-bold text-slate-600 shrink-0 group-hover:ring-2 group-hover:ring-[#0B84CE]/30 transition-all">

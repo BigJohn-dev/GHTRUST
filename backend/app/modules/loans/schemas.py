@@ -194,7 +194,8 @@ class AssetProductData(BaseModel):
 
 
 class CreateApplicationRequest(BaseModel):
-    product_code: LoanProductCode
+    # Any active product's code: staff can create products beyond the built-in ones.
+    product_code: str = Field(..., min_length=1, max_length=50)
     channel: ApplicationChannel = ApplicationChannel.WEB
 
 
@@ -228,6 +229,65 @@ class ApplicationStatusUpdate(BaseModel):
 
 class LoanProductToggleRequest(BaseModel):
     is_active: bool
+
+
+class CreateLoanProductRequest(BaseModel):
+    """
+    A new product, created switched off. Steps, documents and cadences are limited to the
+    ones the customer app and servicing engine understand; switching it on requires a
+    published approval workflow.
+    """
+
+    code: str = Field(..., pattern=r"^[a-z][a-z0-9_]{2,49}$", description="Permanent ID, e.g. `agric_loan`")
+    name: str = Field(..., min_length=3, max_length=150)
+    description: str | None = Field(None, max_length=500)
+    interest_rate_pct_monthly: Decimal = Field(..., gt=0, le=20, decimal_places=2)
+    processing_fee_pct: Decimal = Field(Decimal("0"), ge=0, le=20, decimal_places=2)
+    interest_method: InterestMethod = InterestMethod.FLAT
+    max_tenure_days: int | None = Field(None, ge=30, le=1825)
+    default_penalty_pct_daily: Decimal | None = Field(None, ge=0, le=5, decimal_places=2)
+    repayment_cadence_options: list[RepaymentCadence] = Field(..., min_length=1)
+    required_document_types: list[str] = Field(..., min_length=1)
+    workflow_steps: list[str] = Field(..., min_length=3)
+
+    @field_validator("name", "description")
+    @classmethod
+    def _strip(cls, value: str | None) -> str | None:
+        return value.strip() if value else value
+
+    @field_validator("repayment_cadence_options")
+    @classmethod
+    def _unique_cadences(cls, value: list[RepaymentCadence]) -> list[RepaymentCadence]:
+        return list(dict.fromkeys(value))
+
+    @field_validator("required_document_types")
+    @classmethod
+    def _known_documents(cls, value: list[str]) -> list[str]:
+        from app.modules.loans.constants import DOCUMENT_LABELS
+
+        unknown = [d for d in value if d not in DOCUMENT_LABELS]
+        if unknown:
+            raise ValueError(f"Unknown document types: {', '.join(unknown)}")
+        return list(dict.fromkeys(value))
+
+    @field_validator("workflow_steps")
+    @classmethod
+    def _known_steps(cls, value: list[str]) -> list[str]:
+        from app.modules.loans.constants import WIZARD_STEPS
+
+        unknown = [s for s in value if s not in WIZARD_STEPS]
+        if unknown:
+            raise ValueError(f"Unknown application steps: {', '.join(unknown)}")
+        if len(set(value)) != len(value):
+            raise ValueError("Each application step can appear only once")
+        for required in ("universal_form", "documents", "review_submit"):
+            if required not in value:
+                raise ValueError(f"Application steps must include '{required}'")
+        if value[-1] != "review_submit":
+            raise ValueError("'review_submit' must be the last step")
+        if "product_selection" in value and value[0] != "product_selection":
+            raise ValueError("'product_selection' must be the first step")
+        return value
 
 
 class LoanProductResponse(BaseModel):
@@ -371,7 +431,7 @@ class LoanResponse(BaseModel):
     customer_id: str
     customer_name: str | None = None
     application_id: str | None = None
-    product_type: LoanProductCode
+    product_type: str
     principal: Decimal
     total_interest: Decimal
     total_repayable: Decimal

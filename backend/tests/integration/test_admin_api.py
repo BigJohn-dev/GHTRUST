@@ -226,6 +226,27 @@ class TestAdminSettings:
         product = next(p for p in listing.json() if p["code"] == "lpo_invoice_financing")
         assert product["is_active"] is False
 
+        # LPO has no approval workflow yet: switching it on would strand its applications.
+        blocked = await api_client.patch(
+            "/api/v1/admin/loans/products/lpo_invoice_financing",
+            headers=admin_headers,
+            json={"is_active": True},
+        )
+        assert blocked.status_code == 409
+        assert blocked.json()["code"] == "WORKFLOW_REQUIRED"
+
+        from app.modules.loans.workflow_seed import seed_workflow_roles
+
+        roles = await seed_workflow_roles(db_session)
+        await db_session.commit()
+        draft = await api_client.post(
+            "/api/v1/admin/loans/products/lpo_invoice_financing/workflows",
+            headers=admin_headers,
+            json={"stages": [{"name": "Review", "approver_role_id": roles["Loan Officer"].id}]},
+        )
+        assert draft.status_code == 201, draft.text
+        await api_client.post(f"/api/v1/admin/loans/workflows/{draft.json()['id']}/publish", headers=admin_headers)
+
         toggle = await api_client.patch(
             "/api/v1/admin/loans/products/lpo_invoice_financing",
             headers=admin_headers,

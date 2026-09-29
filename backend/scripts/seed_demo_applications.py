@@ -17,7 +17,6 @@ from app.modules.loans.schemas import (
     ApplicationChannel,
     CreateApplicationRequest,
     GuarantorInput,
-    LoanProductCode,
     UpdateApplicationStepRequest,
 )
 from app.modules.loans.service import LoanService, seed_loan_products
@@ -110,7 +109,7 @@ async def _seed_one(session, applicant: dict) -> str:
 
     app = await svc.create_application(
         customer,
-        CreateApplicationRequest(product_code=LoanProductCode(product_code), channel=ApplicationChannel.WEB),
+        CreateApplicationRequest(product_code=product_code, channel=ApplicationChannel.WEB),
     )
 
     await svc.update_application_step(

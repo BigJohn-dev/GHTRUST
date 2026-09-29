@@ -23,6 +23,7 @@ from app.modules.admin.permissions import (
     STAFF_UPDATE,
 )
 from app.modules.admin.schemas import (
+    StaffSelfUpdateRequest,
     AdminDashboardResponse,
     OtpSentResponse,
     PermissionCatalogResponse,
@@ -190,6 +191,20 @@ async def staff_logout(
 
 @router.get("/auth/me", response_model=StaffResponse, summary="Current staff profile")
 async def staff_me(staff: CurrentStaff):
+    return StaffResponse.from_staff(staff)
+
+
+@router.patch("/auth/me", response_model=StaffResponse, summary="Update own profile")
+async def update_staff_me(payload: StaffSelfUpdateRequest, staff: CurrentStaff, db: DbSession):
+    """Name, job title and avatar colour. Send an empty job title to clear it."""
+    changes = payload.model_dump(exclude_unset=True)
+    if "full_name" in changes and changes["full_name"]:
+        staff.full_name = changes["full_name"]
+    if "job_title" in changes:
+        staff.job_title = changes["job_title"] or None
+    if "avatar_color" in changes:
+        staff.avatar_color = changes["avatar_color"]
+    await db.flush()
     return StaffResponse.from_staff(staff)
 
 

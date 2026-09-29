@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import {
@@ -555,6 +555,13 @@ function DemographicBarCard({
   )
 }
 
+const STATUS_FILTERS: { value: string; label: string; statuses: string[] }[] = [
+  { value: 'review', label: 'In review', statuses: ['submitted', 'under_review', 'documents_incomplete'] },
+  { value: 'approved', label: 'Approved', statuses: ['approved', 'ready_to_disburse'] },
+  { value: 'disbursed', label: 'Disbursed', statuses: ['disbursed'] },
+  { value: 'rejected', label: 'Rejected', statuses: ['rejected'] },
+]
+
 function RecentApplicationsTable({
   applications,
   linkRows = false,
@@ -563,86 +570,198 @@ function RecentApplicationsTable({
   linkRows?: boolean
 }) {
   const navigate = useNavigate()
+  const [status, setStatus] = useState<string | null>(null)
+  const [product, setProduct] = useState<string | null>(null)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const filterRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!filterOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFilterOpen(false)
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [filterOpen])
+
+  const products = useMemo(
+    () => [...new Map(applications.map((a) => [a.product_code, a.product_name])).entries()],
+    [applications],
+  )
+  const statusSet = STATUS_FILTERS.find((f) => f.value === status)?.statuses
+  const rows = applications.filter(
+    (a) => (!statusSet || statusSet.includes(a.status)) && (!product || a.product_code === product),
+  )
+  const activeFilters = (status ? 1 : 0) + (product ? 1 : 0)
 
   return (
-    <DashCard className="overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100/80">
-        <div>
+    <DashCard>
+      <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-slate-100/80">
+        <div className="min-w-0">
           <h3 className="text-[14px] font-semibold text-navy">Recent loan applications</h3>
-          <p className="text-[11px] text-slate-400 mt-0.5">Latest submissions across all products</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {activeFilters
+              ? `${rows.length} of ${applications.length} latest submissions`
+              : 'Latest submissions across all products'}
+          </p>
         </div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-lg px-3 py-1.5 transition-colors"
-        >
-          <Filter className="h-3.5 w-3.5" />
-          Filter
-        </button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="text-left text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-              <th className="px-6 py-3">Applicant</th>
-              <th className="px-6 py-3">Type</th>
-              <th className="px-6 py-3">Date</th>
-              <th className="px-6 py-3 text-right">Amount</th>
-              <th className="px-6 py-3">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {applications.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-[13px] text-slate-400">
-                  No applications yet
-                </td>
-              </tr>
-            ) : (
-              applications.map((row) => {
-                const name = row.applicant_name ?? 'Applicant'
-                const content = (
-                  <>
-                    <td className="px-6 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-slate-100 text-navy flex items-center justify-center text-[10px] font-bold group-hover:bg-navy/10 transition-colors">
-                          {initials(name)}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-medium text-navy truncate">{name}</p>
-                          <p className="text-[11px] text-slate-400 font-mono">{row.id.slice(0, 8)}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-3.5 text-[13px] text-slate-500">{row.product_name}</td>
-                    <td className="px-6 py-3.5 text-[12px] text-slate-400 whitespace-nowrap tabular-nums">
-                      {formatAppDate(row.submitted_at ?? row.created_at)}
-                    </td>
-                    <td className="px-6 py-3.5 text-[13px] font-semibold text-navy text-right tabular-nums">
-                      {formatNaira(row.requested_amount)}
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <StatusPill status={row.status} />
-                    </td>
-                  </>
-                )
-
-                return (
-                  <tr
-                    key={row.id}
-                    onClick={linkRows ? () => navigate(`/applications/${row.id}`) : undefined}
-                    className={clsx(
-                      'border-t border-slate-50 hover:bg-slate-50/60 transition-colors group',
-                      linkRows ? 'cursor-pointer' : 'cursor-default',
-                    )}
-                  >
-                    {content}
-                  </tr>
-                )
-              })
+        <div ref={filterRef} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setFilterOpen((o) => !o)}
+            aria-expanded={filterOpen}
+            aria-haspopup="dialog"
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-[12px] font-medium rounded-lg px-3 py-1.5 transition-colors',
+              activeFilters ? 'text-navy bg-navy/10 hover:bg-navy/15' : 'text-slate-500 bg-slate-50 hover:bg-slate-100',
             )}
-          </tbody>
-        </table>
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Filter
+            {activeFilters > 0 && (
+              <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-navy text-white text-[10px] leading-4 text-center">
+                {activeFilters}
+              </span>
+            )}
+          </button>
+          {filterOpen && (
+            <div
+              role="dialog"
+              aria-label="Filter applications"
+              className="absolute right-0 top-9 z-30 w-60 rounded-xl bg-white shadow-xl ring-1 ring-slate-200 p-3 space-y-3"
+            >
+              <FilterGroup
+                label="Status"
+                options={STATUS_FILTERS.map((f) => [f.value, f.label])}
+                value={status}
+                onChange={setStatus}
+              />
+              {products.length > 1 && (
+                <FilterGroup label="Loan type" options={products} value={product} onChange={setProduct} />
+              )}
+              <div className="flex justify-between pt-1 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={!activeFilters}
+                  onClick={() => {
+                    setStatus(null)
+                    setProduct(null)
+                  }}
+                  className="text-[12px] font-medium text-slate-500 hover:text-slate-800 disabled:opacity-40 pt-2"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterOpen(false)}
+                  className="text-[12px] font-semibold text-navy hover:underline pt-2"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+      {/* Fixed layout and truncation keep the table inside the card at any width. */}
+      <table className="w-full table-fixed">
+        <thead>
+          <tr className="text-left text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+            <th className="px-6 py-3 w-[38%]">Applicant</th>
+            <th className="px-3 py-3">Type</th>
+            <th className="px-3 py-3 text-right w-[22%]">Amount</th>
+            <th className="px-6 py-3 w-[26%]">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="px-6 py-8 text-center text-[13px] text-slate-400">
+                {applications.length ? 'No applications match these filters' : 'No applications yet'}
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => {
+              const name = row.applicant_name ?? 'Applicant'
+              return (
+                <tr
+                  key={row.id}
+                  onClick={linkRows ? () => navigate(`/applications/${row.id}`) : undefined}
+                  className={clsx(
+                    'border-t border-slate-50 hover:bg-slate-50/60 transition-colors group',
+                    linkRows ? 'cursor-pointer' : 'cursor-default',
+                  )}
+                >
+                  <td className="px-6 py-3.5">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 shrink-0 rounded-lg bg-slate-100 text-navy flex items-center justify-center text-[10px] font-bold group-hover:bg-navy/10 transition-colors">
+                        {initials(name)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-navy truncate" title={name}>{name}</p>
+                        <p className="text-[11px] text-slate-400 truncate tabular-nums">
+                          {formatAppDate(row.submitted_at ?? row.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3.5 text-[13px] leading-snug text-slate-500 break-words">
+                    {row.product_name}
+                  </td>
+                  <td className="px-3 py-3.5 text-[13px] font-semibold text-navy text-right tabular-nums truncate">
+                    {formatNaira(row.requested_amount)}
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <StatusPill status={row.status} />
+                  </td>
+                </tr>
+              )
+            })
+          )}
+        </tbody>
+      </table>
     </DashCard>
+  )
+}
+
+function FilterGroup({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: [string, string][]
+  value: string | null
+  onChange: (value: string | null) => void
+}) {
+  return (
+    <fieldset>
+      <legend className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5">{label}</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(([optionValue, optionLabel]) => {
+          const active = value === optionValue
+          return (
+            <button
+              key={optionValue}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(active ? null : optionValue)}
+              className={clsx(
+                'px-2.5 py-1 rounded-md text-[12px] font-medium ring-1 transition-colors',
+                active ? 'bg-navy text-white ring-navy' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50',
+              )}
+            >
+              {optionLabel}
+            </button>
+          )
+        })}
+      </div>
+    </fieldset>
   )
 }

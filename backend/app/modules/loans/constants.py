@@ -121,6 +121,20 @@ PRODUCT_WIZARD_STEPS: dict[str, list[str]] = {
     ],
 }
 
+# Every application step the customer apps have screens for, in their usual order.
+WIZARD_STEPS: tuple[str, ...] = (
+    "product_selection",
+    "universal_form",
+    "business_details",
+    "employment_details",
+    "student_school_details",
+    "guardian_details",
+    "asset_details",
+    "guarantor_collateral",
+    "documents",
+    "review_submit",
+)
+
 LOAN_PRODUCT_SEED: list[dict] = [
     {
         "code": BUSINESS_LOAN,
