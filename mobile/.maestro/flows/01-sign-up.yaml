@@ -1,0 +1,47 @@
+# New customer: BVN → SMS code (shown in test mode) → live face check → consent → PIN.
+appId: ng.ghtrust.app
+name: Sign up
+tags: [smoke]
+env:
+  BVN: "22200011122"
+  PIN: "250817"
+---
+- launchApp:
+    clearState: true
+    permissions:
+      camera: allow
+- tapOn: "Skip"
+- tapOn: "Create an account"
+- tapOn: "11-digit BVN"
+- inputText: ${BVN}
+- tapOn: "Continue"
+# The dev server echoes the code in a banner ("… Your code is 123456."); type it in.
+- extendedWaitUntil:
+    visible: ".*Your code is \\d{6}.*"
+    timeout: 30000
+- copyTextFrom:
+    text: ".*Your code is \\d{6}.*"
+- evalScript: ${output.otp = maestro.copiedText.match(/\d{6}/)[0]}
+- inputText: ${output.otp}
+- tapOn: "Start face check"
+- extendedWaitUntil:
+    visible: "Before you continue"
+    timeout: 60000
+- tapOn: "I have read and agree.*"
+- tapOn: "Agree and continue"
+- extendedWaitUntil:
+    visible: "Create your sign-in PIN"
+    timeout: 20000
+- runFlow:
+    file: ../subflows/enter-pin.yaml
+    env:
+      PIN: ${PIN}
+- assertVisible: "Enter it again"
+- runFlow:
+    file: ../subflows/enter-pin.yaml
+    env:
+      PIN: ${PIN}
+- runFlow: ../subflows/skip-optional-setup.yaml
+- extendedWaitUntil:
+    visible: "QUICK ACTIONS"
+    timeout: 20000

@@ -1,0 +1,13 @@
+# Maestro workspace: https://maestro.mobile.dev
+# Flows share one app install and run in this order (sign-up creates the account the
+# others use), against backend/scripts/dev_server.py started with --reset --wallet.
+flows:
+  - "flows/*.yaml"
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - 01-sign-up
+    - 02-unlock-with-pin
+    - 03-start-application
+    - 04-payout-account
+    - 05-report-a-problem

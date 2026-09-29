@@ -18,10 +18,14 @@ import { SessionProvider, useSession } from '@/auth/session';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { BlockingScreen } from '@/components/BlockingScreen';
 import { loadIntro, useIntroSeen } from '@/lib/intro';
+import { initMonitoring, withMonitoring } from '@/lib/monitoring';
 import { makeQueryClient, useAppConfig } from '@/lib/queries';
+import { protectAppSwitcher } from '@/lib/useSecureScreen';
 import { hideSplash, holdSplash } from '@/lib/splash';
 import { colors, font } from '@/theme/tokens';
 
+initMonitoring();
+protectAppSwitcher();
 holdSplash();
 loadIntro();
 
@@ -33,7 +37,9 @@ if (Platform.OS !== 'web') {
   AppState.addEventListener('change', (state) => focusManager.setFocused(state === 'active'));
 }
 
-export default function RootLayout() {
+export default withMonitoring(RootLayout);
+
+function RootLayout() {
   const [queryClient] = useState(makeQueryClient);
   const [fontsLoaded, fontError] = useFonts({
     Montserrat_400Regular,

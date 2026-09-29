@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 
 import { approvals } from '@/api/endpoints';
 import { setupFlow, usePinReset, useSetupFlow } from '@/lib/flags';
+import { setMonitoringUser } from '@/lib/monitoring';
 import { usePushNotifications } from '@/lib/usePushNotifications';
 import { useMe } from '@/lib/queries';
 import { colors, font } from '@/theme/tokens';
@@ -27,6 +28,11 @@ export default function AppLayout() {
 
   const ready = !needsSetup && !needsConsent;
   usePendingApprovals(ready);
+  const customerId = me.data?.id ?? null;
+  useEffect(() => {
+    setMonitoringUser(customerId);
+    return () => setMonitoringUser(null);
+  }, [customerId]);
   usePushNotifications(ready);
 
   return (

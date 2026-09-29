@@ -2,7 +2,7 @@ import type Ionicons from '@expo/vector-icons/Ionicons';
 
 import type { ApplicationSummary, Loan, WalletTransaction } from '@/api/types';
 
-import { productName } from '@/components/loans';
+import { productName } from '@/lib/products';
 import { applicationStatus, loanStatus, type Tone } from './status';
 
 /** One row of "Recent activity" on the home screen. */

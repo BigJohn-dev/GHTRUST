@@ -17,6 +17,7 @@ import { Card } from '@/components/Card';
 import { PinPad } from '@/components/PinPad';
 import { Banner, ProgressBar } from '@/components/States';
 import { Text } from '@/components/Text';
+import { useSecureScreen } from '@/lib/useSecureScreen';
 import { colors, font, radius, space } from '@/theme/tokens';
 
 type Stage = 'ask' | 'pin' | 'code' | 'denied' | 'gone';
@@ -26,6 +27,7 @@ type Stage = 'ask' | 'pin' | 'code' | 'denied' | 'gone';
  * them (then proves it with their PIN or biometrics), and gets a code to type there.
  */
 export default function ApproveDevice() {
+  useSecureScreen('approve-device'); // shows a one-time code
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { biometric } = useSession();

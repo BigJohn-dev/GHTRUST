@@ -1,0 +1,18 @@
+# Reopening the app on a trusted phone asks for the sign-in PIN, not an SMS code.
+appId: ng.ghtrust.app
+name: Unlock with PIN
+env:
+  PIN: "250817"
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Enter your 6-digit sign-in PIN"
+    timeout: 20000
+- runFlow:
+    file: ../subflows/enter-pin.yaml
+    env:
+      PIN: ${PIN}
+- extendedWaitUntil:
+    visible: "QUICK ACTIONS"
+    timeout: 20000

@@ -19,6 +19,19 @@ function devOrigin(): string {
 }
 
 export const API_ORIGIN = (process.env.EXPO_PUBLIC_API_URL || devOrigin()).replace(/\/+$/, '');
+
+// A release build must talk to the API over HTTPS: PINs, BVNs and tokens travel on it.
+// Failing at start-up makes a build with a missing or http:// EXPO_PUBLIC_API_URL
+// obvious in testing, instead of quietly sending data unencrypted. Only the end-to-end
+// test build (against a local dev server) sets EXPO_PUBLIC_ALLOW_INSECURE_API.
+if (
+  !__DEV__ &&
+  Platform.OS !== 'web' &&
+  !API_ORIGIN.startsWith('https://') &&
+  process.env.EXPO_PUBLIC_ALLOW_INSECURE_API !== '1'
+) {
+  throw new Error(`Release builds need an https EXPO_PUBLIC_API_URL (got "${API_ORIGIN}").`);
+}
 export const API_BASE = `${API_ORIGIN}/api/v1`;
 
 export const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';

@@ -11,6 +11,7 @@ import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 
 import { tokenStore } from '@/auth/storage';
+import { reportError } from '@/lib/monitoring';
 
 import { API_BASE, APP_VERSION } from './config';
 import { ApiError, SESSION_ENDED } from './errors';
@@ -96,6 +97,10 @@ async function toApiError(res: Response): Promise<ApiError> {
 
 async function send(method: Method, path: string, opts: RequestOptions, idempotencyKey?: string) {
   const headers = baseHeaders();
+  // The API reuses this ID in its logs and error reports, so a crash report from the
+  // phone can be matched to the server side, even when the response never arrived.
+  const requestId = Crypto.randomUUID();
+  headers['X-Request-ID'] = requestId;
   if (opts.auth !== false && accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
 
@@ -116,7 +121,13 @@ async function send(method: Method, path: string, opts: RequestOptions, idempote
     if (opts.signal?.aborted) throw err;
     const timedOut = (err as Error)?.name === 'AbortError';
     const url = buildUrl(path, opts.query);
-    throw new ApiError(0, timedOut ? 'TIMEOUT' : 'NETWORK', `${timedOut ? 'Timed out' : 'No response'}: ${method} ${url}`);
+    throw new ApiError(
+      0,
+      timedOut ? 'TIMEOUT' : 'NETWORK',
+      `${timedOut ? 'Timed out' : 'No response'}: ${method} ${url}`,
+      [],
+      requestId,
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -174,6 +185,7 @@ export async function request<T>(method: Method, path: string, opts: RequestOpti
 
   if (!res.ok) {
     const error = await toApiError(res);
+    if (res.status >= 500) reportError(error, { path: path.split('?')[0] });
     if (error.code === 'APP_UPDATE_REQUIRED' || error.code === 'MAINTENANCE_MODE') {
       listeners.onGate(error.code, error.message);
     } else if (res.status === 401 && needsAuth) {

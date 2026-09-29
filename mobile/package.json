@@ -6,6 +6,7 @@
     "@expo-google-fonts/montserrat": "^0.4.2",
     "@expo/ui": "~57.0.20",
     "@expo/vector-icons": "^15.0.2",
+    "@sentry/react-native": "~8.28.0",
     "@tanstack/react-query": "^5.103.2",
     "eslint-config-expo": "~57.0.2",
     "expo": "~57.0.25",
@@ -25,6 +26,7 @@
     "expo-local-authentication": "~57.0.3",
     "expo-notifications": "~57.0.21",
     "expo-router": "~57.0.23",
+    "expo-screen-capture": "~57.0.3",
     "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
@@ -42,8 +44,12 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
+    "jest": "^29.7.0",
+    "jest-expo": "~57.0.5",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -54,7 +60,17 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "gen:api": "node scripts/gen-api.mjs",
-    "start:railway": "node scripts/start-remote.mjs"
+    "start:railway": "node scripts/start-remote.mjs",
+    "test": "jest"
   },
-  "private": true
+  "private": true,
+  "jest": {
+    "preset": "jest-expo",
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/src/$1"
+    },
+    "testMatch": [
+      "<rootDir>/src/**/__tests__/**/*.test.ts?(x)"
+    ]
+  }
 }
