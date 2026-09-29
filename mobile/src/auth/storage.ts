@@ -12,6 +12,7 @@ import { Platform } from 'react-native';
 const REFRESH_KEY = 'ghtrust.refresh_token';
 const DEVICE_KEY = 'ghtrust.device_id';
 const NAME_KEY = 'ghtrust.first_name';
+const INTRO_KEY = 'ghtrust.intro_seen';
 
 const OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
@@ -55,6 +56,12 @@ export const tokenStore = {
   /** First name for the "Welcome back" unlock screen (not sensitive). */
   getName: () => get(NAME_KEY),
   setName: (name: string) => set(NAME_KEY, name),
+};
+
+/** Whether this install has seen the first-launch intro (kept across sign-outs). */
+export const introFlag = {
+  get: async () => (await get(INTRO_KEY)) === '1',
+  set: () => set(INTRO_KEY, '1'),
 };
 
 let deviceId: string | null = null;

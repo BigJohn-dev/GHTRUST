@@ -15,12 +15,15 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { SessionProvider, useSession } from '@/auth/session';
+import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { BlockingScreen } from '@/components/BlockingScreen';
+import { loadIntro, useIntroSeen } from '@/lib/intro';
 import { makeQueryClient, useAppConfig } from '@/lib/queries';
 import { hideSplash, holdSplash } from '@/lib/splash';
 import { colors } from '@/theme/tokens';
 
 holdSplash();
+loadIntro();
 
 // Expo Router renders this for any render error below the root layout.
 export { CrashScreen as ErrorBoundary } from '@/components/CrashScreen';
@@ -57,11 +60,15 @@ export default function RootLayout() {
 function Shell({ ready }: { ready: boolean }) {
   const { status, gate, clearGate } = useSession();
   const config = useAppConfig();
-  const booting = !ready || status === 'loading';
+  const introSeen = useIntroSeen();
+  const [splashDone, setSplashDone] = useState(false);
+  const booting = !ready || status === 'loading' || introSeen === null;
 
+  // The animated splash starts on the native splash's last frame, so hand over as soon as
+  // it can draw (fonts loaded); it then covers the rest of start-up itself.
   useEffect(() => {
-    if (!booting) hideSplash();
-  }, [booting]);
+    if (ready) hideSplash();
+  }, [ready]);
 
   // Never leave the splash up if start-up stalls (e.g. slow secure storage).
   useEffect(() => {
@@ -69,8 +76,20 @@ function Shell({ ready }: { ready: boolean }) {
     return () => clearTimeout(failsafe);
   }, []);
 
-  if (booting) return null;
+  return (
+    <>
+      {booting ? null : <Screens status={status} gate={gate} clearGate={clearGate} config={config} />}
+      {ready && !splashDone ? <AnimatedSplash ready={!booting} onDone={() => setSplashDone(true)} /> : null}
+    </>
+  );
+}
 
+function Screens({
+  status,
+  gate,
+  clearGate,
+  config,
+}: Pick<ReturnType<typeof useSession>, 'status' | 'gate' | 'clearGate'> & { config: ReturnType<typeof useAppConfig> }) {
   if (config.data?.update_required || gate?.code === 'APP_UPDATE_REQUIRED') {
     return <BlockingScreen kind="update" platform={config.data?.platform} />;
   }
