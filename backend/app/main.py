@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from app import __version__
-from app.api.v1.router import api_v1_router
+from app.api.v1.router import api_v1_router, health_check, readiness_check
 from app.core.config import get_settings
 from app.core.cache import CacheGenerationMiddleware
 from app.core.errors import register_exception_handlers
@@ -90,13 +90,20 @@ def create_app() -> FastAPI:
 
     app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
 
+    # Unversioned aliases, the paths hosting platforms (Railway, load balancers) probe by default.
+    app.add_api_route("/health", health_check, methods=["GET"], tags=["Health"])
+    app.add_api_route(
+        "/health/ready", readiness_check, methods=["GET"], tags=["Health"],
+        summary="Readiness: database and Redis reachable",
+    )
+
     @app.get("/", tags=["Root"])
     async def root():
         return {
             "message": "GH Trust MFB API",
             "tagline": "Secure Today. Grow Tomorrow.",
             "docs": "/docs" if docs else None,
-            "health": f"{settings.api_v1_prefix}/health",
+            "health": "/health",
         }
 
     return app

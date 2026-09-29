@@ -4236,6 +4236,45 @@
     }
    }
   },
+  "/health": {
+   "get": {
+    "tags": [
+     "Health"
+    ],
+    "summary": "Health Check",
+    "operationId": "health_check_health_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/health/ready": {
+   "get": {
+    "tags": [
+     "Health"
+    ],
+    "summary": "Readiness: database and Redis reachable",
+    "description": "For load balancers/orchestrators: 503 until this instance can actually serve traffic.",
+    "operationId": "readiness_check_health_ready_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
   "/": {
    "get": {
     "tags": [
