@@ -24,8 +24,13 @@ import type {
   SelfieRequired,
   Session,
   StepUpdate,
+  PayoutAccountSaved,
+  TransactionDirection,
   Wallet,
   WalletFundSession,
+  WalletTransaction,
+  WalletTransactionPage,
+  Withdrawal,
 } from './types';
 
 export const appConfig = () =>
@@ -142,6 +147,15 @@ export const wallet = {
   summary: () => api.get<Wallet>('/wallet'),
   fund: (amount: string, idempotencyKey: string) =>
     api.post<WalletFundSession>('/wallet/fund', { amount }, { idempotencyKey }),
+  transactions: (params: { direction?: TransactionDirection; cursor?: string; limit?: number } = {}) =>
+    api.get<WalletTransactionPage>('/wallet/transactions', { query: params }),
+  transaction: (id: string) => api.get<WalletTransaction>(`/wallet/transactions/${encodeURIComponent(id)}`),
+  savePayoutAccount: (
+    account: { bank_code: string; bank_name: string; account_number: string; account_name: string },
+    transactionPin: string,
+  ) => api.post<PayoutAccountSaved>('/wallet/payout-account', { ...account, transaction_pin: transactionPin }),
+  withdraw: (amount: string, transactionPin: string, idempotencyKey: string) =>
+    api.post<Withdrawal>('/wallet/withdraw', { amount, transaction_pin: transactionPin }, { idempotencyKey }),
 };
 
 export const banks = {

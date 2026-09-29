@@ -1,6 +1,17 @@
+from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class PayoutAccountSummary(BaseModel):
+    """Where withdrawals go. The account number is masked to its last four digits."""
+
+    bank_code: str
+    bank_name: str | None = None
+    account_name: str | None = None
+    account_number_masked: str
 
 
 class WalletSummaryResponse(BaseModel):
@@ -13,6 +24,9 @@ class WalletSummaryResponse(BaseModel):
     paystack_customer_code: str | None = None
     payment_provider: str | None = None
     funding_mode: str | None = None  # permanent_dva | on_demand_dynamic
+    payout_account: PayoutAccountSummary | None = None
+    # Money can't leave the account before this (after signing in without the old phone).
+    withdrawals_blocked_until: datetime | None = None
 
 
 class WalletFundRequest(BaseModel):
@@ -48,6 +62,13 @@ class UpdatePayoutAccountRequest(BaseModel):
         return digits
 
 
+class PayoutAccountSavedResponse(BaseModel):
+    message: str
+    account_name: str | None = None
+    account_number: str
+    payout_account: PayoutAccountSummary
+
+
 class WithdrawRequest(BaseModel):
     amount: Decimal = Field(gt=0, decimal_places=2)
     transaction_pin: str = Field(
@@ -70,6 +91,32 @@ class WithdrawalResponse(BaseModel):
     message: str = "Withdrawal queued for processing"
 
     model_config = {"from_attributes": True}
+
+
+class WalletTransactionResponse(BaseModel):
+    """One movement of money in or out of the wallet, as the customer sees it."""
+
+    id: str
+    kind: Literal["funding", "repayment", "withdrawal"]
+    direction: Literal["in", "out"]
+    amount: float
+    status: Literal["completed", "pending", "failed"]
+    title: str
+    # Bank account for withdrawals, loan product code for repayments.
+    detail: str | None = None
+    reference: str | None = None
+    loan_id: str | None = None
+    loan_product: str | None = None
+    # Customer-facing explanation, e.g. why a withdrawal failed and where the money is.
+    note: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+class WalletTransactionPage(BaseModel):
+    items: list[WalletTransactionResponse]
+    # Pass as ``cursor`` to get the next (older) page; null on the last page.
+    next_cursor: str | None = None
 
 
 class WebhookAckResponse(BaseModel):

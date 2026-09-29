@@ -1629,6 +1629,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/wallet/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Wallet Transactions
+         * @description Money in and out of the wallet, newest first.
+         */
+        get: operations["list_wallet_transactions_api_v1_wallet_transactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wallet/transactions/{transaction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Wallet Transaction
+         * @description One transaction, for its receipt.
+         */
+        get: operations["get_wallet_transaction_api_v1_wallet_transactions__transaction_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wallet/payout-account": {
         parameters: {
             query?: never;
@@ -3257,6 +3297,30 @@ export interface components {
          * @enum {string}
          */
         PaymentProvider: "paystack" | "monnify" | "zest" | "stanbic" | "manual";
+        /** PayoutAccountSavedResponse */
+        PayoutAccountSavedResponse: {
+            /** Message */
+            message: string;
+            /** Account Name */
+            account_name?: string | null;
+            /** Account Number */
+            account_number: string;
+            payout_account: components["schemas"]["PayoutAccountSummary"];
+        };
+        /**
+         * PayoutAccountSummary
+         * @description Where withdrawals go. The account number is masked to its last four digits.
+         */
+        PayoutAccountSummary: {
+            /** Bank Code */
+            bank_code: string;
+            /** Bank Name */
+            bank_name?: string | null;
+            /** Account Name */
+            account_name?: string | null;
+            /** Account Number Masked */
+            account_number_masked: string;
+        };
         /** PendingApprovalResponse */
         PendingApprovalResponse: {
             /** Id */
@@ -4046,6 +4110,60 @@ export interface components {
             payment_provider?: string | null;
             /** Funding Mode */
             funding_mode?: string | null;
+            payout_account?: components["schemas"]["PayoutAccountSummary"] | null;
+            /** Withdrawals Blocked Until */
+            withdrawals_blocked_until?: string | null;
+        };
+        /** WalletTransactionPage */
+        WalletTransactionPage: {
+            /** Items */
+            items: components["schemas"]["WalletTransactionResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * WalletTransactionResponse
+         * @description One movement of money in or out of the wallet, as the customer sees it.
+         */
+        WalletTransactionResponse: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "funding" | "repayment" | "withdrawal";
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "in" | "out";
+            /** Amount */
+            amount: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "completed" | "pending" | "failed";
+            /** Title */
+            title: string;
+            /** Detail */
+            detail?: string | null;
+            /** Reference */
+            reference?: string | null;
+            /** Loan Id */
+            loan_id?: string | null;
+            /** Loan Product */
+            loan_product?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Completed At */
+            completed_at?: string | null;
         };
         /** WebhookAckResponse */
         WebhookAckResponse: {
@@ -7188,6 +7306,72 @@ export interface operations {
             };
         };
     };
+    list_wallet_transactions_api_v1_wallet_transactions_get: {
+        parameters: {
+            query?: {
+                /** @description Only money in, or only money out */
+                direction?: ("in" | "out") | null;
+                limit?: number;
+                /** @description `next_cursor` from the previous page */
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransactionPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_wallet_transaction_api_v1_wallet_transactions__transaction_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transaction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransactionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_payout_account_api_v1_wallet_payout_account_post: {
         parameters: {
             query?: never;
@@ -7207,7 +7391,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PayoutAccountSavedResponse"];
                 };
             };
             /** @description Validation Error */

@@ -160,7 +160,7 @@ function WalletView({ wallet }: { wallet?: Wallet }) {
           : 'Add money by bank transfer or card'}
       </Text>
       <View style={[styles.between, { marginTop: space.lg }]}>
-        <HeroButton title="Wallet" icon="wallet-outline" href="/wallet" compact ghost />
+        <HeroButton title="Withdraw" icon="arrow-up" href="/withdraw" compact ghost />
         <HeroButton title="Add money" icon="add" href="/fund" compact />
       </View>
     </View>

@@ -14,13 +14,19 @@ import { PressableScale } from './PressableScale';
 /** Fixed row height, so lists of these never re-measure while scrolling. */
 export const TRANSACTION_ROW_HEIGHT = 76;
 
-type Props = { item: Activity; last?: boolean };
+type Props = {
+  item: Activity;
+  last?: boolean;
+  /** Add the time of day ("Today, 2:05 pm"), for full history lists. */
+  withTime?: boolean;
+};
 
 /** A row in "Recent activity": category icon, title and detail, amount, status and when. */
-export const TransactionItem = memo(function TransactionItem({ item, last }: Props) {
+export const TransactionItem = memo(function TransactionItem({ item, last, withTime }: Props) {
   const tint = toneColor(item.status.tone);
-  const when = activityWhen(item.at);
-  const amount = item.amount ? `${item.direction === 'in' ? '+' : ''}${naira(item.amount)}` : null;
+  const when = activityWhen(item.at, new Date(), withTime);
+  const sign = item.direction === 'in' ? '+' : item.direction === 'out' ? '−' : '';
+  const amount = item.amount ? `${sign}${naira(item.amount)}` : null;
   return (
     <PressableScale
       scaleTo={0.98}

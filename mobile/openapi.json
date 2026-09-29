@@ -4767,6 +4767,146 @@
     ]
    }
   },
+  "/api/v1/wallet/transactions": {
+   "get": {
+    "tags": [
+     "Wallet"
+    ],
+    "summary": "List Wallet Transactions",
+    "description": "Money in and out of the wallet, newest first.",
+    "operationId": "list_wallet_transactions_api_v1_wallet_transactions_get",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "direction",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "enum": [
+          "in",
+          "out"
+         ],
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Only money in, or only money out",
+       "title": "Direction"
+      },
+      "description": "Only money in, or only money out"
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 50,
+       "minimum": 1,
+       "default": 20,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "cursor",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "maxLength": 200
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "`next_cursor` from the previous page",
+       "title": "Cursor"
+      },
+      "description": "`next_cursor` from the previous page"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WalletTransactionPage"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/wallet/transactions/{transaction_id}": {
+   "get": {
+    "tags": [
+     "Wallet"
+    ],
+    "summary": "Get Wallet Transaction",
+    "description": "One transaction, for its receipt.",
+    "operationId": "get_wallet_transaction_api_v1_wallet_transactions__transaction_id__get",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "transaction_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Transaction Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WalletTransactionResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/wallet/payout-account": {
    "post": {
     "tags": [
@@ -4789,7 +4929,9 @@
       "description": "Successful Response",
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/PayoutAccountSavedResponse"
+        }
        }
       }
      },
@@ -9283,6 +9425,80 @@
     ],
     "title": "PaymentProvider"
    },
+   "PayoutAccountSavedResponse": {
+    "properties": {
+     "message": {
+      "type": "string",
+      "title": "Message"
+     },
+     "account_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Account Name"
+     },
+     "account_number": {
+      "type": "string",
+      "title": "Account Number"
+     },
+     "payout_account": {
+      "$ref": "#/components/schemas/PayoutAccountSummary"
+     }
+    },
+    "type": "object",
+    "required": [
+     "message",
+     "account_number",
+     "payout_account"
+    ],
+    "title": "PayoutAccountSavedResponse"
+   },
+   "PayoutAccountSummary": {
+    "properties": {
+     "bank_code": {
+      "type": "string",
+      "title": "Bank Code"
+     },
+     "bank_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Bank Name"
+     },
+     "account_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Account Name"
+     },
+     "account_number_masked": {
+      "type": "string",
+      "title": "Account Number Masked"
+     }
+    },
+    "type": "object",
+    "required": [
+     "bank_code",
+     "account_number_masked"
+    ],
+    "title": "PayoutAccountSummary",
+    "description": "Where withdrawals go. The account number is masked to its last four digits."
+   },
    "PendingApprovalResponse": {
     "properties": {
      "id": {
@@ -11719,6 +11935,28 @@
        }
       ],
       "title": "Funding Mode"
+     },
+     "payout_account": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PayoutAccountSummary"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "withdrawals_blocked_until": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Withdrawals Blocked Until"
      }
     },
     "type": "object",
@@ -11729,6 +11967,159 @@
      "dva_status"
     ],
     "title": "WalletSummaryResponse"
+   },
+   "WalletTransactionPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/WalletTransactionResponse"
+      },
+      "type": "array",
+      "title": "Items"
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor"
+     }
+    },
+    "type": "object",
+    "required": [
+     "items"
+    ],
+    "title": "WalletTransactionPage"
+   },
+   "WalletTransactionResponse": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "funding",
+       "repayment",
+       "withdrawal"
+      ],
+      "title": "Kind"
+     },
+     "direction": {
+      "type": "string",
+      "enum": [
+       "in",
+       "out"
+      ],
+      "title": "Direction"
+     },
+     "amount": {
+      "type": "number",
+      "title": "Amount"
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "completed",
+       "pending",
+       "failed"
+      ],
+      "title": "Status"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "detail": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Detail"
+     },
+     "reference": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reference"
+     },
+     "loan_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Loan Id"
+     },
+     "loan_product": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Loan Product"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     },
+     "completed_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Completed At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "direction",
+     "amount",
+     "status",
+     "title",
+     "created_at"
+    ],
+    "title": "WalletTransactionResponse",
+    "description": "One movement of money in or out of the wallet, as the customer sees it."
    },
    "WebhookAckResponse": {
     "properties": {

@@ -1,6 +1,7 @@
-import { QueryClient, useQuery } from '@tanstack/react-query';
+import { QueryClient, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { ApiError } from '@/api/errors';
+import type { TransactionDirection } from '@/api/types';
 import { appConfig, auth, banks, loans, wallet } from '@/api/endpoints';
 
 export const keys = {
@@ -13,6 +14,9 @@ export const keys = {
   loans: ['loans'] as const,
   loan: (id: string) => ['loans', id] as const,
   wallet: ['wallet'] as const,
+  transactions: ['transactions'] as const,
+  transactionList: (direction?: TransactionDirection) => ['transactions', 'list', direction ?? 'all'] as const,
+  transaction: (id: string) => ['transactions', id] as const,
   banks: ['banks'] as const,
 };
 
@@ -58,3 +62,16 @@ export const useLoan = (id: string) => useQuery({ queryKey: keys.loan(id), query
 export const useWallet = (enabled = true) =>
   useQuery({ queryKey: keys.wallet, queryFn: wallet.summary, enabled, staleTime: 0 });
 export const useBanks = () => useQuery({ queryKey: keys.banks, queryFn: banks.list, staleTime: 6 * 3600_000 });
+
+/** Wallet history, newest first, a page at a time (keyset cursor, so no repeats while scrolling). */
+export const useTransactions = (direction?: TransactionDirection, enabled = true) =>
+  useInfiniteQuery({
+    queryKey: keys.transactionList(direction),
+    queryFn: ({ pageParam }) => wallet.transactions({ direction, cursor: pageParam, limit: 20 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    enabled,
+    staleTime: 0,
+  });
+export const useTransaction = (id: string) =>
+  useQuery({ queryKey: keys.transaction(id), queryFn: () => wallet.transaction(id), enabled: !!id });

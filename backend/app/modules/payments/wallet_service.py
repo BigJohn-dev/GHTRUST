@@ -3,10 +3,11 @@ from decimal import Decimal
 from uuid import uuid4
 
 import structlog
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.errors import AppError, ErrorCode
 from app.integrations.payments.factory import get_payment_client
 from app.integrations.payments.schemas import PaymentRailError
 from app.modules.payments.ledger_service import LedgerError, LedgerService, raise_ledger_http
@@ -36,6 +37,30 @@ def _active_provider() -> PaymentProvider:
     return PaymentProvider.MONNIFY
 
 
+def mask_account_number(number: str) -> str:
+    return number[-4:].rjust(len(number), "*")
+
+
+def payout_account_summary(customer: Customer) -> dict | None:
+    if not customer.payout_account_number or not customer.payout_bank_code:
+        return None
+    return {
+        "bank_code": customer.payout_bank_code,
+        "bank_name": customer.payout_bank_name,
+        "account_name": customer.payout_account_name,
+        "account_number_masked": mask_account_number(customer.payout_account_number),
+    }
+
+
+def _blocked_until(customer: Customer) -> datetime | None:
+    until = customer.transfers_blocked_until
+    if until is None:
+        return None
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+    return until if until > datetime.now(timezone.utc) else None
+
+
 class WalletService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -56,6 +81,8 @@ class WalletService:
             "account_reference": customer.paystack_customer_code,
             "paystack_customer_code": customer.paystack_customer_code,
             "funding_mode": "on_demand_dynamic" if self.provider == PaymentProvider.ZEST else "permanent_dva",
+            "payout_account": payout_account_summary(customer),
+            "withdrawals_blocked_until": _blocked_until(customer),
         }
         return summary
 
@@ -144,6 +171,7 @@ class WalletService:
         bank_name: str | None = None,
     ) -> Customer:
         customer.payout_bank_code = bank_code
+        customer.payout_bank_name = bank_name
         customer.payout_account_number = account_number
         customer.payout_account_name = account_name
 
@@ -177,7 +205,11 @@ class WalletService:
         if amount <= 0:
             raise HTTPException(status_code=422, detail="Amount must be positive")
         if not customer.payout_account_number or not customer.payout_bank_code:
-            raise HTTPException(status_code=409, detail="Add a payout bank account before withdrawing")
+            raise AppError(
+                status.HTTP_409_CONFLICT,
+                ErrorCode.PAYOUT_ACCOUNT_REQUIRED,
+                "Add a payout bank account before withdrawing",
+            )
 
         if settings.active_payment_provider == "paystack" and not customer.paystack_transfer_recipient_code:
             await self.update_payout_account(
@@ -199,6 +231,8 @@ class WalletService:
                 reference=reference,
             )
         except LedgerError as exc:
+            if exc.status_code == 409:
+                raise AppError(status.HTTP_409_CONFLICT, ErrorCode.INSUFFICIENT_FUNDS, exc.message) from exc
             raise_ledger_http(exc)
 
         withdrawal = WithdrawalRequest(
@@ -206,6 +240,7 @@ class WalletService:
             wallet_id=wallet.id,
             amount=amount,
             bank_code=customer.payout_bank_code,
+            bank_name=customer.payout_bank_name,
             account_number=customer.payout_account_number,
             account_name=customer.payout_account_name or customer.full_name,
             recipient_code=customer.paystack_transfer_recipient_code,
