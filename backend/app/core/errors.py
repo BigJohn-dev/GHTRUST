@@ -24,6 +24,8 @@ import structlog
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = structlog.get_logger()
@@ -182,6 +184,25 @@ async def validation_exception_handler(
     )
 
 
+async def redis_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    # Redis down or unconfigured: a clear, retryable 503 instead of a generic 500.
+    logger.error(
+        "redis_unavailable",
+        path=request.url.path,
+        method=request.method,
+        error=f"{type(exc).__name__}: {exc}",
+    )
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content=_body(
+            request,
+            "We can't complete this right now. Please try again in a few minutes.",
+            STATUS_CODES[503],
+        ),
+        headers={"Retry-After": "30"},
+    )
+
+
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("unhandled_exception", path=request.url.path, method=request.method)
     from app.core.observability import capture_exception
@@ -196,4 +217,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(RedisConnectionError, redis_unavailable_handler)
+    app.add_exception_handler(RedisTimeoutError, redis_unavailable_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

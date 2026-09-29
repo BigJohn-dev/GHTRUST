@@ -20,7 +20,7 @@ from app.core.hardening import (
 from app.core.observability import init_error_tracking
 from app.core.idempotency import IdempotencyMiddleware
 from app.core.middleware import ClientGateMiddleware, RequestIDMiddleware
-from app.core.redis import get_redis_pool
+from app.core.redis import check_redis_on_startup, get_redis_pool
 
 
 class ProductionConfigError(RuntimeError):
@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     logger = structlog.get_logger()
     logger.info("starting_api", app=settings.app_name, env=settings.app_env)
+    await check_redis_on_startup()
     yield
     await get_redis_pool().aclose()
     logger.info("shutdown_api")
