@@ -30,6 +30,7 @@ cp .env.example .env    # set SEED_SUPER_ADMIN_NAME / _EMAIL / _PHONE
 make bootstrap          # docker Postgres + Redis, alembic upgrade head, seed
 make dev                # uvicorn --reload on :8000
 make seed-demo          # optional: 10 submitted applications for the admin queue
+python scripts/seed_test_customer.py   # optional: a verified customer for the mobile app (phone 08012345678)
 make worker / make beat # Celery (separate terminals)
 ```
 
