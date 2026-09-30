@@ -84,6 +84,7 @@ const COPY: Record<string, string> = {
   TRANSACTION_PIN_INVALID: "That transaction PIN isn't right.",
   TRANSACTION_PIN_LOCKED: 'Your transaction PIN is locked after too many wrong tries. Reset it in Security settings.',
   TRANSACTION_PIN_NOT_SET: 'Create your 4-digit transaction PIN to move money.',
+  DEMO_ACCOUNT: "This is a demo account, so money can't leave it.",
   TRANSFERS_ON_HOLD:
     "For your security, money can't leave your account for 24 hours after signing in without your old phone.",
   // Platform

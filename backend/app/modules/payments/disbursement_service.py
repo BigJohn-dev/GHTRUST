@@ -31,6 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.demo import blocks_money_out
 from app.core.errors import AppError, ErrorCode
 from app.integrations.payments.factory import get_payment_client
 from app.integrations.payments.schemas import PaymentRailError
@@ -191,6 +192,12 @@ class DisbursementService:
         customer = await self.db.get(Customer, application.customer_id)
         if not customer:
             raise AppError(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Customer not found")
+        if blocks_money_out(customer.phone_primary):
+            raise AppError(
+                status.HTTP_409_CONFLICT,
+                ErrorCode.DEMO_ACCOUNT,
+                "This application is from a demo account, so it can't be paid out.",
+            )
 
         provider = _active_provider()
         if not account_name:

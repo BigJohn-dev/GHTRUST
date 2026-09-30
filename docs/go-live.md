@@ -70,12 +70,22 @@ Generate secrets with `python -c "import secrets; print(secrets.token_urlsafe(48
 | provider keys | e.g. Monnify: `MONNIFY_API_KEY`, `MONNIFY_SECRET_KEY`, `MONNIFY_CONTRACT_CODE`, `MONNIFY_MOCK=false`. The webhook secret is the provider's secret key, except Stanbic (`STANBIC_WEBHOOK_SECRET`) |
 | `FEATURE_FLAGS` | `wallet` to launch with the wallet; empty for loans only. Savings, investments, contributions and food basket are refused until they are built |
 | `SEED_SUPER_ADMIN_NAME`, `…_EMAIL`, `…_PHONE` | the first staff admin (see step 4) |
+| `DEMO_PHONES`, `DEMO_OTP`, `DEMO_LOGIN_PIN`, `DEMO_TRANSACTION_PIN` | optional: the app-review account (below) |
 | `SUPPORT_PHONE`, `SUPPORT_EMAIL`, `SUPPORT_WHATSAPP`, `SUPPORT_HOURS` | shown in the app's Help screen |
 | `APP_MIN_VERSION_ANDROID` / `_IOS` | `1.0.0` at launch; raise to force an update |
 | `SENTRY_DSN` | optional, recommended |
 
 If anything required is missing, the api logs the exact list and **does not start**. That's
 deliberate; read the deploy log, fix the variables, redeploy.
+
+**Demo account for app review.** Apple and Google need a login that works without a real
+phone. Set `DEMO_PHONES` to a number you control (not a staff number), `DEMO_OTP` to a
+6-digit code that isn't a pattern (not `000000` or `123456`), and optionally
+`DEMO_LOGIN_PIN` / `DEMO_TRANSACTION_PIN`; then run `python scripts/seed.py`. That number
+signs in with the fixed code (no SMS) as "Demo Customer", on any number of phones at
+once. On the live system money can't leave a demo account and staff sign-in never
+accepts the demo code. Give the number, code and PINs to the stores in the review notes.
+Re-running the seed resets the PINs if a reviewer changed them.
 
 Optional pilot tuning (defaults shown): `DOJAH_SELFIE_THRESHOLD=90`,
 `DOJAH_LIVENESS_MIN_PROBABILITY=0.5`, `DOJAH_SELFIE_MAX_ATTEMPTS=3`. Adjust only with the
@@ -105,7 +115,7 @@ wallet is never credited.
 
 ## 5. Admin portal (Next.js, repo root)
 
-- Set `NEXT_PUBLIC_API_URL=https://<api domain>`, build with `npm run build`, serve with `npm run start`.
+- Set `NEXT_PUBLIC_API_URL=https://<api domain>` (`.env.production` defaults to the Railway API), build with `npm run build`, serve with `npm run start`.
 - **Host it on the same domain as the API**, e.g. `admin.ghtrust.ng` and `api.ghtrust.ng`.
   The staff session cookie is `Secure` and `SameSite=Strict`, so browsers only send it
   between sites on the same registrable domain. With `*.vercel.app` and `*.up.railway.app`
@@ -113,6 +123,10 @@ wallet is never credited.
 - Add the portal's origin to `CORS_ORIGINS` on the API.
 
 ## 6. Mobile app
+
+Builds and updates already point at `https://ghtrust-production.up.railway.app`
+(`mobile/eas.json`, `mobile/.env.production`). Once the API moves to its own domain, set it
+with the first command below, which overrides both.
 
 ```bash
 cd mobile

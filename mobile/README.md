@@ -98,8 +98,11 @@ backend. A `preview` or `production` build **fails** (`app.config.js`) if `EXPO_
 missing, points at a local network address, or isn't `https://` for production, and a production
 build also fails without `EXPO_PUBLIC_ANDROID_STORE_URL` (already set in `eas.json`).
 
-The `preview` profile is already pointed at the test API on Railway
-(`eas.json` → `build.preview.env`); change it there to use another server.
+The `preview` and `production` profiles point at the Railway API
+(`https://ghtrust-production.up.railway.app`, in `eas.json` → `build.*.env`). Over-the-air
+updates don't read `eas.json`, so the same address is also in `.env.production`, which
+every release bundle (updates included) picks up. To move to another server, change both,
+or set `EXPO_PUBLIC_API_URL` as an EAS environment variable, which overrides them.
 
 ### Over-the-air updates (EAS Update)
 
@@ -126,6 +129,12 @@ update up on their next launch.
   each code to the app, which fills it in. It never does this in production.
 - **BVN without Dojah keys:** `DOJAH_MOCK=true` (any BVN works), and `DOJAH_MOCK_PHONE=<your
   number>` if you want the mock identity to use your phone.
+- **Simulated sign-up, even with live Dojah:** on the server set `DEMO_BVNS=00000000001` and
+  `DEMO_OTP=<6 digits>`. Sign up with that BVN, enter the code, take any selfie: the account
+  opens as "Demo Applicant". Entering the BVN again starts over. Sign in later with
+  `07000000001` (070 + the BVN's last 8 digits) and the same code.
+- **Demo sign-in (testers, store review):** `DEMO_PHONES=<numbers>` with `DEMO_OTP`, then
+  `python scripts/seed.py` (see `backend/.env.example`).
 
 ```bash
 npx eas-cli@latest env:create --environment production --name EXPO_PUBLIC_API_URL --value https://<api host> --visibility plaintext
