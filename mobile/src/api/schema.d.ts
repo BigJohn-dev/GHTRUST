@@ -1280,6 +1280,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sign-up funnel and face-check performance */
+        get: operations["onboarding_report_api_v1_admin_onboarding_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/savings/products": {
         parameters: {
             query?: never;
@@ -2577,6 +2594,13 @@ export interface components {
             /** Customer Count */
             customer_count: number;
         };
+        /** Bucket */
+        Bucket: {
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+        };
         /** BvnRegisterRequest */
         BvnRegisterRequest: {
             /**
@@ -3118,6 +3142,35 @@ export interface components {
             /** Draft */
             draft: boolean;
         };
+        /** FaceCheckStats */
+        FaceCheckStats: {
+            /** Attempts */
+            attempts: number;
+            /** Scored Attempts */
+            scored_attempts: number;
+            /** Passed */
+            passed: number;
+            /** Pass Rate */
+            pass_rate: number | null;
+            /** Customers */
+            customers: number;
+            /** First Try Pass Rate */
+            first_try_pass_rate: number | null;
+            /** Cooldowns */
+            cooldowns: number;
+            /** Outcomes */
+            outcomes: components["schemas"]["OutcomeCount"][];
+            /** Threshold */
+            threshold: number;
+            /** Threshold Simulation */
+            threshold_simulation: components["schemas"]["SimulationPoint"][];
+            /** Score Histogram */
+            score_histogram: components["schemas"]["Bucket"][];
+            /** Liveness Min */
+            liveness_min: number | null;
+            /** Liveness Simulation */
+            liveness_simulation: components["schemas"]["SimulationPoint"][];
+        };
         /** FaqResponse */
         FaqResponse: {
             /** Id */
@@ -3178,6 +3231,17 @@ export interface components {
             next_delivery_date?: string | null;
             /** Delivery Address */
             delivery_address: string;
+        };
+        /** FunnelStep */
+        FunnelStep: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+            /** Rate From Start */
+            rate_from_start: number | null;
         };
         /** GlobalAuditLogResponse */
         GlobalAuditLogResponse: {
@@ -3739,6 +3803,19 @@ export interface components {
             /** Amount */
             amount: string;
         };
+        /** OnboardingReport */
+        OnboardingReport: {
+            /** Days */
+            days: number;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /** Funnel */
+            funnel: components["schemas"]["FunnelStep"][];
+            face_checks: components["schemas"]["FaceCheckStats"];
+        };
         /** OpenSavingsAccountRequest */
         OpenSavingsAccountRequest: {
             product_type: components["schemas"]["SavingsProductType"];
@@ -3749,6 +3826,15 @@ export interface components {
             initial_deposit: number | string;
             /** Tenure Months */
             tenure_months?: number | null;
+        };
+        /** OutcomeCount */
+        OutcomeCount: {
+            /** Outcome */
+            outcome: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
         };
         /** Page[AdminTransactionResponse] */
         Page_AdminTransactionResponse_: {
@@ -4191,6 +4277,15 @@ export interface components {
              * @description New 4-digit transaction PIN
              */
             pin: string;
+        };
+        /** SimulationPoint */
+        SimulationPoint: {
+            /** Value */
+            value: number;
+            /** Pass Rate */
+            pass_rate: number | null;
+            /** Current */
+            current: boolean;
         };
         /** StaffAuthTokenResponse */
         StaffAuthTokenResponse: {
@@ -7216,6 +7311,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionSummaryResponse"];
+                };
+            };
+        };
+    };
+    onboarding_report_api_v1_admin_onboarding_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
