@@ -578,6 +578,51 @@
       "HTTPBearer": []
      }
     ]
+   },
+   "patch": {
+    "tags": [
+     "Authentication"
+    ],
+    "summary": "Update contact details",
+    "description": "Change email and/or home address. Only the fields sent are changed.",
+    "operationId": "update_contact_details_api_v1_auth_me_patch",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateContactRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CustomerProfileResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
    }
   },
   "/api/v1/auth/pin": {
@@ -13160,6 +13205,38 @@
      "total_steps"
     ],
     "title": "UpdateApplicationStepRequest"
+   },
+   "UpdateContactRequest": {
+    "properties": {
+     "email": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "email"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Email"
+     },
+     "residential_address": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 300,
+        "minLength": 5
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Residential Address"
+     }
+    },
+    "type": "object",
+    "title": "UpdateContactRequest",
+    "description": "Contact details a customer may change in the app. Name, BVN, date of birth and\nphone come from the BVN record (phone changes go through new-phone approval),\nso they are not editable here."
    },
    "UpdatePayoutAccountRequest": {
     "properties": {

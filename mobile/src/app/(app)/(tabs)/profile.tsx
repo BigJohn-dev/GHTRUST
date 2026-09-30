@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { APP_VERSION } from '@/api/config';
 import { useSession } from '@/auth/session';
@@ -11,7 +11,7 @@ import { Text } from '@/components/Text';
 import { confirm } from '@/lib/confirm';
 import { date, humanize } from '@/lib/format';
 import { useMe } from '@/lib/queries';
-import { colors, space } from '@/theme/tokens';
+import { colors, font, space } from '@/theme/tokens';
 
 export default function Profile() {
   const me = useMe();
@@ -43,7 +43,20 @@ export default function Profile() {
             </Text>
           </Card>
 
-          <SectionHeader title="Personal details" />
+          <SectionHeader
+            title="Personal details"
+            action={
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Edit contact details"
+                hitSlop={10}
+                onPress={() => router.push('/edit-contact')}>
+                <Text variant="small" color={colors.cyanDeep} style={{ fontFamily: font.semibold }}>
+                  Edit
+                </Text>
+              </Pressable>
+            }
+          />
           <Card style={styles.list}>
             <Row icon="call-outline" title="Phone" subtitle={p.phone} />
             <Row icon="mail-outline" title="Email" subtitle={p.email || 'Not provided'} />
@@ -53,7 +66,8 @@ export default function Profile() {
             <Row icon="shield-checkmark-outline" title="Account status" subtitle={humanize(p.status)} last />
           </Card>
           <Text variant="small" muted style={{ paddingHorizontal: space.xs }}>
-            These details come from your BVN record. To change them, visit your branch.
+            You can update your email and address. Your name, BVN and date of birth come from your BVN record; to
+            change them, visit a branch.
           </Text>
         </>
       )}

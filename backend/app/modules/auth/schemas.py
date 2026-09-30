@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 class BvnRegisterRequest(BaseModel):
@@ -131,6 +131,28 @@ class OtpSentResponse(BaseModel):
         description="Local development with mocked SMS only: the code, so a dev build can fill it in. "
         "Never present when SMS is real or outside APP_ENV=development.",
     )
+
+
+class UpdateContactRequest(BaseModel):
+    """
+    Contact details a customer may change in the app. Name, BVN, date of birth and
+    phone come from the BVN record (phone changes go through new-phone approval),
+    so they are not editable here.
+    """
+
+    email: EmailStr | None = None
+    residential_address: str | None = Field(None, min_length=5, max_length=300)
+
+    @field_validator("residential_address")
+    @classmethod
+    def tidy_address(cls, v: str | None) -> str | None:
+        return " ".join(v.split()) if v is not None else None
+
+    @model_validator(mode="after")
+    def something_to_change(self) -> "UpdateContactRequest":
+        if not self.model_fields_set:
+            raise ValueError("Provide an email or a home address to update.")
+        return self
 
 
 class CustomerProfileResponse(BaseModel):

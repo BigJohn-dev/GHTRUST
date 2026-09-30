@@ -1,8 +1,10 @@
+import structlog
 from fastapi import APIRouter, Query, Request, Response, status
 
 from app.core.deps import CurrentCustomer, DbSession, RedisClient, request_meta
 from app.core.rate_limit import get_client_ip
 from app.modules.auth.schemas import (
+    UpdateContactRequest,
     AuthTokenResponse,
     BvnRegisterRequest,
     CustomerProfileResponse,
@@ -20,6 +22,7 @@ from app.modules.auth.schemas import (
 )
 from app.modules.auth.service import AuthService
 
+logger = structlog.get_logger()
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
@@ -222,4 +225,19 @@ async def revoke_session(
 
 @router.get("/me", response_model=CustomerProfileResponse, summary="Current customer profile")
 async def get_current_profile(customer: CurrentCustomer):
+    return CustomerProfileResponse.from_customer(customer)
+
+
+@router.patch("/me", response_model=CustomerProfileResponse, summary="Update contact details")
+async def update_contact_details(payload: UpdateContactRequest, customer: CurrentCustomer, db: DbSession):
+    """Change email and/or home address. Only the fields sent are changed."""
+    changed = []
+    if "email" in payload.model_fields_set and payload.email is not None:
+        customer.email = str(payload.email).lower()
+        changed.append("email")
+    if "residential_address" in payload.model_fields_set and payload.residential_address is not None:
+        customer.residential_address = payload.residential_address
+        changed.append("residential_address")
+    await db.flush()
+    logger.info("customer_contact_updated", customer_id=customer.id, fields=changed)
     return CustomerProfileResponse.from_customer(customer)

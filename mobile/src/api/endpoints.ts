@@ -39,6 +39,7 @@ import type {
   WalletTransaction,
   WalletTransactionPage,
   Withdrawal,
+  UpdateContact,
 } from './types';
 
 export const appConfig = () =>
@@ -74,6 +75,8 @@ export const auth = {
     ),
   resendLogin: (phone: string) => api.post<OtpSent>('/auth/login/resend-otp', { phone }, { auth: false }),
   me: () => api.get<Profile>('/auth/me'),
+  /** Email and home address only; identity fields come from the BVN record. */
+  updateContact: (body: UpdateContact) => api.patch<Profile>('/auth/me', body),
   sessions: () => api.get<Session[]>('/auth/sessions'),
   revokeSession: (id: string) => api.delete<void>(`/auth/sessions/${id}`),
   logout: (forgetDevice = false) =>

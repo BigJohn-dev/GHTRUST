@@ -20,6 +20,7 @@ from app.core.hardening import (
 from app.core.observability import init_error_tracking
 from app.core.idempotency import IdempotencyMiddleware
 from app.core.middleware import ClientGateMiddleware, RequestIDMiddleware
+from app.core.database import check_database_on_startup, get_db
 from app.core.redis import check_redis_on_startup, get_redis, get_redis_pool
 
 
@@ -35,6 +36,9 @@ async def lifespan(app: FastAPI):
     # Honour a swapped-in Redis (the in-memory dev server, tests) instead of the configured URL.
     override = app.dependency_overrides.get(get_redis)
     await check_redis_on_startup(await override() if override else None)
+    # The in-memory dev server and tests swap in their own database.
+    if get_db not in app.dependency_overrides:
+        await check_database_on_startup()
     yield
     await get_redis_pool().aclose()
     logger.info("shutdown_api")

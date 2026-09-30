@@ -210,6 +210,57 @@ async def redis_unavailable_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
+_DB_CONNECT_ERRORS = (OSError, TimeoutError, ConnectionError)
+
+
+def _database_unreachable(exc: BaseException) -> bool:
+    """True when the error is a failure to reach Postgres, not a bug in a query."""
+    from sqlalchemy.exc import InterfaceError, OperationalError
+
+    if isinstance(exc, (OperationalError, InterfaceError)) and getattr(exc, "connection_invalidated", False):
+        return True
+    if type(exc).__name__ in {"CannotConnectNowError", "ConnectionDoesNotExistError", "TooManyConnectionsError"}:
+        return True
+    if isinstance(exc, _DB_CONNECT_ERRORS) or isinstance(exc, OperationalError):
+        # Only when raised while the pool was opening a connection (not file I/O etc.).
+        tb = exc.__traceback__
+        while tb is not None:
+            path = tb.tb_frame.f_code.co_filename.replace("\\", "/")
+            if "sqlalchemy/pool" in path or "asyncpg/connect_utils" in path:
+                return True
+            tb = tb.tb_next
+    return False
+
+
+async def database_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    """
+    Registered for connection-type errors so an outage is answered here, where
+    Starlette does not re-raise (the catch-all Exception handler always re-raises,
+    which printed every failure twice). Anything else is passed on unchanged.
+    """
+    if not _database_unreachable(exc):
+        raise exc
+    # An outage, not a bug: one log line and a retryable 503, no traceback flood.
+    from app.core.database import database_host
+
+    logger.error(
+        "database_unavailable",
+        path=request.url.path,
+        method=request.method,
+        db_host=database_host(),
+        error=f"{type(exc).__name__}: {exc}"[:300],
+    )
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content=_body(
+            request,
+            "We can't complete this right now. Please try again in a few minutes.",
+            STATUS_CODES[503],
+        ),
+        headers={"Retry-After": "30"},
+    )
+
+
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("unhandled_exception", path=request.url.path, method=request.method)
     from app.core.observability import capture_exception
@@ -226,4 +277,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(RedisConnectionError, redis_unavailable_handler)
     app.add_exception_handler(RedisTimeoutError, redis_unavailable_handler)
+    # Postgres unreachable (refused, timed out, dropped): see database_unavailable_handler.
+    from sqlalchemy.exc import InterfaceError, OperationalError
+
+    for exc_type in (OSError, OperationalError, InterfaceError):
+        app.add_exception_handler(exc_type, database_unavailable_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

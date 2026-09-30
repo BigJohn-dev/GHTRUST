@@ -9,6 +9,7 @@ export type AuthTokens = S['AuthTokenResponse'];
 export type TokenPair = S['TokenPair'];
 export type DeviceInfo = S['DeviceInfo'];
 export type Profile = S['CustomerProfileResponse'];
+export type UpdateContact = S['UpdateContactRequest'];
 export type Session = S['SessionResponse'];
 export type ApprovalRequired = S['DeviceApprovalRequiredResponse'];
 export type SelfieRequired = S['SelfieRequiredResponse'];
