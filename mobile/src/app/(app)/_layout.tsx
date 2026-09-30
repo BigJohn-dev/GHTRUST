@@ -60,6 +60,7 @@ export default function AppLayout() {
         <Stack.Screen name="applications/[id]/offer" options={{ title: 'Your loan offer' }} />
         <Stack.Screen name="loans/[id]" options={{ title: 'Loan' }} />
         <Stack.Screen name="devices" options={{ title: 'Signed-in devices' }} />
+        <Stack.Screen name="edit-contact" options={{ title: 'Contact details' }} />
         <Stack.Screen name="security" options={{ title: 'Security' }} />
         <Stack.Screen name="pin/[action]" options={{ title: '', presentation: 'modal' }} />
         <Stack.Screen

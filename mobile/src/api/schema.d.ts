@@ -257,7 +257,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update contact details
+         * @description Change email and/or home address. Only the fields sent are changed.
+         */
+        patch: operations["update_contact_details_api_v1_auth_me_patch"];
         trace?: never;
     };
     "/api/v1/auth/pin": {
@@ -4542,6 +4546,18 @@ export interface components {
             /** Collaterals */
             collaterals?: components["schemas"]["CollateralInput"][] | null;
         };
+        /**
+         * UpdateContactRequest
+         * @description Contact details a customer may change in the app. Name, BVN, date of birth and
+         *     phone come from the BVN record (phone changes go through new-phone approval),
+         *     so they are not editable here.
+         */
+        UpdateContactRequest: {
+            /** Email */
+            email?: string | null;
+            /** Residential Address */
+            residential_address?: string | null;
+        };
         /** UpdatePayoutAccountRequest */
         UpdatePayoutAccountRequest: {
             /** Bank Code */
@@ -5244,6 +5260,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerProfileResponse"];
+                };
+            };
+        };
+    };
+    update_contact_details_api_v1_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateContactRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
