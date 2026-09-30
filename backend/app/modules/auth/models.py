@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -116,3 +116,35 @@ class DeviceApproval(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     code_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     code_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+class SelfieOutcome(str, enum.Enum):
+    PASSED = "passed"
+    NO_MATCH = "no_match"  # live face, but didn't match the BVN photo
+    NOT_LIVE = "not_live"  # liveness check failed (photo of a photo, no face, several faces)
+    UNREADABLE = "unreadable"  # Dojah couldn't read the image
+    PROVIDER_ERROR = "provider_error"  # Dojah unavailable
+
+
+class SelfieAttempt(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """
+    One row per face check at sign-up, passed or failed.
+
+    Pilot data for tuning DOJAH_SELFIE_THRESHOLD and the liveness minimum: pass
+    rates, and what they would be at other thresholds. Scores only, never images.
+    """
+
+    __tablename__ = "selfie_attempts"
+    __table_args__ = (Index("ix_selfie_attempts_created_at", "created_at"),)
+
+    customer_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("customers.id", ondelete="CASCADE"), index=True
+    )
+    outcome: Mapped[str] = mapped_column(String(20))
+    attempt_number: Mapped[int] = mapped_column(Integer)
+    # Settings in force for this attempt, so later threshold changes don't blur history.
+    threshold: Mapped[int] = mapped_column(Integer)
+    liveness_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    liveness_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    liveness_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)

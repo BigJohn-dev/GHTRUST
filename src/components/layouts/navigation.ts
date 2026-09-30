@@ -1,6 +1,6 @@
 import {
   ArrowLeftRight, BarChart3, Bell, ClipboardList, FileText, HandCoins, LayoutDashboard,
-  Package, PiggyBank, Settings, Shield, Users, UsersRound,
+  Package, PiggyBank, ScanFace, Settings, Shield, Users, UsersRound,
 } from "lucide-react";
 import { P } from "@/lib/admin/auth";
 
@@ -20,6 +20,7 @@ export const NAV_SECTIONS = ["Overview", "Lending", "Customers & money", "Admini
 export const NAV_ITEMS: NavItem[] = [
   { href: "/admin", label: "Dashboard", section: "Overview", icon: LayoutDashboard, anyOf: [P.LOAN_READ] },
   { href: "/admin/reports", label: "Reports", section: "Overview", icon: BarChart3, anyOf: [P.LOAN_READ] },
+  { href: "/admin/onboarding", label: "Onboarding", section: "Overview", icon: ScanFace, anyOf: [P.LOAN_READ] },
 
   { href: "/admin/loan-applications", label: "Applications", section: "Lending", icon: FileText, anyOf: [P.LOAN_READ] },
   { href: "/admin/loans", label: "Loan book", section: "Lending", icon: HandCoins, anyOf: [P.LOAN_READ] },

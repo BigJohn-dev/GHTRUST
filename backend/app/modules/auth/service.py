@@ -17,8 +17,8 @@ from app.core.rate_limit import OtpService, RateLimiter
 from app.core.errors import AppError, ErrorCode
 from app.core.security import hash_token
 from app.integrations.dojah.client import DojahClient
-from app.integrations.dojah.schemas import DojahError
-from app.modules.auth.models import SubjectType
+from app.integrations.dojah.schemas import DojahError, LivenessResult
+from app.modules.auth.models import SelfieAttempt, SelfieOutcome, SubjectType
 from app.modules.auth.schemas import (
     AuthTokenResponse,
     CustomerProfileResponse,
@@ -286,6 +286,7 @@ class AuthService:
             raise AppError(status.HTTP_410_GONE, ErrorCode.REGISTRATION_EXPIRED, "Please start again with your BVN.")
 
         dojah = DojahClient()
+        liveness: LivenessResult | None = None
         try:
             if settings.dojah_liveness_required:
                 liveness = await dojah.check_liveness(image, settings.dojah_liveness_min_probability)
@@ -296,13 +297,21 @@ class AuthService:
                         reason=liveness.reason,
                         probability=liveness.probability,
                     )
+                    await self._record_selfie_attempt(customer, ticket, SelfieOutcome.NOT_LIVE, liveness=liveness)
                     await self._selfie_attempt_failed(
                         key, ticket, customer, ErrorCode.LIVENESS_FAILED,
                         "We couldn't confirm a live face. {left} attempt(s) left.",
                     )
             result = await dojah.verify_bvn_selfie(ticket["bvn"], image, settings.dojah_selfie_threshold)
         except DojahError as e:
-            if e.status_code == 400:
+            unreadable = e.status_code == 400
+            await self._record_selfie_attempt(
+                customer,
+                ticket,
+                SelfieOutcome.UNREADABLE if unreadable else SelfieOutcome.PROVIDER_ERROR,
+                liveness=liveness,
+            )
+            if unreadable:
                 raise AppError(
                     status.HTTP_400_BAD_REQUEST,
                     ErrorCode.SELFIE_UNREADABLE,
@@ -312,6 +321,9 @@ class AuthService:
 
         if not result.match:
             logger.warning("registration_selfie_no_match", customer_id=customer.id, confidence=result.confidence_value)
+            await self._record_selfie_attempt(
+                customer, ticket, SelfieOutcome.NO_MATCH, match=result.confidence_value, liveness=liveness
+            )
             await self._selfie_attempt_failed(
                 key, ticket, customer, ErrorCode.SELFIE_NO_MATCH,
                 "Your selfie didn't match your BVN photo. {left} attempt(s) left.",
@@ -323,7 +335,39 @@ class AuthService:
         customer.selfie_verified_at = datetime.now(timezone.utc)
         customer.selfie_match_score = result.confidence_value
         logger.info("registration_selfie_matched", customer_id=customer.id, confidence=result.confidence_value)
+        await self._record_selfie_attempt(
+            customer, ticket, SelfieOutcome.PASSED, match=result.confidence_value, liveness=liveness, commit=False
+        )
         return await self._open_account(customer, meta=meta, device=device)
+
+    async def _record_selfie_attempt(
+        self,
+        customer: Customer,
+        ticket: dict,
+        outcome: SelfieOutcome,
+        *,
+        match: float | None = None,
+        liveness: LivenessResult | None = None,
+        commit: bool = True,
+    ) -> None:
+        """
+        Keep every face check for pilot tuning. Failed checks end in an error, which
+        rolls the request back, so those are committed straight away.
+        """
+        self.db.add(
+            SelfieAttempt(
+                customer_id=customer.id,
+                outcome=outcome.value,
+                attempt_number=ticket["attempts"] + 1,
+                threshold=settings.dojah_selfie_threshold,
+                liveness_min=settings.dojah_liveness_min_probability if settings.dojah_liveness_required else None,
+                match_score=match,
+                liveness_probability=liveness.probability if liveness else None,
+                liveness_reason=liveness.reason if liveness else None,
+            )
+        )
+        if commit:
+            await self.db.commit()
 
     async def _selfie_attempt_failed(
         self, key: str, ticket: dict, customer: Customer, code: str, message: str
