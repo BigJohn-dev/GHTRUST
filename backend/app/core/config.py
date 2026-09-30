@@ -16,6 +16,8 @@ _INSECURE_SECRETS = frozenset(
 
 
 SUPPORTED_SMS_PROVIDERS = frozenset({"termii"})
+# Optional modules that are fully built and may be switched on in production.
+LIVE_FEATURES = ("wallet",)
 
 
 def _is_local_url(url: str) -> bool:
@@ -266,6 +268,16 @@ class Settings(BaseSettings):
         if _is_local_url(self.celery_broker_url) or _is_local_url(self.celery_result_backend):
             errors.append(
                 "CELERY_BROKER_URL / CELERY_RESULT_BACKEND point at localhost: set them to the production Redis"
+            )
+        # Savings, investments, contributions and food basket have no account flows yet
+        # (their endpoints return 501), so the app must not be told they're on.
+        unbuilt = sorted(
+            f.strip() for f in self.feature_flags.split(",") if f.strip() and f.strip() not in LIVE_FEATURES
+        )
+        if unbuilt:
+            errors.append(
+                f"FEATURE_FLAGS includes modules that aren't built yet: {', '.join(unbuilt)} "
+                f"(allowed: {', '.join(LIVE_FEATURES)})"
             )
         return errors
 

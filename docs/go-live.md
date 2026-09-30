@@ -68,7 +68,7 @@ Generate secrets with `python -c "import secrets; print(secrets.token_urlsafe(48
 | `OTP_TEST_ECHO` | `false` (codes are never echoed in production anyway, but keep it off) |
 | `PAYMENT_PROVIDER` | `monnify`, `paystack`, `stanbic` or `zest` |
 | provider keys | e.g. Monnify: `MONNIFY_API_KEY`, `MONNIFY_SECRET_KEY`, `MONNIFY_CONTRACT_CODE`, `MONNIFY_MOCK=false`. The webhook secret is the provider's secret key, except Stanbic (`STANBIC_WEBHOOK_SECRET`) |
-| `FEATURE_FLAGS` | `wallet` to launch with the wallet; empty for loans only |
+| `FEATURE_FLAGS` | `wallet` to launch with the wallet; empty for loans only. Savings, investments, contributions and food basket are refused until they are built |
 | `SEED_SUPER_ADMIN_NAME`, `…_EMAIL`, `…_PHONE` | the first staff admin (see step 4) |
 | `SUPPORT_PHONE`, `SUPPORT_EMAIL`, `SUPPORT_WHATSAPP`, `SUPPORT_HOURS` | shown in the app's Help screen |
 | `APP_MIN_VERSION_ANDROID` / `_IOS` | `1.0.0` at launch; raise to force an update |

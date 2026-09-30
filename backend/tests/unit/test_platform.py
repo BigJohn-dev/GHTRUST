@@ -38,6 +38,10 @@ class TestProductionGuard:
     def test_fully_configured_production_passes(self):
         assert Settings(_env_file=None, **LIVE_PROD).production_config_errors() == []
 
+    def test_wallet_may_be_switched_on(self):
+        s = Settings(_env_file=None, **{**LIVE_PROD, "feature_flags": " wallet "})
+        assert s.production_config_errors() == []
+
     def test_non_production_is_never_blocked(self):
         s = Settings(_env_file=None, app_env="staging", debug=True, sms_mock=True)
         assert s.production_config_errors() == []
@@ -57,6 +61,8 @@ class TestProductionGuard:
             ({"monnify_mock": True}, "mock mode"),
             ({"monnify_secret_key": ""}, "Webhook signing secret"),
             ({"cors_origins": "http://localhost:5173"}, "localhost"),
+            ({"feature_flags": "wallet,savings"}, "savings"),
+            ({"feature_flags": "investments"}, "FEATURE_FLAGS"),
         ],
     )
     def test_each_misconfiguration_is_reported(self, override, fragment):

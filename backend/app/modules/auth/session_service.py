@@ -197,7 +197,9 @@ class SessionService:
             return
 
         grace = timedelta(seconds=get_settings().refresh_token_reuse_grace_seconds)
-        if reused.rotated_at and now - as_utc(reused.rotated_at) <= grace:
+        # Strict: a grace of 0 means none, even when both requests land in the same
+        # clock tick (Windows clocks tick every ~15 ms).
+        if reused.rotated_at and now - as_utc(reused.rotated_at) < grace:
             # Concurrent refresh from the same client: the other request already
             # rotated. Reject this one without killing the session; the client
             # should retry with the token it just stored.
