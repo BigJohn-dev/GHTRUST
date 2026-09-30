@@ -3751,6 +3751,56 @@
     ]
    }
   },
+  "/api/v1/admin/onboarding": {
+   "get": {
+    "tags": [
+     "Admin: Onboarding"
+    ],
+    "summary": "Sign-up funnel and face-check performance",
+    "operationId": "onboarding_report_api_v1_admin_onboarding_get",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "days",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 365,
+       "minimum": 1,
+       "default": 30,
+       "title": "Days"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OnboardingReport"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/savings/products": {
    "get": {
     "tags": [
@@ -7212,6 +7262,24 @@
     ],
     "title": "BranchSummaryResponse"
    },
+   "Bucket": {
+    "properties": {
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
+     "count": {
+      "type": "integer",
+      "title": "Count"
+     }
+    },
+    "type": "object",
+    "required": [
+     "label",
+     "count"
+    ],
+    "title": "Bucket"
+   },
    "BvnRegisterRequest": {
     "properties": {
      "bvn": {
@@ -8856,6 +8924,112 @@
     ],
     "title": "DocumentSummary"
    },
+   "FaceCheckStats": {
+    "properties": {
+     "attempts": {
+      "type": "integer",
+      "title": "Attempts"
+     },
+     "scored_attempts": {
+      "type": "integer",
+      "title": "Scored Attempts"
+     },
+     "passed": {
+      "type": "integer",
+      "title": "Passed"
+     },
+     "pass_rate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pass Rate"
+     },
+     "customers": {
+      "type": "integer",
+      "title": "Customers"
+     },
+     "first_try_pass_rate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "First Try Pass Rate"
+     },
+     "cooldowns": {
+      "type": "integer",
+      "title": "Cooldowns"
+     },
+     "outcomes": {
+      "items": {
+       "$ref": "#/components/schemas/OutcomeCount"
+      },
+      "type": "array",
+      "title": "Outcomes"
+     },
+     "threshold": {
+      "type": "integer",
+      "title": "Threshold"
+     },
+     "threshold_simulation": {
+      "items": {
+       "$ref": "#/components/schemas/SimulationPoint"
+      },
+      "type": "array",
+      "title": "Threshold Simulation"
+     },
+     "score_histogram": {
+      "items": {
+       "$ref": "#/components/schemas/Bucket"
+      },
+      "type": "array",
+      "title": "Score Histogram"
+     },
+     "liveness_min": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Liveness Min"
+     },
+     "liveness_simulation": {
+      "items": {
+       "$ref": "#/components/schemas/SimulationPoint"
+      },
+      "type": "array",
+      "title": "Liveness Simulation"
+     }
+    },
+    "type": "object",
+    "required": [
+     "attempts",
+     "scored_attempts",
+     "passed",
+     "pass_rate",
+     "customers",
+     "first_try_pass_rate",
+     "cooldowns",
+     "outcomes",
+     "threshold",
+     "threshold_simulation",
+     "score_histogram",
+     "liveness_min",
+     "liveness_simulation"
+    ],
+    "title": "FaceCheckStats"
+   },
    "FaqResponse": {
     "properties": {
      "id": {
@@ -9016,6 +9190,41 @@
      "delivery_address"
     ],
     "title": "FoodBasketSubscriptionResponse"
+   },
+   "FunnelStep": {
+    "properties": {
+     "key": {
+      "type": "string",
+      "title": "Key"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
+     "count": {
+      "type": "integer",
+      "title": "Count"
+     },
+     "rate_from_start": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rate From Start"
+     }
+    },
+    "type": "object",
+    "required": [
+     "key",
+     "label",
+     "count",
+     "rate_from_start"
+    ],
+    "title": "FunnelStep"
    },
    "GlobalAuditLogResponse": {
     "properties": {
@@ -10760,6 +10969,37 @@
     ],
     "title": "OfferInstallment"
    },
+   "OnboardingReport": {
+    "properties": {
+     "days": {
+      "type": "integer",
+      "title": "Days"
+     },
+     "since": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Since"
+     },
+     "funnel": {
+      "items": {
+       "$ref": "#/components/schemas/FunnelStep"
+      },
+      "type": "array",
+      "title": "Funnel"
+     },
+     "face_checks": {
+      "$ref": "#/components/schemas/FaceCheckStats"
+     }
+    },
+    "type": "object",
+    "required": [
+     "days",
+     "since",
+     "funnel",
+     "face_checks"
+    ],
+    "title": "OnboardingReport"
+   },
    "OpenSavingsAccountRequest": {
     "properties": {
      "product_type": {
@@ -10798,6 +11038,29 @@
      "initial_deposit"
     ],
     "title": "OpenSavingsAccountRequest"
+   },
+   "OutcomeCount": {
+    "properties": {
+     "outcome": {
+      "type": "string",
+      "title": "Outcome"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
+     "count": {
+      "type": "integer",
+      "title": "Count"
+     }
+    },
+    "type": "object",
+    "required": [
+     "outcome",
+     "label",
+     "count"
+    ],
+    "title": "OutcomeCount"
    },
    "Page_AdminTransactionResponse_": {
     "properties": {
@@ -11987,6 +12250,36 @@
      "pin"
     ],
     "title": "SetTransactionPinRequest"
+   },
+   "SimulationPoint": {
+    "properties": {
+     "value": {
+      "type": "number",
+      "title": "Value"
+     },
+     "pass_rate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pass Rate"
+     },
+     "current": {
+      "type": "boolean",
+      "title": "Current"
+     }
+    },
+    "type": "object",
+    "required": [
+     "value",
+     "pass_rate",
+     "current"
+    ],
+    "title": "SimulationPoint"
    },
    "StaffAuthTokenResponse": {
     "properties": {

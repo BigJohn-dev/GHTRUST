@@ -27,6 +27,10 @@ LIVE_PROD = dict(
     monnify_secret_key="s",
     monnify_contract_code="c",
     cors_origins="https://admin.ghtrust.com",
+    database_url="postgresql+asyncpg://ghtrust:s@db.internal:5432/ghtrust",
+    redis_url="redis://redis.internal:6379/0",
+    celery_broker_url="redis://redis.internal:6379/1",
+    celery_result_backend="redis://redis.internal:6379/2",
 )
 
 
@@ -44,6 +48,9 @@ class TestProductionGuard:
             ({"secret_key": "dev-secret-change-in-production"}, "SECRET_KEY"),
             ({"secret_key": "short"}, "SECRET_KEY"),
             ({"debug": True}, "DEBUG"),
+            ({"database_url": "postgresql+asyncpg://u:p@localhost:5432/db"}, "DATABASE_URL"),
+            ({"redis_url": "redis://127.0.0.1:6379/0"}, "REDIS_URL"),
+            ({"celery_broker_url": "redis://localhost:6379/1"}, "CELERY_BROKER_URL"),
             ({"sms_mock": True}, "SMS_MOCK"),
             ({"sms_provider": ""}, "SMS_PROVIDER"),
             ({"dojah_mock": True}, "Dojah"),
@@ -144,3 +151,20 @@ class TestSms:
         monkeypatch.setenv("DEBUG", "true")
         refresh_settings()
         assert not isinstance(get_sms_sender(), ConsoleSmsSender)
+
+
+class TestDatabaseUrl:
+    """Hosts hand out plain postgres URLs; the async engine needs the asyncpg driver."""
+
+    @pytest.mark.parametrize(
+        "given",
+        ["postgres://u:p@db.railway.internal:5432/app", "postgresql://u:p@db.railway.internal:5432/app"],
+    )
+    def test_plain_host_urls_get_the_async_driver(self, given):
+        s = Settings(_env_file=None, database_url=given)
+        assert s.async_database_url == "postgresql+asyncpg://u:p@db.railway.internal:5432/app"
+        assert s.sync_database_url == "postgresql://u:p@db.railway.internal:5432/app"
+
+    def test_explicit_asyncpg_url_is_untouched(self):
+        url = "postgresql+asyncpg://u:p@db:5432/app"
+        assert Settings(_env_file=None, database_url=url).async_database_url == url

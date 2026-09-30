@@ -17,6 +17,12 @@ _INSECURE_SECRETS = frozenset(
 
 SUPPORTED_SMS_PROVIDERS = frozenset({"termii"})
 
+
+def _is_local_url(url: str) -> bool:
+    from urllib.parse import urlparse
+
+    return (urlparse(url.replace("+asyncpg", "")).hostname or "") in {"localhost", "127.0.0.1", "::1"}
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -251,6 +257,16 @@ class Settings(BaseSettings):
             errors.append("CORS_ORIGINS must all be https:// (the staff refresh cookie is Secure)")
         if self.enable_api_docs:
             errors.append("ENABLE_API_DOCS must be false (publishes the full API surface)")
+        # Both default to localhost. On a hosted deploy that boots "healthy" and then
+        # fails every sign-in, so name the variable instead.
+        if _is_local_url(self.async_database_url):
+            errors.append("DATABASE_URL points at localhost: set it to the production Postgres")
+        if _is_local_url(self.redis_url):
+            errors.append("REDIS_URL points at localhost: set it to the production Redis")
+        if _is_local_url(self.celery_broker_url) or _is_local_url(self.celery_result_backend):
+            errors.append(
+                "CELERY_BROKER_URL / CELERY_RESULT_BACKEND point at localhost: set them to the production Redis"
+            )
         return errors
 
     @property
@@ -291,7 +307,13 @@ class Settings(BaseSettings):
     @property
     def async_database_url(self) -> str:
         if self.database_url:
-            return self.database_url
+            # Hosts (Railway, Heroku, Render) hand out postgres:// or postgresql:// URLs;
+            # the async engine needs the asyncpg driver named in the scheme.
+            url = self.database_url
+            for plain in ("postgres://", "postgresql://"):
+                if url.startswith(plain):
+                    return "postgresql+asyncpg://" + url[len(plain) :]
+            return url
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
