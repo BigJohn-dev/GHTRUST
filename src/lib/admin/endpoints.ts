@@ -3,6 +3,7 @@
 import { api, apiWithTotal, COOKIE_TRANSPORT, downloadFile, query } from "./api";
 import type {
   AdminSettings,
+  OnboardingReport,
   ApplicationDetail,
   ApplicationSummary,
   ApplicationWorkflowState,
@@ -48,6 +49,10 @@ export const authApi = {
       ...COOKIE_TRANSPORT,
     }),
   me: () => api<StaffProfile>(`${V1}/admin/auth/me`),
+};
+
+export const onboardingApi = {
+  report: (days: number) => api<OnboardingReport>(`${V1}/admin/onboarding${query({ days })}`),
 };
 
 export const dashboardApi = {

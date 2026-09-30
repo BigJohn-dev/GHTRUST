@@ -460,3 +460,31 @@ export interface ContributionGroup {
   status: string;
   service_fee_percent: Money;
 }
+
+/** GET /admin/onboarding: sign-up funnel and face-check performance (pilot tuning). */
+export interface OnboardingReport {
+  days: number;
+  since: string;
+  funnel: { key: string; label: string; count: number; rate_from_start: number | null }[];
+  face_checks: {
+    attempts: number;
+    scored_attempts: number;
+    passed: number;
+    pass_rate: number | null;
+    customers: number;
+    first_try_pass_rate: number | null;
+    cooldowns: number;
+    outcomes: { outcome: string; label: string; count: number }[];
+    threshold: number;
+    threshold_simulation: OnboardingSimulationPoint[];
+    score_histogram: { label: string; count: number }[];
+    liveness_min: number | null;
+    liveness_simulation: OnboardingSimulationPoint[];
+  };
+}
+
+export interface OnboardingSimulationPoint {
+  value: number;
+  pass_rate: number | null;
+  current: boolean;
+}

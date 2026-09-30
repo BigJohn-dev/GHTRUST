@@ -1,6 +1,6 @@
 """Side-effect imports so Alembic sees all mapped tables."""
 
-from app.modules.auth.models import AuthSession, CustomerDevice, DeviceApproval  # noqa: F401
+from app.modules.auth.models import AuthSession, CustomerDevice, DeviceApproval, SelfieAttempt  # noqa: F401
 
 from app.modules.contributions.models import (  # noqa: F401
     ContributionGroup,
