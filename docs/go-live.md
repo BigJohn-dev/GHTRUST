@@ -33,7 +33,7 @@ project per environment (staging and production, never shared):
 |---|---|---|---|
 | Postgres | Railway Postgres | – | Turn on **daily backups** |
 | Redis | Railway Redis | – | Sessions, OTPs, rate limits, task queue |
-| **api** | `backend/Dockerfile` | the image's default | Healthcheck path `/api/v1/health/ready`. **Pre-deploy command: `alembic upgrade head`.** **Attach a volume at `/app/uploads`** |
+| **api** | `backend/Dockerfile` | the image's default | Healthcheck path `/api/v1/health/ready`. **Pre-deploy command: `alembic upgrade head && python scripts/seed.py`.** **Attach a volume at `/app/uploads`** |
 | **worker** | same image | `celery -A app.core.celery_app.celery_app worker --loglevel=info` | Processes withdrawals, reconciliation, notifications |
 | **beat** | same image | `celery -A app.core.celery_app.celery_app beat --loglevel=info` | Schedules the periodic jobs. Run **exactly one** |
 
@@ -107,9 +107,12 @@ wallet is never credited.
 
 ## 4. First deploy
 
-1. Deploy **api** (the pre-deploy command migrates the empty database to `022`).
-2. Seed products and the first staff admin, once, from the api service shell:
-   `python scripts/seed.py` (safe to re-run; it never duplicates).
+1. Deploy **api**. The pre-deploy command migrates the database, then seeds products, the
+   first staff admin (`SEED_SUPER_ADMIN_*`) and any demo customers. The seed never
+   duplicates, so it's safe on every deploy. Without it there's no staff account and
+   portal sign-in answers "Staff account not found".
+2. Changed `SEED_SUPER_ADMIN_*` or `DEMO_*`? Redeploy, or run `python scripts/seed.py`
+   from the api service shell.
 3. Deploy **worker** and **beat**.
 4. Check `https://<api domain>/api/v1/health/ready` returns `{"status":"ready"}`.
 
