@@ -83,21 +83,39 @@ src/
 ## Release builds (EAS)
 
 Builds run on Expo's servers (`npx eas-cli@latest login` first, then `eas init` once to link the project).
-`eas.json` has two profiles:
+`eas.json` has three profiles. Each installs from its own update channel (see below).
 
 | Profile | Output | Use |
 |---|---|---|
+| `development` | Android `.apk`, iOS dev build | your own phone, with the dev menu; needed for anything Expo Go can't run (liveness camera, push on Android) |
 | `preview` | Android `.apk`, iOS ad-hoc build | internal testers, pointed at staging |
 | `production` | Android `.aab`, iOS `.ipa` | Play Console / App Store Connect; build numbers auto-increment |
 
 Settings come from EAS environment variables (one set per profile), not committed files. See
 `.env.example` for the list. Only `EXPO_PUBLIC_*` values reach the app, and every one of them is
 readable by anyone with the app, so the app holds no API keys; provider credentials stay on the
-backend. A `preview` or `production` build **fails** if `EXPO_PUBLIC_API_URL` is missing, or isn't
-`https://` for production (`app.config.js`).
+backend. A `preview` or `production` build **fails** (`app.config.js`) if `EXPO_PUBLIC_API_URL` is
+missing, points at a local network address, or isn't `https://` for production, and a production
+build also fails without `EXPO_PUBLIC_ANDROID_STORE_URL` (already set in `eas.json`).
 
 The `preview` profile is already pointed at the test API on Railway
 (`eas.json` → `build.preview.env`); change it there to use another server.
+
+### Over-the-air updates (EAS Update)
+
+JavaScript-only fixes ship without a store review. Each build listens on the channel of its
+profile, and `runtimeVersion` uses the **fingerprint** policy: any change to native code or
+native config gives new builds a new runtime, so an update can never reach a build it
+wouldn't run on. Anything native (a new Expo module, a permission, `app.json` plugin
+changes) still needs a new store build.
+
+```bash
+npm run update:preview -- --message "Fix repayment amount rounding"     # testers
+npm run update:production -- --message "Fix repayment amount rounding"  # everyone
+```
+
+Ship to `preview` first and check it on a tester build before `production`. Phones pick an
+update up on their next launch.
 
 ### Testing against the Railway API
 
