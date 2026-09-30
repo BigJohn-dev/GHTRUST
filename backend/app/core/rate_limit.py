@@ -105,13 +105,20 @@ class OtpService:
         """Generate OTP, store its hash in Redis, dispatch SMS. Returns expiry seconds."""
         from app.integrations.sms import get_sms_sender, otp_message
 
+        from app.core.demo import demo_code_for
+
         settings = get_settings()
-        otp = self._generate()
         key = f"otp:{purpose}:{identifier}"
         attempts_key = f"otp:attempts:{purpose}:{identifier}"
 
-        # Send first: if delivery fails, no dangling OTP is left in Redis.
-        await get_sms_sender().send(phone, otp_message(otp, purpose))
+        demo = demo_code_for(purpose, phone)
+        if demo:
+            otp = demo
+            logger.warning("demo_otp_issued", purpose=purpose, phone=CustomerMask.mask_phone(phone))
+        else:
+            otp = self._generate()
+            # Send first: if delivery fails, no dangling OTP is left in Redis.
+            await get_sms_sender().send(phone, otp_message(otp, purpose))
 
         async with self.redis.pipeline(transaction=True) as pipe:
             pipe.setex(key, settings.otp_expire_seconds, _hash_otp(otp))

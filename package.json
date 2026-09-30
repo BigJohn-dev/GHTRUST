@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "dev:webpack": "next dev"
+    "dev:webpack": "next dev",
+    "dev:railway": "node scripts/dev-remote.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

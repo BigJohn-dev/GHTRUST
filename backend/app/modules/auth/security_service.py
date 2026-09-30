@@ -25,6 +25,7 @@ from fastapi import status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.demo import blocks_money_out
 from app.core.errors import AppError, ErrorCode
 from app.core.pins import (
     LOGIN_PIN_LENGTH,
@@ -200,6 +201,13 @@ class SecurityService:
         Gate for anything that moves money out of the account. Call it before doing any
         other work in the request: a wrong PIN commits its attempt count.
         """
+        # Signing an offer or changing the PIN (check_hold=False) still works on a demo account.
+        if check_hold and blocks_money_out(customer.phone_primary):
+            raise AppError(
+                status.HTTP_403_FORBIDDEN,
+                ErrorCode.DEMO_ACCOUNT,
+                "This is a demo account, so money can't leave it.",
+            )
         if not customer.transaction_pin_hash:
             raise AppError(
                 status.HTTP_403_FORBIDDEN,

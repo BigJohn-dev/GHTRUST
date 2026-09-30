@@ -32,6 +32,7 @@
       },
       "channel": "production",
       "env": {
+        "EXPO_PUBLIC_API_URL": "https://ghtrust-production.up.railway.app",
         "EXPO_PUBLIC_ANDROID_STORE_URL": "https://play.google.com/store/apps/details?id=ng.ghtrust.app"
       }
     }

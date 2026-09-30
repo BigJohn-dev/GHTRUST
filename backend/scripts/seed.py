@@ -22,6 +22,7 @@ from sqlalchemy import inspect, select  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.core.database import AsyncSessionLocal, engine  # noqa: E402
 from app.modules.admin.service import seed_super_admin  # noqa: E402
+from app.modules.auth.demo_accounts import DemoSeedError, seed_demo_customers  # noqa: E402
 from app.modules.food_basket.models import FoodBasketPlan  # noqa: E402
 from app.modules.food_basket.schemas import FoodBasketPlanType  # noqa: E402
 from app.modules.investments.models import InvestmentPlan  # noqa: E402
@@ -110,17 +111,21 @@ async def seed() -> None:
         savings = await _seed_by_name(session, SavingsProduct, SAVINGS_PRODUCTS)
         investments = await _seed_by_name(session, InvestmentPlan, INVESTMENT_PLANS)
         food = await _seed_by_name(session, FoodBasketPlan, FOOD_BASKET_PLANS)
+        # After the super admin, so a staff number in DEMO_PHONES isn't made a customer.
+        demo = await seed_demo_customers(session)
         await session.commit()
 
     print(
         "Seed complete: super admin, loan products, workflows "
         f"(+{savings} savings, +{investments} investment, +{food} food basket plans)"
     )
+    if demo:
+        print(f"Demo customers ready: {', '.join(demo)}")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(seed())
-    except SeedError as exc:
+    except (SeedError, DemoSeedError) as exc:
         print(f"Seed aborted: {exc}", file=sys.stderr)
         sys.exit(1)

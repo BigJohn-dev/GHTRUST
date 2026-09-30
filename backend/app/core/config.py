@@ -176,6 +176,17 @@ class Settings(BaseSettings):
     # mocked, no text is ever sent, so return the code to the app instead. Opt-in, and
     # ignored in production (which refuses SMS_MOCK anyway).
     otp_test_echo: bool = False
+    # Demo sign-in (testers, app-store review; see app/core/demo.py). These numbers get
+    # DEMO_OTP instead of an SMS. In production staff sign-in never uses it, money can't
+    # leave a demo account, and the code must not be guessable (no 000000 or 123456).
+    demo_phones: str = ""
+    demo_otp: str = ""
+    # Test servers only: these 11-digit BVNs simulate sign-up without Dojah (made-up
+    # identity, face check passes, code is DEMO_OTP). Entering one again starts over.
+    demo_bvns: str = ""
+    # Optional PINs `scripts/seed.py` gives demo customers, so reviewers skip PIN setup.
+    demo_login_pin: str = ""
+    demo_transaction_pin: str = ""
 
     # Rate limits (requests per window). Disabled automatically when APP_ENV=development.
     rate_limit_enabled: bool = True
@@ -269,6 +280,16 @@ class Settings(BaseSettings):
             errors.append(
                 "CELERY_BROKER_URL / CELERY_RESULT_BACKEND point at localhost: set them to the production Redis"
             )
+        if self.demo_bvns.strip():
+            errors.append("DEMO_BVNS must be empty in production (it opens accounts without identity checks)")
+        if self.demo_phones.strip():
+            from app.core.demo import weak_code
+
+            code = self.demo_otp.strip()
+            if not (code.isdigit() and len(code) == self.otp_length):
+                errors.append(f"DEMO_PHONES is set, so DEMO_OTP must be {self.otp_length} digits")
+            elif weak_code(code):
+                errors.append("DEMO_OTP is guessable (all one digit or a run like 123456): pick another")
         # Savings, investments, contributions and food basket have no account flows yet
         # (their endpoints return 501), so the app must not be told they're on.
         unbuilt = sorted(

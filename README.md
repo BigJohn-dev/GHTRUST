@@ -58,6 +58,13 @@ printed in the API's terminal (the `sms_mock_delivery` line).
 For day-to-day use, run the production build — pages are precompiled and much
 faster than dev mode: `npm run build && npm start`.
 
+**Against the deployed API.** `npm run build` / `npm start` use the Railway API
+(`https://ghtrust-production.up.railway.app`, set in `.env.production`; a `.env.local` or a
+host setting overrides it). For dev mode against it: `npm run dev:railway`. Signing in
+works from `localhost`, but the staff session cookie isn't sent across sites, so a page
+refresh signs you out. That goes away once the portal and API share a domain
+(`docs/go-live.md`, step 5).
+
 ### Staff portal sessions
 
 - **No automatic sign-in on launch.** The access token (10 min) lives only in

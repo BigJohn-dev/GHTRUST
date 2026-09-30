@@ -13,11 +13,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.demo import demo_identity, is_demo_bvn, is_demo_phone
 from app.core.rate_limit import OtpService, RateLimiter
 from app.core.errors import AppError, ErrorCode
 from app.core.security import hash_token
 from app.integrations.dojah.client import DojahClient
-from app.integrations.dojah.schemas import DojahError, LivenessResult
+from app.integrations.dojah.schemas import DojahError, DojahSelfieVerification, LivenessResult
 from app.modules.auth.models import SelfieAttempt, SelfieOutcome, SubjectType
 from app.modules.auth.schemas import (
     AuthTokenResponse,
@@ -113,20 +114,25 @@ class AuthService:
 
     async def register_with_bvn(self, bvn: str, *, ip: str) -> OtpSentResponse:
         bvn = _validate_bvn(bvn)
+        demo = is_demo_bvn(bvn)
         limiter = RateLimiter(self.redis)
-        await limiter.check_bvn_registration(ip, bvn)
+        if not demo:  # testers rerun sign-up with the same demo BVN many times a day
+            await limiter.check_bvn_registration(ip, bvn)
         # Checked before the (paid) BVN lookup.
         await self._check_selfie_cooldown(bvn)
 
         existing = await self.db.execute(select(Customer).where(Customer.bvn == bvn))
         customer = existing.scalar_one_or_none()
+        if customer and demo:
+            await self._retire_demo_customer(customer)
+            customer = None
         if customer and customer.status == CustomerStatus.ACTIVE:
             raise AppError(status.HTTP_409_CONFLICT, ErrorCode.ACCOUNT_EXISTS, "An account with this BVN already exists. Please login.")
         if customer and customer.phone_verified:
             raise AppError(status.HTTP_409_CONFLICT, ErrorCode.ACCOUNT_EXISTS, "Account already verified. Please login with your phone number.")
 
         try:
-            entity = await self.dojah.lookup_bvn_advanced(bvn)
+            entity = demo_identity(bvn) if demo else await self.dojah.lookup_bvn_advanced(bvn)
         except DojahError as e:
             if e.status_code == 404:
                 raise AppError(status.HTTP_404_NOT_FOUND, ErrorCode.BVN_NOT_FOUND, e.message) from e
@@ -205,6 +211,21 @@ class AuthService:
             purpose="registration",
             dev_code=self.otp.dev_code,
         )
+
+    async def _retire_demo_customer(self, customer: Customer) -> None:
+        """
+        Starting sign-up again with a demo BVN: close the previous attempt instead of
+        deleting it (loans, wallet and audit rows still point at it), sign it out
+        everywhere, and free its BVN and phone for the new attempt.
+        """
+        await SessionService(self.db).revoke_all(
+            subject_type=SubjectType.CUSTOMER, subject_id=customer.id, reason="demo_restart"
+        )
+        customer.status = CustomerStatus.INACTIVE
+        customer.bvn = "R" + "".join(secrets.choice("0123456789") for _ in range(10))
+        customer.phone_primary = f"retired-{secrets.token_hex(6)}"
+        await self.db.flush()
+        logger.info("demo_registration_restarted", customer_id=customer.id)
 
     async def verify_registration_otp(
         self,
@@ -285,6 +306,30 @@ class AuthService:
             await self.redis.delete(key)
             raise AppError(status.HTTP_410_GONE, ErrorCode.REGISTRATION_EXPIRED, "Please start again with your BVN.")
 
+        demo = is_demo_bvn(ticket["bvn"])
+        if demo:
+            # No BVN photo to match against; kept out of the Onboarding face-check figures.
+            result = DojahSelfieVerification(confidence_value=100.0, match=True)
+            liveness = None
+        else:
+            result, liveness = await self._check_face(key, ticket, customer, image)
+
+        # Single use: a second request with this ticket finds nothing.
+        if not await self.redis.delete(key):
+            raise AppError(status.HTTP_410_GONE, ErrorCode.REGISTRATION_EXPIRED, "Please start again with your BVN.")
+        customer.selfie_verified_at = datetime.now(timezone.utc)
+        customer.selfie_match_score = result.confidence_value
+        logger.info("registration_selfie_matched", customer_id=customer.id, confidence=result.confidence_value)
+        if not demo:
+            await self._record_selfie_attempt(
+                customer, ticket, SelfieOutcome.PASSED, match=result.confidence_value, liveness=liveness, commit=False
+            )
+        return await self._open_account(customer, meta=meta, device=device)
+
+    async def _check_face(
+        self, key: str, ticket: dict, customer: Customer, image: str
+    ) -> tuple[DojahSelfieVerification, LivenessResult | None]:
+        """Dojah liveness (if required) and BVN photo match. Raises on a failed check."""
         dojah = DojahClient()
         liveness: LivenessResult | None = None
         try:
@@ -328,17 +373,7 @@ class AuthService:
                 key, ticket, customer, ErrorCode.SELFIE_NO_MATCH,
                 "Your selfie didn't match your BVN photo. {left} attempt(s) left.",
             )
-
-        # Single use: a second request with this ticket finds nothing.
-        if not await self.redis.delete(key):
-            raise AppError(status.HTTP_410_GONE, ErrorCode.REGISTRATION_EXPIRED, "Please start again with your BVN.")
-        customer.selfie_verified_at = datetime.now(timezone.utc)
-        customer.selfie_match_score = result.confidence_value
-        logger.info("registration_selfie_matched", customer_id=customer.id, confidence=result.confidence_value)
-        await self._record_selfie_attempt(
-            customer, ticket, SelfieOutcome.PASSED, match=result.confidence_value, liveness=liveness, commit=False
-        )
-        return await self._open_account(customer, meta=meta, device=device)
+        return result, liveness
 
     async def _record_selfie_attempt(
         self,
@@ -397,7 +432,12 @@ class AuthService:
 
         from app.modules.payments.wallet_service import WalletService
 
-        await WalletService(self.db).provision_paystack(customer)
+        wallets = WalletService(self.db)
+        if is_demo_bvn(customer.bvn):
+            # A made-up identity mustn't reach the payment provider: internal wallet only.
+            await wallets.ledger.get_or_create_wallet(customer.id)
+        else:
+            await wallets.provision_paystack(customer)
 
         return await self._issue_tokens(customer, meta=meta, device=device)
 
@@ -474,8 +514,9 @@ class AuthService:
             raise AppError(status.HTTP_401_UNAUTHORIZED, "UNAUTHENTICATED", "Invalid credentials.")
 
         # A new phone while another is signed in: hold the sign-in until it's approved there.
+        # Demo accounts are shared by testers and reviewers: nobody is there to approve.
         security = SecurityService(self.db)
-        approvers = await security.approver_sessions(customer, device)
+        approvers = [] if is_demo_phone(normalized) else await security.approver_sessions(customer, device)
         if approvers:
             return await security.start_approval(customer, approvers, device, meta)
 
