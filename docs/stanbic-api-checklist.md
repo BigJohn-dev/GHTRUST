@@ -1,59 +1,80 @@
-# Stanbic sandbox APIs — GH Trust mapping
+# Stanbic APIs: GH Trust mapping and status
 
-All OpenAPI files we have are under `backend/app/integrations/stanbic/specs/`.
+All OpenAPI files are in `backend/app/integrations/stanbic/specs/`. Everything Stanbic-specific
+switches on only with `PAYMENT_PROVIDER=stanbic`; Monnify stays the default until then.
 
-## Is **Current Account Opening** the wallet virtual account?
+## Wallet top-ups: Fundable Virtual ID
 
-**No.** It is a different product from wallet **collection / dedicated VA** funding.
+**This is Stanbic's virtual account product** (files `fvid-*.json`, `nuban-generator_3.0.0.json`).
+It works differently from Monnify: there is **no "create account" call**.
 
-| Product | What it does | GH Trust use |
-|--------|----------------|--------------|
-| **Account Opening 2.0** | BVN/NIN onboarding → CIF + account async | Full KYC account creation |
-| **Current Account Opening 1.0** | Opens a **current account for an existing `cifID`** (scheme/branch) | Second step after CIF exists — still a **real CASA**, not a per-customer collection VA |
-| **Collection / VA** (not in portal yet) | Dedicated account number for **inbound** transfers | What Monnify “reserved account” does today for wallet top-ups |
+1. Stanbic gives GH Trust a **4-digit prefix** (`STANBIC_FVID_PREFIX`).
+2. Each customer's account number = prefix + a 5-digit serial we allocate + the check digit from
+   Stanbic's **Nuban Generator** (bank code 221). One prefix = 99,999 customers.
+3. A transfer to that number from any bank lands in GH Trust's pooled wallet account at Stanbic.
+4. **Transaction history by prefix** lists every payment (other banks and Stanbic-to-Stanbic are
+   separate lists). Each record has a `checksum` and `sessionId`.
+5. The **Checksum Validator** confirms a record is genuine (`isValid`, amount, account) before
+   we credit anything.
 
-**Practical path today:** use **Account Opening 2.0 + status** (and optionally **Current Account**) if Stanbic wants every customer on a real Stanbic account. For **wallet top-ups**, keep Monnify/Paystack until Stanbic confirms a **collection / virtual account** API on your plan.
+Code: `backend/app/modules/payments/stanbic_fvid.py`.
 
-Code:
+- Account numbers are allocated at sign-up (`WalletService.provision_payment_rail`), stored in
+  `stanbic_virtual_accounts` (migration `027`). A failure leaves the customer signed in, and the
+  `retry_wallet_accounts` job finishes it.
+- Wallets are credited by polling: the `credit_stanbic_payments` job runs every 2 minutes, reads
+  today's and yesterday's history, validates each checksum, and credits once per `sessionId`. A
+  forged or mismatched record is rejected; one Stanbic can't confirm right now is retried next run;
+  a payment to an unknown number is logged (`stanbic_fvid_unknown_account`) and not credited.
+- Push notifications (instant credit) are not built: their format isn't in any file Stanbic gave.
+  Polling works without them, and stays as the safety net once they are.
 
-- Account Opening 2.0 → `account_opening.py`
-- Current account → `current_account.py` (OAuth Bearer)
-- NPS disbursement / name enquiry → `portal_sandbox.py` + `StanbicClient` when `STANBIC_PORTAL_SANDBOX=true`
-- Credit check → `credit_check.py` (opt-in `STANBIC_CREDIT_CHECK_ENABLED`)
-- Transaction history → `portal_sandbox.transaction_history()` for settlement reconciliation
+## Transfers out (withdrawals and loan payouts)
 
-## Specs in repo
+- NPS single transfer, transfer status and name enquiry: `portal_sandbox.py`, `StanbicClient`.
+- **Bank codes:** Stanbic routes on 6-digit institution codes; the app and older saved accounts
+  use 3-digit CBN codes. `bank_codes.py` converts using Stanbic's **Bank List**, which gives both
+  codes per bank. Unknown codes are refused, never guessed. With Stanbic as the rail, the app's
+  bank picker shows Stanbic's list.
 
-| File | Product |
-|------|---------|
-| `account-opening_2.0.0.json` | Account Opening (create) |
-| `account-opening-status_1.0.0.json` | Account Opening status |
-| `current-account-opening_1.0.0.json` | Current account for existing CIF |
-| `name-enquiry_1.0.0.json` | NPS name enquiry |
-| `single-transfer_1.0.0.json` | NPS transfer + `/trans-status` |
-| `transaction-history-service_1.0.0.json` | Statement / reconciliation |
-| `credit-check_2.0.0.json` | Outstanding loan, CBN, private checks |
+## Other products
 
-## Still ask Stanbic for
+| Product | File | Use |
+|---|---|---|
+| Account Opening 2.0 + status | `account-opening_2.0.0.json`, `account-opening-status_1.0.0.json` | Full bank accounts (CASA). **Not** for the wallet |
+| Current Account Opening | `current-account-opening_1.0.0.json` | Current account for an existing CIF. **Not** for the wallet |
+| Transaction History | `transaction-history-service_1.0.0.json` | Settlement account statement |
+| Credit Check | `credit-check_2.0.0.json` | Optional (`STANBIC_CREDIT_CHECK_ENABLED`) |
+| Nuban Generator (Bank-Test) | `nuban-generator_3.0.0.json` | Check digit for our virtual account numbers |
 
-- **Dedicated collection / virtual account** for wallet funding (inbound NIP to a unique NUBAN per customer)
-- **Inbound payment webhooks** for that product (if separate from NPS)
-- **NIP bank code list** — portal examples use `999221`-style codes; map from CBN 3-digit codes before live NPS
+## Status of our sandbox access
 
-## Sandbox env (`.env`)
+- App **"GH Trust Sandbox"** subscribed to **Bank-Test** (Default Plan). Keys are valid (the OAuth
+  token is issued).
+- Every call is still refused with **"Invalid Account or Client ID"** / **"This account number is
+  not profiled for this Client Id"**: Stanbic has to **profile our Client ID to an account**.
+
+## Still needed from Stanbic
+
+1. **Profile our Client ID** for every subscribed product (Bank-Test, Fundable Virtual ID, NPS Funds Transfer).
+2. **Our 4-digit Fundable Virtual ID prefix** (sandbox now, live later).
+3. **Sandbox test accounts:** a funded source (settlement) account for NPS transfers, and test destination accounts.
+4. **A way to simulate a payment** into a sandbox virtual account.
+5. **Push notification details:** format, how to register our URL, retries.
+6. **The name senders see** when paying a customer's virtual account.
+7. **What NPS response codes mean** (success / processing / failed), and whether a repeated `clientRefId` is ignored or pays twice.
+8. **Live URLs and live keys** (into Railway, never by email or chat).
+
+## Sandbox env (`backend/.env`, not Railway)
 
 ```env
 STANBIC_MOCK=false
+STANBIC_PORTAL_SANDBOX=true
 STANBIC_CLIENT_ID=
 STANBIC_CLIENT_SECRET=
-STANBIC_SETTLEMENT_ACCOUNT_NUMBER=   # source for NPS single-transfer
-STANBIC_PORTAL_SANDBOX=true
-STANBIC_ACCOUNT_OPENING_BASE_URL=https://testapi.stanbicibtc.com/test/sandbox/account-opening
-STANBIC_NPS_BASE_URL=https://testapi.stanbicibtc.com/test/sandbox/nps
-STANBIC_NAME_ENQUIRY_BASE_URL=https://testapi.stanbicibtc.com/test/sandbox/nameenquiry
-STANBIC_TRANSACTION_HISTORY_BASE_URL=https://testapi.stanbicibtc.com/test/sandbox/transaction-history-service
-STANBIC_CREDIT_CHECK_BASE_URL=https://testapi.stanbicibtc.com/test/sandbox/credit-check-services
-STANBIC_OAUTH_TOKEN_URL=https://testapi.stanbicibtc.com/test/sandbox/mynativeoauthprovider/oauth2/token
+STANBIC_FVID_PREFIX=                 # from Stanbic
+STANBIC_SETTLEMENT_ACCOUNT_NUMBER=   # from Stanbic: source for NPS transfers
+# PAYMENT_PROVIDER=stanbic           # only when testing the Stanbic rail locally
 ```
 
-Subscribe each product in the portal (Default plan) with the same sandbox keys.
+Subscribe each product in the portal (Default Plan) with the same app ("GH Trust Sandbox").

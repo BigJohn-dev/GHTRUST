@@ -281,6 +281,23 @@ async def run_retry_wallet_accounts(limit: int = 100) -> dict:
     return {"status": "ok", "fixed": fixed, "failed": failed, "checked": len(ids)}
 
 
+async def run_credit_stanbic_payments() -> dict:
+    """Credit wallets for transfers into customers' Stanbic account numbers (Fundable Virtual ID)."""
+    from app.modules.payments import stanbic_fvid
+
+    if not stanbic_fvid.enabled():
+        return {"status": "skipped", "reason": "Stanbic Fundable Virtual ID is not configured"}
+    async with worker_session() as db:
+        try:
+            counts = await stanbic_fvid.StanbicVirtualAccounts(db).credit_new_payments()
+        except PaymentRailError as exc:
+            await db.rollback()
+            logger.warning("stanbic_fvid_poll_failed", error=exc.message)
+            return {"status": "error", "error": exc.message}
+        await db.commit()
+    return {"status": "ok", **counts}
+
+
 async def run_pay_out_investments() -> dict:
     """Pay matured investments (amount plus returns) into customers' wallets."""
     from app.modules.investments.service import InvestmentService

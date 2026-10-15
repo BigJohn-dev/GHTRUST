@@ -20,6 +20,7 @@ from app.modules.payments.models import (  # noqa: F401
     LoanDisbursement,
     PaymentTransaction,
     ProcessedWebhookEvent,
+    StanbicVirtualAccount,
     WithdrawalRequest,
 )
 from app.modules.loans.models import (  # noqa: F401

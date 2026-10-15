@@ -1,0 +1,309 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "version": "2.1.0",
+        "title": "Transaction history by prefix",
+        "description": "This API gets the history of transactions carried out on a prefix id",
+        "contact": {
+            "name": "Integration APIs Team",
+            "email": "Integrationsapis@stanbicibtc.com"
+        }
+    },
+    "basePath": "/test/sandbox/history/prefix-id",
+    "paths": {
+        "/history": {
+            "parameters": [],
+            "get": {
+                "responses": {
+                    "200": {
+                        "$ref": "#/responses/00"
+                    },
+                    "400": {
+                        "$ref": "#/responses/99"
+                    },
+                    "401": {
+                        "$ref": "#/responses/41"
+                    },
+                    "500": {
+                        "$ref": "#/responses/55"
+                    }
+                },
+                "produces": [
+                    "application/json"
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "name": "prefixId",
+                        "required": true,
+                        "in": "query",
+                        "type": "string",
+                        "description": "A 4 digit prefix id number"
+                    },
+                    {
+                        "name": "startDate",
+                        "required": true,
+                        "in": "query",
+                        "type": "string",
+                        "description": "21-MAY-23"
+                    },
+                    {
+                        "name": "endDate",
+                        "required": true,
+                        "in": "query",
+                        "type": "string",
+                        "description": "21-MAY-23"
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "type": "integer",
+                        "description": "page number of response"
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "type": "integer",
+                        "description": "size of the response object"
+                    },
+                    {
+                        "name": "sessionId",
+                        "in": "query",
+                        "type": "string",
+                        "description": "The session Id of the transaction"
+                    }
+                ],
+                "description": "This api gets the history of transaction done from other banks"
+            }
+        },
+        "/stanbic-to-stanbic": {
+            "get": {
+                "responses": {
+                    "200": {
+                        "$ref": "#/responses/00"
+                    },
+                    "400": {
+                        "$ref": "#/responses/99"
+                    },
+                    "401": {
+                        "$ref": "#/responses/41"
+                    }
+                },
+                "consumes": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "name": "prefixId",
+                        "required": true,
+                        "in": "query",
+                        "type": "string",
+                        "description": "A 4 digit prefix id number"
+                    },
+                    {
+                        "name": "startDate",
+                        "in": "query",
+                        "description": "21-mar-23",
+                        "type": "string"
+                    },
+                    {
+                        "name": "endDate",
+                        "required": true,
+                        "in": "query",
+                        "type": "string",
+                        "description": "21-mar-23"
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "type": "integer",
+                        "description": "page number of response"
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "type": "integer",
+                        "description": "size of the response object"
+                    },
+                    {
+                        "name": "sessionId",
+                        "in": "query",
+                        "type": "string",
+                        "description": "The session Id of the transaction"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "description": "This api gets the history of transaction done from StanbicIBTC bank accounts."
+            }
+        }
+    },
+    "securityDefinitions": {
+        "clientID": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Client-Id"
+        },
+        "Client-Secret": {
+            "type": "apiKey",
+            "name": "Client-Secret",
+            "in": "header"
+        }
+    },
+    "security": [
+        {
+            "clientID": [],
+            "Client-Secret": []
+        }
+    ],
+    "schemes": [
+        "https"
+    ],
+    "host": "testapi.stanbicibtc.com",
+    "produces": [
+        "application/json"
+    ],
+    "consumes": [
+        "application/json"
+    ],
+    "definitions": {
+        "RequestBody": {
+            "type": "object",
+            "properties": {
+                "prefixId": {
+                    "title": "prefixId",
+                    "type": "string",
+                    "enum": [
+                        ""
+                    ]
+                },
+                "tran_date": {
+                    "type": "string",
+                    "format": "date",
+                    "enum": [
+                        "15-Nov-22"
+                    ]
+                }
+            }
+        },
+        "LookupByClientInformationSchema": {
+            "type": "object",
+            "properties": {
+                "clientId": {
+                    "type": "string"
+                },
+                "chargeId": {
+                    "type": "string"
+                },
+                "accountNumber": {
+                    "type": "string"
+                }
+            },
+            "description": "This request takes note of the client Id and Charge id for each user calling the API"
+        }
+    },
+    "responses": {
+        "41": {
+            "description": "Unauthorized",
+            "schema": {
+                "example": {
+                    "httpCode": "401",
+                    "httpMessage": "Unauthorized",
+                    "moreInformation": "Invalid client id or secret."
+                }
+            }
+        },
+        "55": {
+            "description": "Service Unavailable"
+        },
+        "99": {
+            "description": "Bad request",
+            "schema": {
+                "example": {
+                    "responseMsg": "Invalid date format",
+                    "responseCode": "99"
+                }
+            }
+        },
+        "200": {
+            "description": "Success"
+        },
+        "400": {
+            "description": "Bad Request"
+        },
+        "401": {
+            "description": "Unauthorized"
+        },
+        "403": {
+            "description": "Forbidden"
+        },
+        "404": {
+            "description": "Not found"
+        },
+        "408": {
+            "description": "Request Timeout"
+        },
+        "500": {
+            "description": "Internal Server Error"
+        },
+        "502": {
+            "description": "Bad Gateway"
+        },
+        "503": {
+            "description": "Service Unavailable"
+        },
+        "00": {
+            "description": "Successful",
+            "schema": {
+                "example": {
+                    "responseCode": "00",
+                    "responseMsg": "Successful",
+                    "responseDetails": {
+                        "content": [
+                            {
+                                "id": 4654,
+                                "tranDate": "20-DEC-2023",
+                                "tranTime": "20-DEC-2023 16:22:42",
+                                "walletAcctName": "JOHN DOE WALLET",
+                                "amount": "50000.00",
+                                "customerAcct": "5151515151",
+                                "sourceAcctName": "Dummy Account Name",
+                                "sourceAcctNumber": "********",
+                                "sourceBankCode": "000015",
+                                "clientNotificationReqId": "5232-27938",
+                                "clientNotificationStatus": "PENDING",
+                                "checksum": "FE38A0E02FUU87Y78E5EA82F5119C482B98BFF370DD14CBABDEC3DF8D6A346E0135A0BDE6D6E7D5328C61ED4B085222CA24C15A7D71FC1BF983FB2207D0D2A436BEC",
+                                "sessionId": "000000000311151102464310031429"
+                            }
+                        ],
+                        "pageNumber": 1,
+                        "size": 50,
+                        "totalRecords": 1,
+                        "totalPages": 1
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Confidential",
+            "description": "Business-sensitive transaction metadata requiring restricted access"
+        },
+        {
+            "name": "Transaction Data",
+            "description": "Involves transaction dates and identifiers for lookup or processing"
+        },
+        {
+            "name": "System Data",
+            "description": "Handles reference values such as prefix IDs for system-level processing"
+        },
+        {
+            "name": "Stable",
+            "description": "Production-ready API."
+        }
+    ]
+}

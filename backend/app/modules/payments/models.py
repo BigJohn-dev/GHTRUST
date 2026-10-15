@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -104,6 +105,24 @@ class CustomerWallet(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     dva_status: Mapped[DvaStatus] = mapped_column(StrEnum(DvaStatus), default=DvaStatus.PENDING)
 
     customer: Mapped["Customer"] = relationship("Customer", back_populates="wallet", lazy="raise")
+
+
+class StanbicVirtualAccount(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """
+    A customer's Stanbic "Fundable Virtual ID" account number: GH Trust's 4-digit prefix,
+    a 5-digit serial we allocate, and Stanbic's check digit. Transfers to it land in GH
+    Trust's pooled wallet account at Stanbic; see modules/payments/stanbic_fvid.py.
+    """
+
+    __tablename__ = "stanbic_virtual_accounts"
+    __table_args__ = (UniqueConstraint("prefix", "serial", name="uq_stanbic_va_prefix_serial"),)
+
+    customer_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("customers.id"), unique=True, index=True
+    )
+    prefix: Mapped[str] = mapped_column(String(4))
+    serial: Mapped[int] = mapped_column(Integer)
+    account_number: Mapped[str] = mapped_column(String(10), unique=True, index=True)
 
 
 class LedgerJournal(Base, UUIDPrimaryKeyMixin, TimestampMixin):

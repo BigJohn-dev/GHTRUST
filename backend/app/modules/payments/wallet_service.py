@@ -116,15 +116,21 @@ class WalletService:
             return customer
 
         account_name = f"GH Trust / {customer.full_name}"[:100]
+        from app.modules.payments import stanbic_fvid
+
         try:
-            reserved = await self.rail.create_reserved_account(
-                account_reference=account_reference,
-                account_name=account_name,
-                customer_email=email,
-                customer_name=customer.full_name,
-                bvn=customer.bvn,
-                phone=customer.phone_primary,
-            )
+            if stanbic_fvid.enabled():
+                # Stanbic: our prefix + a serial + Stanbic's check digit; no create call.
+                reserved = await stanbic_fvid.StanbicVirtualAccounts(self.db).assign(customer)
+            else:
+                reserved = await self.rail.create_reserved_account(
+                    account_reference=account_reference,
+                    account_name=account_name,
+                    customer_email=email,
+                    customer_name=customer.full_name,
+                    bvn=customer.bvn,
+                    phone=customer.phone_primary,
+                )
         except PaymentRailError as exc:
             reserved = await self._existing_reserved_account(account_reference)
             if reserved is None:

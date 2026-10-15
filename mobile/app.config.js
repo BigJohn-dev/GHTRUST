@@ -38,5 +38,14 @@ module.exports = ({ config }) => {
   }
   const firebase = googleServicesFile();
   if (firebase) config.android = { ...config.android, googleServicesFile: firebase };
+
+  // Certificate pinning on the API host, in tester and store builds only (development builds
+  // talk to a laptop over plain HTTP). See config/pins.js and docs/certificate-pinning.md.
+  if (RELEASE_PROFILES.includes(profile) && process.env.EXPO_PUBLIC_API_URL?.startsWith('https://')) {
+    const { ALL, ANDROID_EXPIRY_DAYS } = require('./config/pins');
+    const host = new URL(process.env.EXPO_PUBLIC_API_URL).hostname;
+    const expiration = new Date(Date.now() + ANDROID_EXPIRY_DAYS * 86_400_000).toISOString().slice(0, 10);
+    config = require('./plugins/withApiPinning')(config, { host, pins: ALL, expiration });
+  }
   return config;
 };

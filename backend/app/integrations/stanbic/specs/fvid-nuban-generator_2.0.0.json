@@ -1,0 +1,203 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "version": "2.0.0",
+        "title": "Nuban Generator",
+        "description": "Generates a check digit that makes a 10 digit NUBAN account number.",
+        "contact": {
+            "name": "Integration APIs Team",
+            "email": "Integrationsapis@stanbicibtc.com"
+        }
+    },
+    "basePath": "/test/sandbox/nuban-generator",
+    "paths": {
+        "/generator": {
+            "parameters": [],
+            "post": {
+                "responses": {
+                    "200": {
+                        "$ref": "#/responses/00"
+                    },
+                    "400": {
+                        "$ref": "#/responses/99"
+                    },
+                    "401": {
+                        "$ref": "#/responses/41"
+                    },
+                    "500": {
+                        "$ref": "#/responses/55"
+                    }
+                },
+                "produces": [
+                    "application/json"
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "name": "NubanGenParams",
+                        "required": true,
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/RequestBody"
+                        },
+                        "description": "This request takes in requestId, account number and bank code to generate the check digit."
+                    }
+                ]
+            }
+        }
+    },
+    "securityDefinitions": {
+        "clientID": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Client-Id"
+        },
+        "Client-Secret": {
+            "type": "apiKey",
+            "name": "Client-Secret",
+            "in": "header"
+        }
+    },
+    "security": [
+        {
+            "clientID": [],
+            "Client-Secret": []
+        }
+    ],
+    "schemes": [
+        "https"
+    ],
+    "host": "testapi.stanbicibtc.com",
+    "produces": [
+        "application/json"
+    ],
+    "consumes": [
+        "application/json"
+    ],
+    "definitions": {
+        "RequestBody": {
+            "type": "object",
+            "properties": {
+                "reqId": {
+                    "type": "string",
+                    "maxLength": 10
+                },
+                "accountNo": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 10,
+                    "maximum": 9,
+                    "minimum": 9,
+                    "example": 123456789
+                },
+                "bankCode": {
+                    "type": "string",
+                    "enum": [
+                        "221"
+                    ]
+                }
+            },
+            "description": "This request takes in requestId, account number and bank code to generate the check digit."
+        },
+        "LookupByClientInformationSchema": {
+            "type": "object",
+            "properties": {
+                "clientId": {
+                    "type": "string"
+                },
+                "chargeId": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "responses": {
+        "41": {
+            "description": "Unauthorized",
+            "schema": {
+                "example": {
+                    "httpCode": "401",
+                    "httpMessage": "Unauthorized",
+                    "moreInformation": "Invalid client id or secret."
+                }
+            }
+        },
+        "55": {
+            "description": "Service Unavailable"
+        },
+        "99": {
+            "description": "Bad request",
+            "schema": {
+                "example": {
+                    "responseMsg": "invalid bank code",
+                    "responseCode": "99"
+                }
+            }
+        },
+        "200": {
+            "description": "Success"
+        },
+        "400": {
+            "description": "Bad Request"
+        },
+        "401": {
+            "description": "Unauthorized"
+        },
+        "403": {
+            "description": "Forbidden"
+        },
+        "404": {
+            "description": "Not found"
+        },
+        "408": {
+            "description": "Request Timeout"
+        },
+        "500": {
+            "description": "Internal Server Error"
+        },
+        "502": {
+            "description": "Bad Gateway"
+        },
+        "503": {
+            "description": "Service Unavailable"
+        },
+        "00": {
+            "description": "Successful",
+            "schema": {
+                "example": {
+                    "transactionDetails": {
+                        "reqId": "596387953639424",
+                        "bankCode": "221",
+                        "nubanGeneratedAccntNo": "5151515151"
+                    },
+                    "responseMsg": "Success",
+                    "responseCode": 200
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Confidential",
+            "description": "Business-sensitive request requiring restricted access"
+        },
+        {
+            "name": "PII",
+            "description": "Involves customer account numbers and identifiers"
+        },
+        {
+            "name": "Transaction Data",
+            "description": "Used to generate and validate account check digits for financial transactions"
+        },
+        {
+            "name": "Security",
+            "description": "Ensures accuracy and integrity of account details before processing"
+        },
+        {
+            "name": "Stable",
+            "description": "Production-ready API."
+        }
+    ]
+}

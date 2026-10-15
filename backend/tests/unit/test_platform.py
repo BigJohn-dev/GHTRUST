@@ -206,6 +206,9 @@ class TestStanbicProductionGuard:
         "stanbic_base_url": "https://api.stanbicibtc.com",
         "stanbic_nps_base_url": "https://api.stanbicibtc.com/nps",
         "stanbic_name_enquiry_base_url": "https://api.stanbicibtc.com/nameenquiry",
+        "stanbic_bank_list_base_url": "https://api.stanbicibtc.com",
+        "stanbic_fvid_base_url": "https://api.stanbicibtc.com",
+        "stanbic_fvid_prefix": "5151",
         "stanbic_transaction_history_base_url": "https://api.stanbicibtc.com/history",
         "stanbic_oauth_token_url": "https://api.stanbicibtc.com/oauth2/token",
     }
