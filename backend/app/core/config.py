@@ -162,6 +162,12 @@ class Settings(BaseSettings):
     stanbic_current_account_base_url: str = "https://testapi.stanbicibtc.com/test/sandbox/current-account-opening"
     stanbic_nps_base_url: str = "https://testapi.stanbicibtc.com/test/sandbox/nps"
     stanbic_name_enquiry_base_url: str = "https://testapi.stanbicibtc.com/test/sandbox/nameenquiry"
+    # Bank List (6-digit institution codes with their 3-digit CBN codes); see stanbic/bank_codes.py.
+    stanbic_bank_list_base_url: str = "https://testapi.stanbicibtc.com/test/sandbox"
+    # Fundable Virtual ID (wallet top-ups): customer account numbers are GH Trust's 4-digit
+    # prefix from Stanbic + a 5-digit serial + Stanbic's check digit. See payments/stanbic_fvid.py.
+    stanbic_fvid_prefix: str = ""
+    stanbic_fvid_base_url: str = "https://testapi.stanbicibtc.com/test/sandbox"
     stanbic_transaction_history_base_url: str = (
         "https://testapi.stanbicibtc.com/test/sandbox/transaction-history-service"
     )
@@ -302,12 +308,16 @@ class Settings(BaseSettings):
         if provider == "stanbic":
             if self.stanbic_portal_sandbox:
                 errors.append("STANBIC_PORTAL_SANDBOX must be false in production (it uses the developer-portal test APIs)")
+            if not (self.stanbic_fvid_prefix.isdigit() and len(self.stanbic_fvid_prefix) == 4):
+                errors.append("STANBIC_FVID_PREFIX must be the 4-digit prefix Stanbic assigned (wallet top-ups)")
             sandbox_urls = [
                 name
                 for name in (
                     "stanbic_base_url",
                     "stanbic_nps_base_url",
                     "stanbic_name_enquiry_base_url",
+                    "stanbic_bank_list_base_url",
+                    "stanbic_fvid_base_url",
                     "stanbic_transaction_history_base_url",
                     "stanbic_oauth_token_url",
                 )

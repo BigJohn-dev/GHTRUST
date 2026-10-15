@@ -13,6 +13,7 @@ from app.modules.payments.worker_service import (
     run_process_pending_withdrawals,
     run_reconcile_payments,
     run_retry_wallet_accounts,
+    run_credit_stanbic_payments,
     run_refresh_loan_statuses,
     run_send_loan_reminders,
 )
@@ -90,6 +91,13 @@ def deliver_notifications(self):
 def pay_out_investments(self):
     """Pay matured investments into wallets (idempotent per investment)."""
     return asyncio.run(run_pay_out_investments())
+
+
+@celery_app.task(name="app.workers.tasks.credit_stanbic_payments", bind=True, **RETRY)
+@single_flight("credit_stanbic_payments", ttl_seconds=300)
+def credit_stanbic_payments(self):
+    """Credit wallets for transfers into Stanbic account numbers (no-op unless Stanbic is the rail)."""
+    return asyncio.run(run_credit_stanbic_payments())
 
 
 @celery_app.task(name="app.workers.tasks.retry_wallet_accounts", bind=True, **RETRY)

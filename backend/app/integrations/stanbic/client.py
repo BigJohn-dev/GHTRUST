@@ -44,6 +44,7 @@ from app.integrations.payments.schemas import (
     WalletBalanceResult,
 )
 from app.integrations.stanbic import portal_sandbox as stanbic_portal
+from app.integrations.stanbic.bank_codes import get_bank_directory
 from app.integrations.stanbic.constants import (
     ACCOUNT_STATUS_ACTIVE,
     PATH_BANKS,
@@ -361,6 +362,10 @@ class StanbicClient:
     async def supported_banks(self) -> list[Bank]:
         if self._use_mock:
             return list(MOCK_BANKS)
+        if self._use_portal_sandbox:
+            # Stanbic's Bank List: the app then saves 6-digit codes Stanbic routes on directly.
+            directory = await get_bank_directory()
+            return [Bank(code=e.code, name=e.name) for e in directory.entries]
         body = await self._request("GET", PATH_BANKS)
         items = body.get("banks", body) if isinstance(body, dict) else body
         banks = []
@@ -380,8 +385,9 @@ class StanbicClient:
             )
 
         if self._use_portal_sandbox:
-            # Portal NIP codes are often 999xxx; pass through the code the app collected.
-            body = await stanbic_portal.name_enquiry(account_number, bank_code)
+            # Stanbic wants its 6-digit institution code; the app may hold a 3-digit CBN code.
+            nip_code = (await get_bank_directory()).to_institution_code(bank_code)
+            body = await stanbic_portal.name_enquiry(account_number, nip_code)
         else:
             body = await self._request(
                 "POST",
@@ -394,7 +400,7 @@ class StanbicClient:
         return ResolvedAccount(
             account_number=str(body.get("accountNumber") or account_number),
             account_name=account_name,
-            bank_code=str(body.get("bankCode") or bank_code),
+            bank_code=bank_code,  # keep the app's code; transfers convert it when sending
         )
 
     # ── D3: outbound transfer (withdrawal + loan disbursement) ──────────────
@@ -427,6 +433,8 @@ class StanbicClient:
             )
 
         if self._use_portal_sandbox:
+            # Converted before anything is sent: an unknown code fails here, definitively.
+            bank_code = (await get_bank_directory()).to_institution_code(bank_code)
             payload = {
                 "clientRefId": reference[:32],
                 "srcAcctName": "GH Trust MFB",

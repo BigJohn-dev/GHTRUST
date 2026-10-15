@@ -1,0 +1,314 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "3.0.0",
+    "title": "Nuban Generator",
+    "x-ibm-name": "nuban-generator",
+    "description": "Generates a check digit that makes a 10 digit NUBAN account number.",
+    "contact": {
+      "name": "Integration APIs Team",
+      "email": "Integrationsapis@stanbicibtc.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://testapi.stanbicibtc.com/test/sandbox"
+    }
+  ],
+  "x-ibm-configuration": {
+    "type": "rest",
+    "phase": "realized",
+    "enforced": true,
+    "testable": true,
+    "application-authentication": {
+      "certificate": false
+    },
+    "cors": {
+      "enabled": true
+    },
+    "oauth-servers": {
+      "OAuth": {
+        "clientCredentials": {
+          "tokenUrls": [
+            "https://testapi.stanbicibtc.com/test/sandbox/mynativeoauthprovider/oauth2/token"
+          ],
+          "authorizationUrls": [],
+          "refreshUrls": []
+        }
+      }
+    }
+  },
+  "paths": {
+    "/generate": {
+      "summary": "This API is used to generate NUBAN compliant account numbers.",
+      "description": "This API is used to generate NUBAN compliant account numbers.",
+      "post": {
+        "summary": "This API is used to generate NUBAN compliant account numbers.",
+        "description": "Accepts a 9-digit account number and a bank code, then generates the check digit to produce a valid 10-digit NUBAN compliant account number.",
+        "security": [
+          {
+            "OAuth": [
+              "access"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "The request payload containing the base account number and bank code required to generate a NUBAN compliant account number.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/00"
+          },
+          "400": {
+            "$ref": "#/components/responses/99"
+          },
+          "401": {
+            "$ref": "#/components/responses/41"
+          },
+          "500": {
+            "$ref": "#/components/responses/55"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RequestBody": {
+        "type": "object",
+        "description": "Request payload containing the base account number and bank code used to generate a NUBAN compliant 10-digit account number.",
+        "additionalProperties": false,
+        "properties": {
+          "reqId": {
+            "type": "string",
+            "maxLength": 10,
+            "description": "A unique request identifier for tracking this NUBAN generation request. Maximum length is 10 characters.",
+            "example": "REQ0012345"
+          },
+          "accountNo": {
+            "type": "string",
+            "minLength": 9,
+            "maxLength": 9,
+            "description": "The 9-digit base account number for which the NUBAN check digit will be generated.",
+            "example": "123456789"
+          },
+          "bankCode": {
+            "type": "string",
+            "description": "The CBN-assigned 3-digit bank sort code used in the NUBAN check digit calculation. Currently only code 221 is supported.",
+            "enum": [
+              "221"
+            ],
+            "example": "221"
+          }
+        },
+        "example": {
+          "reqId": "REQ0012345",
+          "accountNo": "123456789",
+          "bankCode": "221"
+        }
+      },
+      "ResponsePayload": {
+        "type": "object",
+        "description": "The standard response envelope returned by the API on a successful NUBAN account number generation request.",
+        "additionalProperties": false,
+        "properties": {
+          "transactionDetails": {
+            "type": "object",
+            "description": "An object containing the details of the generated NUBAN account number, including the request ID and bank code used.",
+            "additionalProperties": false,
+            "properties": {
+              "reqId": {
+                "type": "string",
+                "description": "The unique request identifier that was submitted in the original generation request.",
+                "example": "596387953639424"
+              },
+              "bankCode": {
+                "type": "string",
+                "description": "The CBN-assigned 3-digit bank sort code used during the NUBAN check digit calculation.",
+                "example": "221"
+              },
+              "nubanGeneratedAccntNo": {
+                "type": "string",
+                "description": "The fully generated 10-digit NUBAN compliant account number including the computed check digit.",
+                "example": "5151515151"
+              }
+            }
+          },
+          "responseMsg": {
+            "type": "string",
+            "description": "A human-readable message describing the outcome of the NUBAN generation request.",
+            "example": "Success"
+          },
+          "responseCode": {
+            "type": "integer",
+            "description": "A numeric code indicating the result of the request. A value of 200 indicates successful generation.",
+            "minimum": 100,
+            "maximum": 599,
+            "example": 200
+          }
+        },
+        "example": {
+          "transactionDetails": {
+            "reqId": "596387953639424",
+            "bankCode": "221",
+            "nubanGeneratedAccntNo": "5151515151"
+          },
+          "responseMsg": "Success",
+          "responseCode": 200
+        }
+      }
+    },
+    "responses": {
+      "41": {
+        "description": "Unauthorized. The client ID or secret provided in the request headers is invalid or missing.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "description": "Error response returned when the supplied authentication credentials are invalid or absent.",
+              "additionalProperties": false,
+              "properties": {
+                "httpCode": {
+                  "type": "string",
+                  "description": "The HTTP status code for the authentication error."
+                },
+                "httpMessage": {
+                  "type": "string",
+                  "description": "A short label describing the HTTP error status."
+                },
+                "moreInformation": {
+                  "type": "string",
+                  "description": "Additional context explaining why the authorization request failed."
+                }
+              },
+              "example": {
+                "httpCode": "401",
+                "httpMessage": "Unauthorized",
+                "moreInformation": "Invalid client id or secret."
+              }
+            }
+          }
+        }
+      },
+      "55": {
+        "description": "Service Currently Unavailable. The downstream service is temporarily unable to process the request.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "description": "Error response returned when the service is temporarily unavailable or unreachable.",
+              "additionalProperties": false,
+              "properties": {
+                "responsecode": {
+                  "type": "string",
+                  "description": "The response code indicating service unavailability."
+                },
+                "responseMsg": {
+                  "type": "string",
+                  "description": "A message describing the service availability error."
+                }
+              }
+            },
+            "example": {
+              "responsecode": "55",
+              "responseMsg": "Service Currently Unavailable"
+            }
+          }
+        }
+      },
+      "99": {
+        "description": "Bad Request. The request payload is invalid, such as an unsupported bank code or malformed account number.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "description": "Error response returned when the request payload fails validation, such as an invalid or unsupported bank code.",
+              "additionalProperties": false,
+              "properties": {
+                "responseMsg": {
+                  "type": "string",
+                  "description": "A message describing the nature of the bad request error."
+                },
+                "responseCode": {
+                  "type": "string",
+                  "description": "A code identifying the specific validation failure that occurred during request processing."
+                }
+              },
+              "example": {
+                "responseMsg": "invalid bank code",
+                "responseCode": "99"
+              }
+            }
+          }
+        }
+      },
+      "00": {
+        "description": "Successful. The NUBAN check digit has been generated and the full 10-digit account number is returned.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ResponsePayload"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "OAuth": {
+        "type": "oauth2",
+        "x-ibm-oauth-provider": "mynativeoauthprovider",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://testapi.stanbicibtc.com/test/sandbox/mynativeoauthprovider/oauth2/token",
+            "scopes": {
+              "access": "Branch details"
+            }
+          }
+        },
+        "description": "OAuth 2.0 client credentials flow used to authorize API access. A bearer token must be obtained and passed with each request."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Confidential",
+      "description": "Business-sensitive request requiring restricted access"
+    },
+    {
+      "name": "PII",
+      "description": "Involves customer account numbers and identifiers"
+    },
+    {
+      "name": "Transaction Data",
+      "description": "Used to generate and validate account check digits for financial transactions"
+    },
+    {
+      "name": "Security",
+      "description": "Ensures accuracy and integrity of account details before processing"
+    },
+    {
+      "name": "Stable",
+      "description": "Production-ready API."
+    }
+  ],
+  "security": [
+    {
+      "OAuth": [
+        "access"
+      ]
+    }
+  ],
+  "x-ibm-endpoints": [
+    {
+      "url": "https://testapi.stanbicibtc.com/test/sandbox"
+    }
+  ]
+}

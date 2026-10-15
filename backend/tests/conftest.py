@@ -42,6 +42,12 @@ _SETTINGS_CONSUMER_MODULES = (
     "app.integrations.paystack.client",
     "app.integrations.monnify.client",
     "app.integrations.zest.client",
+    "app.integrations.stanbic.client",
+    "app.integrations.stanbic.portal_sandbox",
+    "app.integrations.stanbic.bank_codes",
+    "app.integrations.stanbic.account_opening",
+    "app.integrations.stanbic.current_account",
+    "app.integrations.stanbic.credit_check",
     "app.modules.payments.webhook_router",
     "app.modules.auth.service",
     "app.modules.admin.service",
@@ -82,6 +88,12 @@ def _test_env(monkeypatch):
     monkeypatch.setenv("MONNIFY_CONTRACT_CODE", "1234567890")
     monkeypatch.setenv("ZEST_AUTH_ENCRYPTION_IV", "3A4CD38XVS621KZ6")
     monkeypatch.setenv("SMS_MOCK", "true")
+    # Never inherit a developer's real Stanbic sandbox keys from backend/.env: tests that
+    # need Stanbic switch it on themselves, with every HTTP call patched.
+    monkeypatch.setenv("STANBIC_MOCK", "true")
+    monkeypatch.setenv("STANBIC_CLIENT_ID", "")
+    monkeypatch.setenv("STANBIC_CLIENT_SECRET", "")
+    monkeypatch.setenv("STANBIC_FVID_PREFIX", "")
     # Never inherit a developer's local test-mode phone from backend/.env.
     monkeypatch.setenv("DOJAH_MOCK_PHONE", "")
     # Optional modules off unless a test switches them on (backend/.env may enable them).

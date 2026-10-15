@@ -67,7 +67,9 @@
     "start:railway": "node scripts/start-remote.mjs",
     "test": "jest",
     "update:preview": "eas update --channel preview --environment preview",
-    "update:production": "eas update --channel production --environment production"
+    "update:production": "eas update --channel production --environment production",
+    "check:pins": "node scripts/check-pins.mjs",
+    "eas-build-pre-install": "node scripts/check-pins.mjs"
   },
   "private": true,
   "jest": {

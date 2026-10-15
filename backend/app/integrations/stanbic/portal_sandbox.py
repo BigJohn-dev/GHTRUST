@@ -85,14 +85,19 @@ async def _portal_request(
     except ValueError as exc:
         raise PaymentRailError("Invalid Stanbic portal response", status_code=502) from exc
 
+    # The API gateway's own refusals carry the reason in moreInformation, e.g. 401 "Invalid
+    # client id or secret", 403 "Not registered to plan" (the app isn't subscribed to the product).
+    detail = payload.get("moreInformation") if isinstance(payload, dict) else None
     if response.status_code == 401:
-        raise PaymentRailError("Stanbic portal authentication rejected", status_code=502)
+        raise PaymentRailError(f"Stanbic rejected our keys: {detail or 'unauthorized'}", status_code=502)
 
     if response.status_code >= 400:
         _check_response_code(payload if isinstance(payload, dict) else {})
+        message = (payload or {}).get("responseMsg") if isinstance(payload, dict) else None
         raise PaymentRailError(
-            str((payload or {}).get("responseMsg") or "Stanbic portal request failed"),
+            f"Stanbic refused the request ({response.status_code}): {message or detail or 'no reason given'}",
             status_code=502,
+            provider_code=str(response.status_code),
         )
 
     if isinstance(payload, dict):
@@ -151,3 +156,91 @@ async def transaction_history(
         url,
         json={"accountNumber": account_number, "startDate": start_date, "endDate": end_date},
     )
+
+
+# ── Fundable Virtual ID (wallet top-ups); specs/fvid-*.json, nuban-generator_3.0.0.json ──
+
+_token: tuple[str, float] | None = None
+
+
+async def _oauth_token() -> str:
+    """Client-credentials bearer token (the Nuban Generator v3 requires OAuth)."""
+    global _token
+    import time
+
+    if _token and time.monotonic() < _token[1]:
+        return _token[0]
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                settings.stanbic_oauth_token_url,
+                data={
+                    "grant_type": "client_credentials",
+                    "scope": "access",
+                    "client_id": settings.stanbic_client_id,
+                    "client_secret": settings.stanbic_client_secret,
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise StanbicPortalRetryable("Stanbic sign-in unreachable", status_code=502) from exc
+    body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+    token = body.get("access_token")
+    if response.status_code != 200 or not token:
+        raise PaymentRailError(
+            f"Stanbic sign-in failed ({response.status_code}): {body.get('moreInformation') or 'no token'}",
+            status_code=502,
+        )
+    _token = (token, time.monotonic() + max(int(body.get("expires_in") or 3600) - 60, 60))
+    return token
+
+
+async def nuban_check_digit(base9: str, request_id: str) -> str:
+    """Stanbic's 10-digit NUBAN for a 9-digit base (bank code 221)."""
+    token = await _oauth_token()
+    url = f"{settings.stanbic_fvid_base_url.rstrip('/')}/generate"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                url,
+                headers={**_portal_headers(), "Authorization": f"Bearer {token}"},
+                json={"reqId": request_id[:10], "accountNo": base9, "bankCode": "221"},
+            )
+    except httpx.HTTPError as exc:
+        raise StanbicPortalRetryable("Stanbic NUBAN generator unreachable", status_code=502) from exc
+    body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+    number = str(((body.get("transactionDetails") or {}).get("nubanGeneratedAccntNo")) or "")
+    if response.status_code != 200 or len(number) != 10 or not number.startswith(base9):
+        reason = body.get("responseMsg") or body.get("moreInformation") or body.get("httpMessage") or "no number"
+        raise PaymentRailError(f"Stanbic NUBAN generator failed ({response.status_code}): {reason}", status_code=502)
+    return number
+
+
+def portal_history_date(dt: datetime) -> str:
+    """Fundable Virtual ID history dates: DD-MON-YY (e.g. 21-MAR-23)."""
+    return dt.strftime("%d-%b-%y").upper()
+
+
+async def history_by_prefix(prefix: str, start: str, end: str, *, stanbic_to_stanbic: bool) -> list[dict[str, Any]]:
+    """Every payment into our virtual accounts in the date range (all pages)."""
+    path = "stanbic-to-stanbic" if stanbic_to_stanbic else "history"
+    url = f"{settings.stanbic_fvid_base_url.rstrip('/')}/history/prefix-id/{path}"
+    records: list[dict[str, Any]] = []
+    page = 1
+    while page <= 50:
+        body = await _portal_request(
+            "GET", url, params={"prefixId": prefix, "startDate": start, "endDate": end, "page": page, "size": 100}
+        )
+        details = body.get("responseDetails") or {}
+        records.extend(r for r in details.get("content") or [] if isinstance(r, dict))
+        total_pages = int(details.get("totalPages") or 0)
+        if page >= total_pages:
+            break
+        page += 1
+    return records
+
+
+async def validate_checksum(checksum: str, session_id: str) -> dict[str, Any]:
+    """Stanbic confirms a payment record is genuine; returns its details (with isValid)."""
+    url = f"{settings.stanbic_fvid_base_url.rstrip('/')}/checksum-validator/validator"
+    body = await _portal_request("POST", url, json={"checkSum": checksum, "sessionId": session_id})
+    return body.get("responseDetails") or {}
