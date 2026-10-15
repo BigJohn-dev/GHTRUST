@@ -231,6 +231,56 @@ async def run_deliver_notifications() -> dict:
     return {"status": "ok", **counts}
 
 
+async def run_retry_wallet_accounts(limit: int = 100) -> dict:
+    """
+    Give an account number to active customers who don't have one yet: the provider failed
+    at sign-up, or the request ended between saving the customer and the provider's reply.
+    Repeating is safe: an account the provider already made is adopted, never duplicated.
+    """
+    from datetime import timedelta
+
+    from app.core.demo import is_demo_bvn
+    from app.modules.payments.models import CustomerWallet, DvaStatus
+    from app.modules.users.models import Customer, CustomerStatus
+
+    if get_settings().active_payment_provider == "zest":
+        return {"status": "skipped", "reason": "zest uses per-top-up accounts"}
+    # Leave sign-ups that are still in progress alone.
+    settled_before = datetime.now(timezone.utc) - timedelta(minutes=5)
+    fixed = failed = 0
+    async with worker_session() as db:
+        ids = (
+            await db.execute(
+                select(Customer.id)
+                .outerjoin(CustomerWallet, CustomerWallet.customer_id == Customer.id)
+                .where(
+                    Customer.status == CustomerStatus.ACTIVE,
+                    Customer.paystack_dva_account_number.is_(None),
+                    Customer.phone_verified_at < settled_before,
+                    # FAILED, or still PENDING after a crash mid-sign-up (the wallet is saved
+                    # before the provider is called). Asking again adopts an existing account.
+                    or_(CustomerWallet.id.is_(None), CustomerWallet.dva_status != DvaStatus.ACTIVE),
+                )
+                .order_by(Customer.phone_verified_at)
+                .limit(limit)
+            )
+        ).scalars().all()
+        for customer_id in ids:
+            customer = await db.get(Customer, customer_id)
+            if customer is None or is_demo_bvn(customer.bvn):
+                continue
+            try:
+                await WalletService(db).provision_payment_rail(customer, strict=False)
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                failed += 1
+                logger.exception("wallet_account_retry_failed", customer_id=customer_id)
+                continue
+            fixed += int(bool(customer.paystack_dva_account_number))
+    return {"status": "ok", "fixed": fixed, "failed": failed, "checked": len(ids)}
+
+
 async def run_pay_out_investments() -> dict:
     """Pay matured investments (amount plus returns) into customers' wallets."""
     from app.modules.investments.service import InvestmentService

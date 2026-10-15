@@ -437,16 +437,28 @@ class AuthService:
         customer.status = CustomerStatus.ACTIVE
         customer.phone_verified = True
         customer.phone_verified_at = datetime.now(timezone.utc)
-        await self.db.flush()
 
         from app.modules.payments.wallet_service import WalletService
 
         wallets = WalletService(self.db)
-        if is_demo_bvn(customer.bvn):
-            # A made-up identity mustn't reach the payment provider: internal wallet only.
-            await wallets.ledger.get_or_create_wallet(customer.id)
-        else:
-            await wallets.provision_paystack(customer)
+        # The account and its wallet are saved BEFORE the payment provider is asked for an
+        # account number. Otherwise a crash or dropped connection after the provider created
+        # the account would roll our side back, leave the provider's account orphaned, and the
+        # next attempt would be refused ("already exists"), blocking sign-up.
+        await wallets.ledger.get_or_create_wallet(customer.id)
+        await self.db.commit()
+
+        if not is_demo_bvn(customer.bvn):  # a made-up identity mustn't reach the provider
+            try:
+                await wallets.provision_payment_rail(customer, strict=False)
+                await self.db.commit()
+            except Exception:
+                # Never block sign-up on the provider: the retry job (retry_wallet_accounts)
+                # finishes it, adopting the provider's account if it was made after all.
+                customer_id = customer.id
+                await self.db.rollback()
+                await self.db.refresh(customer)  # the rollback expired it; reload before issuing tokens
+                logger.exception("signup_wallet_account_deferred", customer_id=customer_id)
 
         return await self._issue_tokens(customer, meta=meta, device=device)
 

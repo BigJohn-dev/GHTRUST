@@ -91,8 +91,15 @@ class WalletService:
         """Provision payment rail (Monnify reserved account by default)."""
         return await self.provision_payment_rail(customer)
 
-    async def provision_payment_rail(self, customer: Customer) -> Customer:
-        """Create provider reserved account / DVA after customer activation."""
+    async def provision_payment_rail(self, customer: Customer, *, strict: bool = True) -> Customer:
+        """
+        Create the customer's provider account number (reserved account / DVA).
+
+        Safe to repeat: the account reference is fixed per customer, so if the provider already
+        made the account (an earlier attempt whose reply was lost, or whose database commit
+        never happened) it is looked up and adopted instead of failing. With strict=False a
+        provider failure only marks the wallet FAILED for the retry job, and never raises.
+        """
         wallet = await self.ledger.get_or_create_wallet(customer.id)
         email = customer.email or f"{customer.id}@wallet.ghtrust.local"
         account_reference = customer.paystack_customer_code or f"ghtrust_{customer.id}"
@@ -118,24 +125,46 @@ class WalletService:
                 bvn=customer.bvn,
                 phone=customer.phone_primary,
             )
-            customer.paystack_customer_code = reserved.account_reference
-            customer.paystack_dva_account_number = reserved.account_number
-            customer.paystack_dva_bank_name = reserved.bank_name
-            customer.paystack_dva_bank_slug = reserved.bank_code
-            wallet.dva_status = DvaStatus.ACTIVE
         except PaymentRailError as exc:
-            wallet.dva_status = DvaStatus.FAILED
-            logger.error(
-                "payment_rail_provision_failed",
-                customer_id=customer.id,
-                provider=self.provider.value,
-                error=exc.message,
-            )
-            if settings.payment_rail_enabled:
-                raise HTTPException(status_code=502, detail="Unable to provision payment account") from exc
+            reserved = await self._existing_reserved_account(account_reference)
+            if reserved is None:
+                wallet.dva_status = DvaStatus.FAILED
+                logger.error(
+                    "payment_rail_provision_failed",
+                    customer_id=customer.id,
+                    provider=self.provider.value,
+                    error=exc.message,
+                )
+                await self.db.flush()
+                if strict and settings.payment_rail_enabled:
+                    raise HTTPException(status_code=502, detail="Unable to provision payment account") from exc
+                return customer
+            logger.info("payment_rail_account_adopted", customer_id=customer.id, provider=self.provider.value)
+        if not reserved.account_number:
+            # Accepted but numbered later (async providers confirm by webhook).
+            customer.paystack_customer_code = reserved.account_reference
+            wallet.dva_status = DvaStatus.PENDING
+            await self.db.flush()
+            return customer
+        customer.paystack_customer_code = reserved.account_reference
+        customer.paystack_dva_account_number = reserved.account_number
+        customer.paystack_dva_bank_name = reserved.bank_name
+        customer.paystack_dva_bank_slug = reserved.bank_code
+        wallet.dva_status = DvaStatus.ACTIVE
 
         await self.db.flush()
         return customer
+
+    async def _existing_reserved_account(self, account_reference: str):
+        """The provider's account for this reference, if it already exists (else None)."""
+        lookup = getattr(self.rail, "get_reserved_account", None)
+        if lookup is None:
+            return None
+        try:
+            found = await lookup(account_reference)
+        except PaymentRailError:
+            return None
+        return found if found.account_number else None
 
     async def create_funding_session(self, customer: Customer, amount: Decimal) -> dict:
         """Generate a Zest dynamic virtual account for a wallet top-up (expires ~5 min)."""
