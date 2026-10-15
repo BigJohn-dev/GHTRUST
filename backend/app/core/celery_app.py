@@ -32,6 +32,7 @@ celery_app.conf.update(
         "app.workers.tasks.accrue_savings_interest": {"queue": "scheduled"},
         "app.workers.tasks.send_loan_reminders": {"queue": "notifications"},
         "app.workers.tasks.refresh_loan_statuses": {"queue": "scheduled"},
+        "app.workers.tasks.retry_wallet_accounts": {"queue": "scheduled"},
         "app.workers.tasks.process_pending_withdrawals": {"queue": "transactions"},
         "app.workers.tasks.reconcile_payments": {"queue": "reconciliation"},
         "app.workers.tasks.food_basket_fulfillment_check": {"queue": "scheduled"},
@@ -50,6 +51,10 @@ celery_app.conf.update(
             "schedule": crontab(hour=8, minute=0),
         },
         # Hourly, so an investment maturing today is paid early that day (idempotent).
+        "retry-wallet-accounts": {
+            "task": "app.workers.tasks.retry_wallet_accounts",
+            "schedule": crontab(minute="*/15"),
+        },
         "pay-out-investments": {
             "task": "app.workers.tasks.pay_out_investments",
             "schedule": crontab(minute=5),

@@ -12,6 +12,7 @@ from app.modules.payments.worker_service import (
     run_pay_out_investments,
     run_process_pending_withdrawals,
     run_reconcile_payments,
+    run_retry_wallet_accounts,
     run_refresh_loan_statuses,
     run_send_loan_reminders,
 )
@@ -89,6 +90,13 @@ def deliver_notifications(self):
 def pay_out_investments(self):
     """Pay matured investments into wallets (idempotent per investment)."""
     return asyncio.run(run_pay_out_investments())
+
+
+@celery_app.task(name="app.workers.tasks.retry_wallet_accounts", bind=True, **RETRY)
+@single_flight("retry_wallet_accounts", ttl_seconds=600)
+def retry_wallet_accounts(self):
+    """Give an account number to active customers left without one at sign-up."""
+    return asyncio.run(run_retry_wallet_accounts())
 
 
 @celery_app.task(name="app.workers.tasks.refresh_loan_statuses", bind=True, **RETRY)
