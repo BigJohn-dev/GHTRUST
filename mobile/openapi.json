@@ -7084,6 +7084,46 @@
     }
    }
   },
+  "/api/v1/webhooks/stanbic/virtual-id/name-enquiry": {
+   "post": {
+    "tags": [
+     "Webhooks"
+    ],
+    "summary": "Stanbic: name behind a customer's virtual account",
+    "description": "The name (and BVN) for one of our account numbers, so the sender's bank can show it.",
+    "operationId": "stanbic_name_enquiry_api_v1_webhooks_stanbic_virtual_id_name_enquiry_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/webhooks/stanbic/virtual-id/transaction/notification": {
+   "post": {
+    "tags": [
+     "Webhooks"
+    ],
+    "summary": "Stanbic: payments into customers' virtual accounts",
+    "description": "Stanbic's Transaction Notification: a list of payments. Each is confirmed with Stanbic's\nchecksum validator before anything is credited (a forged one credits nothing) and credited\nonce per sessionId; each gets its own answer. A payment answered unsuccessful because Stanbic\ncouldn't confirm it right now is also picked up by the 2-minute history poll.",
+    "operationId": "stanbic_virtual_account_notification_api_v1_webhooks_stanbic_virtual_id_transaction_notification_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/webhooks/stanbic": {
    "post": {
     "tags": [
@@ -14750,6 +14790,17 @@
        }
       ],
       "title": "Hours"
+     },
+     "help_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Help Url"
      }
     },
     "type": "object",

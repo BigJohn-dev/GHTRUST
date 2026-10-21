@@ -34,6 +34,17 @@ class TestHelpCentre:
         assert config["support"]["whatsapp"] == "2348012345678"
         assert config["support"]["hours"]
 
+    async def test_app_config_links_the_public_help_page(self, api_client, monkeypatch):
+        from app.core.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "public_site_url", "https://help.example.ng/")
+        config = (await api_client.get("/api/v1/app/config?platform=ios")).json()
+        assert config["support"]["help_url"] == "https://help.example.ng/help"
+
+        monkeypatch.setattr(get_settings(), "public_site_url", "")
+        config = (await api_client.get("/api/v1/app/config?platform=ios")).json()
+        assert config["support"]["help_url"] is None
+
 
 class TestTickets:
     async def test_customer_reports_and_sees_their_requests(self, api_client):

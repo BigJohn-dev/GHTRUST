@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { memo, useMemo, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -65,6 +66,7 @@ export default function HelpCentre() {
   ].filter((c) => c !== null);
 
   const recent = (tickets.data ?? []).slice(0, 3);
+  const helpUrl = support?.help_url;
 
   return (
     <Screen
@@ -186,8 +188,16 @@ export default function HelpCentre() {
 
       {!q ? (
         <>
-          <SectionHeader title="Legal" />
+          <SectionHeader title="Help & legal" />
           <Card style={{ paddingVertical: space.xs }}>
+            {helpUrl ? (
+              <Row
+                icon="globe-outline"
+                title="Help & contact page"
+                subtitle="Our contact details on the web, to share or use without the app"
+                onPress={() => openWebPage(helpUrl)}
+              />
+            ) : null}
             <Row icon="document-text-outline" title="Terms of Use" onPress={() => router.push('/legal/terms')} />
             <Row icon="lock-closed-outline" title="Privacy Policy" onPress={() => router.push('/legal/privacy')} last />
           </Card>
@@ -195,6 +205,11 @@ export default function HelpCentre() {
       ) : null}
     </Screen>
   );
+}
+
+/** Opens in the in-app browser; falls back to the phone's browser. */
+function openWebPage(url: string) {
+  WebBrowser.openBrowserAsync(url).catch(() => Linking.openURL(url).catch(() => undefined));
 }
 
 const Faq = memo(function Faq({

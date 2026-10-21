@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     # WhatsApp number in international format, e.g. 2348012345678 (opens wa.me/<number>).
     support_whatsapp: str = ""
     support_hours: str = "Monday to Friday, 8am to 5pm"
+    # The public website (admin/ on Vercel) with /help, /privacy, /terms and /delete-account.
+    # The app links to its Help page. Empty hides the link.
+    public_site_url: str = "https://ghtrust.vercel.app"
     # Comma-separated optional modules shown in the app: wallet, savings,
     # investments, contributions, food_basket. Loans are always on.
     feature_flags: str = ""
@@ -350,6 +353,8 @@ class Settings(BaseSettings):
             errors.append("CORS_ORIGINS contains localhost")
         if any(not o.startswith("https://") for o in self.cors_origin_list):
             errors.append("CORS_ORIGINS must all be https:// (the staff refresh cookie is Secure)")
+        if self.public_site_url.strip() and not self.public_site_url.startswith("https://"):
+            errors.append("PUBLIC_SITE_URL must be https:// (the app opens its Help page)")
         if self.enable_api_docs:
             errors.append("ENABLE_API_DOCS must be false (publishes the full API surface)")
         # Both default to localhost. On a hosted deploy that boots "healthy" and then

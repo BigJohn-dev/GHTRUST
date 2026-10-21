@@ -58,6 +58,8 @@ class SupportInfo(BaseModel):
     email: str | None = None
     whatsapp: str | None = None
     hours: str | None = None
+    # The public Help & contact web page (same contact details, shareable, works without the app).
+    help_url: str | None = None
 
 
 class AppConfigResponse(BaseModel):
@@ -92,6 +94,7 @@ def build_config(platform: Platform, version: str | None) -> AppConfigResponse:
             email=s.support_email or None,
             whatsapp="".join(ch for ch in s.support_whatsapp if ch.isdigit()) or None,
             hours=s.support_hours or None,
+            help_url=f"{s.public_site_url.rstrip('/')}/help" if s.public_site_url.strip() else None,
         ),
         server_time=datetime.now(timezone.utc),
     )

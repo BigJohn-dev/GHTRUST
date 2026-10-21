@@ -2444,6 +2444,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/webhooks/stanbic/virtual-id/name-enquiry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stanbic: name behind a customer's virtual account
+         * @description The name (and BVN) for one of our account numbers, so the sender's bank can show it.
+         */
+        post: operations["stanbic_name_enquiry_api_v1_webhooks_stanbic_virtual_id_name_enquiry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/stanbic/virtual-id/transaction/notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stanbic: payments into customers' virtual accounts
+         * @description Stanbic's Transaction Notification: a list of payments. Each is confirmed with Stanbic's
+         *     checksum validator before anything is credited (a forged one credits nothing) and credited
+         *     once per sessionId; each gets its own answer. A payment answered unsuccessful because Stanbic
+         *     couldn't confirm it right now is also picked up by the 2-minute history poll.
+         */
+        post: operations["stanbic_virtual_account_notification_api_v1_webhooks_stanbic_virtual_id_transaction_notification_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/webhooks/stanbic": {
         parameters: {
             query?: never;
@@ -5164,6 +5207,8 @@ export interface components {
             whatsapp?: string | null;
             /** Hours */
             hours?: string | null;
+            /** Help Url */
+            help_url?: string | null;
         };
         /** TicketResponse */
         TicketResponse: {
@@ -10252,6 +10297,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebhookAckResponse"];
+                };
+            };
+        };
+    };
+    stanbic_name_enquiry_api_v1_webhooks_stanbic_virtual_id_name_enquiry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    stanbic_virtual_account_notification_api_v1_webhooks_stanbic_virtual_id_transaction_notification_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
