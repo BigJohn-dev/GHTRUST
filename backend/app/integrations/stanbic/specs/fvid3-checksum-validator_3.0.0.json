@@ -1,0 +1,238 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "version": "3.0.0",
+        "title": "CheckSum Validator",
+        "description": "This API validates transaction details using  a checksum key",
+        "contact": {
+            "name": "Integration APIs Team",
+            "email": "Integrationsapis@stanbicibtc.com"
+        }
+    },
+    "servers": [
+        {
+            "url": "https://testapi.stanbicibtc.com/test/sandbox"
+        }
+    ],
+    "paths": {
+        "/validator": {
+            "post": {
+                "requestBody": {
+                    "required": true,
+                    "description": "The request body of the API. ",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequestBody"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/00"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/99"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/41"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/55"
+                    }
+                },
+                "description": "This API validates transaction details using  a checksum key",
+                "summary": "This API validates transaction details using  a checksum key"
+            },
+            "summary": "This API validates transaction details using  a checksum key",
+            "description": "This API validates transaction details using  a checksum key"
+        }
+    },
+    "components": {
+        "schemas": {
+            "RequestBody": {
+                "type": "object",
+                "description": "This request takes in the checksum key and session Id  of  a transaction.",
+                "properties": {
+                    "checkSum": {
+                        "title": "checkSum",
+                        "type": "string",
+                        "example": "FA3AA0E12AB9E16B53C47CD7895AA94E3606C783B28FFE320CD34DBBB9EF3CFBDFA241E0115C14DA6E6A88FE81E9364F55C1E601"
+                    },
+                    "sessionId": {
+                        "title": "sessionId",
+                        "type": "string",
+                        "example": 2.0240412115630834e+19
+                    }
+                }
+            },
+            "ResponsePayload": {
+                "type": "object",
+                "description": "The standard response envelope returned by the API on a successful call",
+                "properties": {
+                    "responseCode": {
+                        "type": "string",
+                        "example": "00"
+                    },
+                    "responseMsg": {
+                        "type": "string",
+                        "example": "Successful"
+                    },
+                    "responseDetails": {
+                        "type": "object",
+                        "properties": {
+                            "sessionId": {
+                                "type": "string",
+                                "example": "ST-20240412115630835030-601"
+                            },
+                            "checkSum": {
+                                "type": "string",
+                                "example": "FA3AA0E12AB9E16B53C47CD7895AA94E3606C783B28FFE320CD34DBBB9EF3CFBDFA241E0115C14DA6E6A88FE81E9364F55C1E601FDDD07775D87"
+                            },
+                            "amount": {
+                                "type": "string",
+                                "example": "20"
+                            },
+                            "customerAcct": {
+                                "type": "string",
+                                "example": "5123512351"
+                            },
+                            "sourceAcctName": {
+                                "type": "string",
+                                "example": "JOHN DOE"
+                            },
+                            "sourceAcctNumber": {
+                                "type": "string",
+                                "example": "9000000303"
+                            },
+                            "tranDate": {
+                                "type": "string",
+                                "example": "16-APR-2024"
+                            },
+                            "isValid": {
+                                "type": "string",
+                                "example": "True"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "responses": {
+            "41": {
+                "description": "Unauthorized",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "example": {
+                                "httpCode": "401",
+                                "httpMessage": "Unauthorized",
+                                "moreInformation": "Invalid client id or secret."
+                            }
+                        }
+                    }
+                }
+            },
+            "55": {
+                "description": "Service Currently Unavailable",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "responsecode": "55",
+                            "responseMsg": "Service Currently Unavailable"
+                        }
+                    }
+                }
+            },
+            "99": {
+                "description": "Bad request",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "example": {
+                                "responseMsg": "Checksum invalid",
+                                "responseCode": "99"
+                            }
+                        }
+                    }
+                }
+            },
+            "200": {
+                "description": "Success"
+            },
+            "400": {
+                "description": "Bad Request"
+            },
+            "401": {
+                "description": "Unauthorized"
+            },
+            "403": {
+                "description": "Forbidden"
+            },
+            "404": {
+                "description": "Not found"
+            },
+            "408": {
+                "description": "Request Timeout"
+            },
+            "500": {
+                "description": "Internal Server Error"
+            },
+            "502": {
+                "description": "Bad Gateway"
+            },
+            "503": {
+                "description": "Service Unavailable"
+            },
+            "00": {
+                "description": "Successful",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/ResponsePayload"
+                        }
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "OAuth": {
+                "type": "oauth2",
+                "flows": {
+                    "clientCredentials": {
+                        "tokenUrl": "https://testapi.stanbicibtc.com/test/sandbox/mynativeoauthprovider/oauth2/token",
+                        "scopes": {
+                            "access": "Branch details"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Confidential",
+            "description": "Sensitive transaction metadata requiring restricted access"
+        },
+        {
+            "name": "Financial",
+            "description": "Associated with financial transaction integrity and traceability"
+        },
+        {
+            "name": "Transaction Data",
+            "description": "Covers session IDs and checksums used to validate transactions"
+        },
+        {
+            "name": "Stable",
+            "description": "Production-ready API."
+        }
+    ],
+    "security": [
+        {
+            "OAuth": []
+        }
+    ]
+}

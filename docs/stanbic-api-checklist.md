@@ -8,7 +8,8 @@ switches on only with `PAYMENT_PROVIDER=stanbic`; Monnify stays the default unti
 **This is Stanbic's virtual account product** (files `fvid-*.json`, `nuban-generator_3.0.0.json`).
 It works differently from Monnify: there is **no "create account" call**.
 
-1. Stanbic gives GH Trust a **4-digit prefix** (`STANBIC_FVID_PREFIX`).
+1. Stanbic gives GH Trust a **4-digit prefix** (`STANBIC_FVID_PREFIX`). Ours is **5960**
+   (sandbox; confirm the live one). The generator gives e.g. 596000001 -> **5960000018**.
 2. Each customer's account number = prefix + a 5-digit serial we allocate + the check digit from
    Stanbic's **Nuban Generator** (bank code 221). One prefix = 99,999 customers.
 3. A transfer to that number from any bank lands in GH Trust's pooled wallet account at Stanbic.
@@ -16,6 +17,19 @@ It works differently from Monnify: there is **no "create account" call**.
    separate lists). Each record has a `checksum` and `sessionId`.
 5. The **Checksum Validator** confirms a record is genuine (`isValid`, amount, account) before
    we credit anything.
+
+We use **Fundable Virtual ID 3.0.0** (files `fvid3-*.json`). Verified against the sandbox (Oct 2026):
+
+- Addresses are short paths on `STANBIC_FVID_BASE_URL`: `POST /validator`, `GET /history`
+  (other banks), `GET /stanbic-to-stanbic`, `POST /generate` (Nuban Generator). The 2.1.x paths
+  (`/checksum-validator/validator`, `/history/prefix-id/...`) answer "no valid subscription".
+- Every call needs **both** the OAuth token (`mynativeoauthprovider/oauth2/token`, scope `access`)
+  **and** the `Client-Id` / `Client-Secret` headers.
+- A made-up payment is refused by the validator: code 99, "Session ID Does not Exist".
+- **Stanbic's `GET /va-transaction-history/` ignored `prefixId`** and returned other clients'
+  payments. Stanbic fixed the filter (Oct 20: our prefix returns only ours), **but any prefix can
+  still be requested** with our keys (5700 returned another client's payment), so the prefix isn't
+  tied to the client. Reported again. We filter every record to our prefix in our code.
 
 Code: `backend/app/modules/payments/stanbic_fvid.py`.
 
@@ -26,8 +40,21 @@ Code: `backend/app/modules/payments/stanbic_fvid.py`.
   today's and yesterday's history, validates each checksum, and credits once per `sessionId`. A
   forged or mismatched record is rejected; one Stanbic can't confirm right now is retried next run;
   a payment to an unknown number is logged (`stanbic_fvid_unknown_account`) and not credited.
-- Push notifications (instant credit) are not built: their format isn't in any file Stanbic gave.
-  Polling works without them, and stays as the safety net once they are.
+- **Endpoints Stanbic calls** (format: Stanbic's "Fundable Wallet API Specification" v1.0.4 PDF):
+  - Name Enquiry: `POST /api/v1/webhooks/stanbic/virtual-id/name-enquiry`
+    `{requestId, accountNumber}` -> `{accountNumber, accountName, bvn, responseCode "00"|"07"}`.
+    Deleted or inactive customers answer 07 "Invalid Account".
+  - Transaction Notification: `POST /api/v1/webhooks/stanbic/virtual-id/transaction/notification`,
+    a list of payments; each answered `Successful`, `Duplicate Transaction`, `Invalid Checksum`,
+    `Invalid Amount`, `Invalid Account Number`, `Invalid Request` or `System malfunction` (Stanbic
+    couldn't confirm it right now); overall 00 all, 02 some, 99 none. Each is confirmed with the
+    checksum validator (same account and amount) before crediting; sessionId is the duplicate key.
+  - Both require headers `provider_id` / `provider_secret` (`STANBIC_FVID_PROVIDER_ID` /
+    `STANBIC_FVID_PROVIDER_SECRET`, chosen by us, given to Stanbic privately). Without them: 503.
+  - The wallet is credited the notified `amount`. Stanbic's charges (`bankCharge`, `adminFee`, VAT,
+    `amountNetChargesAndVat`) are stored on the payment for reconciliation. **Confirm with Stanbic
+    and the business** who bears them (today GH Trust does).
+- Polling stays as the safety net for a missed notification.
 
 ## Transfers out (withdrawals and loan payouts)
 
@@ -47,23 +74,32 @@ Code: `backend/app/modules/payments/stanbic_fvid.py`.
 | Credit Check | `credit-check_2.0.0.json` | Optional (`STANBIC_CREDIT_CHECK_ENABLED`) |
 | Nuban Generator (Bank-Test) | `nuban-generator_3.0.0.json` | Check digit for our virtual account numbers |
 
-## Status of our sandbox access
+## Response codes (confirmed by Stanbic)
 
-- App **"GH Trust Sandbox"** subscribed to **Bank-Test** (Default Plan). Keys are valid (the OAuth
-  token is issued).
-- Every call is still refused with **"Invalid Account or Client ID"** / **"This account number is
-  not profiled for this Client Id"**: Stanbic has to **profile our Client ID to an account**.
+00 successful, 99 failed, 55 and 56 pending. A repeated `clientRefId` is not reprocessed. Our code:
+pending and "duplicate" replies are never treated as failures (no refund), transfers are never
+auto-retried, and unknown codes wait for the status check.
+
+## Status of our sandbox access (Oct 20, 2026)
+
+- Client ID profiled. Bank List, Name Enquiry, Nuban Generator (prefix 5960), Fundable Virtual ID 3.0
+  history and checksum validator all work.
+- Test account (UAT): **9202314303** (APIC TEST DUMMY ACCOUNT). Accepted as the NPS transfer source.
+- VA transaction history: subscribe to **Transaction History (VA) 3.0.0** (product 14378) on the portal.
 
 ## Still needed from Stanbic
 
-1. **Profile our Client ID** for every subscribed product (Bank-Test, Fundable Virtual ID, NPS Funds Transfer).
-2. **Our 4-digit Fundable Virtual ID prefix** (sandbox now, live later).
-3. **Sandbox test accounts:** a funded source (settlement) account for NPS transfers, and test destination accounts.
-4. **A way to simulate a payment** into a sandbox virtual account.
-5. **Push notification details:** format, how to register our URL, retries.
-6. **The name senders see** when paying a customer's virtual account.
-7. **What NPS response codes mean** (success / processing / failed), and whether a repeated `clientRefId` is ignored or pays twice.
-8. **Live URLs and live keys** (into Railway, never by email or chat).
+1. A second test account (with bank code) to complete a successful NPS transfer, and whether
+   9202314303 holds test funds.
+2. A way to make a test payment into a 5960 virtual account (to see a real notification).
+3. Their outbound IP addresses (optional allow-list) and whether they retry unsuccessful notifications.
+4. Who bears the notification charges, and which amount settles into our pooled account.
+5. Fix: VA history must only return the calling client's prefix.
+6. Live prefix, live URLs and live keys (into Railway, never by email or chat).
+
+## Staging server for UAT
+
+Set-up, variables and the end-to-end check (`scripts/stanbic_check.py`): `docs/staging-stanbic.md`.
 
 ## Sandbox env (`backend/.env`, not Railway)
 
@@ -72,7 +108,9 @@ STANBIC_MOCK=false
 STANBIC_PORTAL_SANDBOX=true
 STANBIC_CLIENT_ID=
 STANBIC_CLIENT_SECRET=
-STANBIC_FVID_PREFIX=                 # from Stanbic
+STANBIC_FVID_PREFIX=5960             # from Stanbic (sandbox)
+STANBIC_FVID_PROVIDER_ID=            # ours: what Stanbic sends to call us
+STANBIC_FVID_PROVIDER_SECRET=        # ours: 32+ random characters, shared privately
 STANBIC_SETTLEMENT_ACCOUNT_NUMBER=   # from Stanbic: source for NPS transfers
 # PAYMENT_PROVIDER=stanbic           # only when testing the Stanbic rail locally
 ```

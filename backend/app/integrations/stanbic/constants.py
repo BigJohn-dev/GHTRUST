@@ -24,6 +24,9 @@ PATH_CREDIT_OUTSTANDING_LOAN = "/outstanding-loan"
 PATH_CREDIT_CBN_CHECK = "/cbn-credit-check"
 PATH_CREDIT_PRIVATE_CHECK = "/private-credit-check"
 ACCOUNT_OPENING_SUCCESS_CODES = frozenset({"00"})
+# Confirmed by Stanbic (Oct 2026): 00 successful, 99 failed, 55 and 56 pending.
+PENDING_RESPONSE_CODES = frozenset({"55", "56"})
+FAILED_RESPONSE_CODES = frozenset({"99"})
 ACCOUNT_OPENING_STATUS_SUCCESS = "00"
 
 # ── Legacy / partner contract (unconfirmed — use when not on portal sandbox) ─

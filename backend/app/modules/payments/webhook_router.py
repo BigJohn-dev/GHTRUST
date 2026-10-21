@@ -17,11 +17,13 @@ Two rules apply to every provider:
    inside the handler.
 """
 
+import hmac
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 import structlog
+from fastapi.responses import JSONResponse
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.core.rate_limit import get_client_ip
@@ -190,6 +192,120 @@ async def paystack_webhook(request: Request, db: DbSession) -> WebhookAckRespons
     return await _dispatch(
         "paystack", event_type, db, lambda: WebhookService(db).handle_event(event_type, data, raw_body)
     )
+
+
+# ── Stanbic Fundable Virtual ID: endpoints Stanbic calls ─────────────────────
+# Formats from Stanbic's "Fundable Wallet API Specification" v1.0.4. Stanbic authenticates with
+# headers provider_id / provider_secret (values we choose: STANBIC_FVID_PROVIDER_ID / _SECRET).
+
+_MAX_NOTIFIED = 500  # payments in one notification
+
+
+def _stanbic_fvid_refusal(request: Request) -> JSONResponse | None:
+    """Why this Stanbic call can't be served (not configured, wrong credentials), or None."""
+    from app.modules.payments import stanbic_fvid
+
+    settings = get_settings()
+    want_id, want_secret = settings.stanbic_fvid_provider_id, settings.stanbic_fvid_provider_secret
+    if not stanbic_fvid.enabled() or not want_id or not want_secret:
+        return JSONResponse(
+            status_code=503, content={"responseCode": "96", "responseDescription": "System malfunction"}
+        )
+    # Some proxies rename underscores in header names to dashes; accept either spelling.
+    got_id = request.headers.get("provider_id") or request.headers.get("provider-id") or ""
+    got_secret = request.headers.get("provider_secret") or request.headers.get("provider-secret") or ""
+    id_ok = hmac.compare_digest(got_id.encode(), want_id.encode())
+    secret_ok = hmac.compare_digest(got_secret.encode(), want_secret.encode())
+    if not (id_ok and secret_ok):
+        logger.warning("stanbic_fvid_unauthorised", ip=get_client_ip(request), path=request.url.path)
+        return JSONResponse(status_code=401, content={"responseCode": "99", "responseDescription": "Unauthorized"})
+    return None
+
+
+async def _json_body(request: Request) -> Any:
+    try:
+        return json.loads(await request.body() or b"null")
+    except ValueError:
+        return None
+
+
+@router.post("/stanbic/virtual-id/name-enquiry", summary="Stanbic: name behind a customer's virtual account")
+async def stanbic_name_enquiry(request: Request, db: DbSession) -> JSONResponse:
+    """The name (and BVN) for one of our account numbers, so the sender's bank can show it."""
+    from app.modules.payments import stanbic_fvid
+
+    refused = _stanbic_fvid_refusal(request)
+    if refused is not None:
+        return refused
+    body = await _json_body(request)
+    number = str(body.get("accountNumber") or "").strip() if isinstance(body, dict) else ""
+    customer = await stanbic_fvid.StanbicVirtualAccounts(db).owner(number) if number.isdigit() else None
+    if customer is None:
+        return JSONResponse(
+            content={
+                "accountNumber": "",
+                "accountName": "",
+                "bvn": "",
+                "responseCode": "07",
+                "responseDescription": "Invalid Account",
+            }
+        )
+    return JSONResponse(
+        content={
+            "accountNumber": number,
+            "accountName": stanbic_fvid.account_name(customer),
+            "bvn": customer.bvn,
+            "responseCode": "00",
+            "responseDescription": "Operation Successful",
+        }
+    )
+
+
+@router.post(
+    "/stanbic/virtual-id/transaction/notification", summary="Stanbic: payments into customers' virtual accounts"
+)
+async def stanbic_virtual_account_notification(request: Request, db: DbSession) -> JSONResponse:
+    """
+    Stanbic's Transaction Notification: a list of payments. Each is confirmed with Stanbic's
+    checksum validator before anything is credited (a forged one credits nothing) and credited
+    once per sessionId; each gets its own answer. A payment answered unsuccessful because Stanbic
+    couldn't confirm it right now is also picked up by the 2-minute history poll.
+    """
+    from app.modules.payments import stanbic_fvid
+
+    refused = _stanbic_fvid_refusal(request)
+    if refused is not None:
+        return refused
+    payload = await _json_body(request)
+    if isinstance(payload, dict):
+        payload = [payload]
+    if not isinstance(payload, list) or not payload or len(payload) > _MAX_NOTIFIED:
+        return JSONResponse(
+            status_code=400,
+            content={"responseDetails": [], "responseCode": "12", "responseDescription": "Invalid transaction"},
+        )
+
+    service = stanbic_fvid.StanbicVirtualAccounts(db)
+    details = []
+    for item in payload:
+        item = item if isinstance(item, dict) else {}
+        outcome, message = await service.credit_notification(item)
+        details.append(
+            {
+                "requestId": str(item.get("transactionReferenceId") or ""),
+                "accountNumber": str(item.get("customerAccountNumber") or ""),
+                "responseMessage": message,
+                "isSuccessful": outcome == "credited",
+            }
+        )
+    succeeded = sum(d["isSuccessful"] for d in details)
+    if succeeded == len(details):
+        code, description = "00", "Approved or completed successfully"
+    elif succeeded:
+        code, description = "02", "Partial Successful"
+    else:
+        code, description = "99", "Unable to process notification"
+    return JSONResponse(content={"responseDetails": details, "responseCode": code, "responseDescription": description})
 
 
 @router.post("/stanbic", response_model=WebhookAckResponse)

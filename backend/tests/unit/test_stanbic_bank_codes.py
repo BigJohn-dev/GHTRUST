@@ -153,3 +153,88 @@ class TestStanbicTransfers:
         assert resolved.account_name == "ADA OBI" and resolved.bank_code == "221"
         banks = await portal_client.supported_banks()
         assert ("999058", "GTBank") in [(b.code, b.name) for b in banks]
+
+
+async def test_live_sandbox_response_shape():
+    """What Stanbic's sandbox actually returns (Oct 2026), unlike the spec file."""
+
+    def live(page):
+        rows = {
+            1: [{"bankId": 1, "bankCode": "000013", "bankName": "GTBank", "v1InstitutionCode": "058", "category": "2", "bankShortName": "GTB"}],
+            2: [{"bankId": 2, "bankCode": "110005", "bankName": "3line Card management Limited", "v1InstitutionCode": "110005", "category": "11", "bankShortName": "3line"}],
+        }[page]
+        return {"responseCode": "00", "responseMsg": "Successful",
+                "responseDetails": {"content": rows, "pageNumber": page, "size": 200, "totalRecords": 2, "totalPages": 2}}
+
+    request = AsyncMock(side_effect=lambda method, url, params: live(params["page"]))
+    with patch(PORTAL, request):
+        directory = await bank_codes.get_bank_directory()
+    assert sorted(c.kwargs["params"]["page"] for c in request.await_args_list) == [1, 2]  # no page 0
+    assert directory.to_institution_code("058") == "000013"
+    assert directory.to_institution_code("110005") == "110005"
+
+
+def test_a_three_digit_code_shared_by_several_banks_is_refused():
+    shared = BankDirectory(
+        [
+            BankEntry(code="999559", v1_code="559", name="Coronation"),
+            BankEntry(code="999359", v1_code="559", name="CreditorCorp"),
+        ]
+    )
+    with pytest.raises(UnknownBankCode):
+        shared.to_institution_code("559")
+    assert shared.to_institution_code("999559") == "999559"  # the full code still works
+
+
+class TestStanbicResponseCodes:
+    """00 successful, 99 failed, 55/56 pending (confirmed by Stanbic). Pending must never refund."""
+
+    @pytest.mark.parametrize(
+        ("payload", "status"),
+        [
+            ({"responseCode": "00", "responseMsg": "SUCCESS", "destAcctCredited": "Y"}, "SUCCESS"),
+            ({"responseCode": "55", "responseMsg": "Pending"}, "PENDING"),
+            ({"responseCode": "56", "responseMsg": "Pending"}, "PENDING"),
+            ({"responseCode": "99", "responseMsg": "Failed"}, "FAILED"),
+            ({"responseCode": "99", "responseMsg": "Duplicate request"}, "PENDING"),
+            ({"responseCode": "42", "responseMsg": "Something new"}, "PENDING"),
+            ({}, "PENDING"),
+        ],
+    )
+    def test_transfer_status_mapping(self, payload, status):
+        from app.integrations.stanbic.portal_sandbox import map_nps_transfer_status
+
+        assert map_nps_transfer_status(payload) == status
+
+    def test_pending_and_duplicate_replies_are_not_errors(self):
+        from app.integrations.stanbic.portal_sandbox import _check_response_code
+
+        _check_response_code({"responseCode": "55", "responseMsg": "Pending"})
+        _check_response_code({"responseCode": "99", "responseMsg": "Duplicate transaction"})
+        with pytest.raises(PaymentRailError):
+            _check_response_code({"responseCode": "99", "responseMsg": "Failed"})
+
+    async def test_sending_a_transfer_is_never_retried(self):
+        """A retry with the same clientRefId would be refused as a duplicate and look like a failure."""
+        import httpx
+
+        from app.integrations.stanbic import portal_sandbox
+
+        calls = []
+
+        class Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def request(self, *args, **kwargs):
+                calls.append(1)
+                raise httpx.ConnectError("connection reset")
+
+        with patch("app.integrations.stanbic.portal_sandbox.httpx.AsyncClient", lambda **kw: Client()):
+            with pytest.raises(PaymentRailError) as exc:
+                await portal_sandbox.single_transfer({"clientRefId": "ghtrust_wdr_9"})
+        assert len(calls) == 1
+        assert exc.value.outcome_unknown  # the caller waits for the status check, no refund

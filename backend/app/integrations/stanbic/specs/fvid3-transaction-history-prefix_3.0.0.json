@@ -1,0 +1,410 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "version": "3.0.0",
+        "title": "Transaction history by prefix",
+        "description": "This API gets the history of transactions carried out on a prefix id",
+        "contact": {
+            "name": "Integration APIs Team",
+            "email": "Integrationsapis@stanbicibtc.com"
+        }
+    },
+    "servers": [
+        {
+            "url": "https://testapi.stanbicibtc.com/test/sandbox"
+        }
+    ],
+    "paths": {
+        "/history": {
+            "get": {
+                "description": "This API gets the history of transaction done from other banks",
+                "parameters": [
+                    {
+                        "name": "prefixId",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "example": "5050"
+                        },
+                        "description": "A 4 digit prefix id number"
+                    },
+                    {
+                        "name": "startDate",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "example": "21-MAY-23"
+                        },
+                        "description": "21-MAY-23"
+                    },
+                    {
+                        "name": "endDate",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "example": "21-MAY-23"
+                        },
+                        "description": "21-MAY-23"
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        },
+                        "description": "page number of response"
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "example": 50
+                        },
+                        "description": "size of the response object"
+                    },
+                    {
+                        "name": "sessionId",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "The session Id of the transaction"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/00"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/99"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/41"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/55"
+                    }
+                }
+            },
+            "description": "This API gets the history of transaction done from other banks",
+            "summary": "This API gets the history of transaction done from other banks"
+        },
+        "/stanbic-to-stanbic": {
+            "get": {
+                "description": "This API gets the history of transaction done from StanbicIBTC bank accounts.",
+                "parameters": [
+                    {
+                        "name": "prefixId",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "example": "5050"
+                        },
+                        "description": "A 4 digit prefix id number"
+                    },
+                    {
+                        "name": "startDate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "example": "21-MAR-23"
+                        },
+                        "description": "21-MAR-23"
+                    },
+                    {
+                        "name": "endDate",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "example": "21-MAR-23"
+                        },
+                        "description": "21-MAR-23"
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        },
+                        "description": "page number of response"
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "example": 50
+                        },
+                        "description": "size of the response object"
+                    },
+                    {
+                        "name": "sessionId",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "The session Id of the transaction"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/00"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/99"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/41"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/55"
+                    }
+                }
+            },
+            "description": "This API gets the history of transaction done from StanbicIBTC bank accounts.",
+            "summary": "This API gets the history of transaction done from StanbicIBTC bank accounts."
+        }
+    },
+    "components": {
+        "schemas": {
+            "RequestBody": {
+                "type": "object",
+                "properties": {
+                    "prefixId": {
+                        "title": "prefixId",
+                        "type": "string",
+                        "enum": [
+                            ""
+                        ]
+                    },
+                    "tran_date": {
+                        "type": "string",
+                        "format": "date",
+                        "enum": [
+                            "15-Nov-22"
+                        ]
+                    }
+                },
+                "description": "Sample query request being passed"
+            },
+            "ResponsePayload": {
+                "type": "object",
+                "description": "The standard response envelope returned by the API on a successful call",
+                "properties": {
+                    "responseCode": {
+                        "type": "string",
+                        "example": "00"
+                    },
+                    "responseMsg": {
+                        "type": "string",
+                        "example": "Successful"
+                    },
+                    "responseDetails": {
+                        "type": "object",
+                        "properties": {
+                            "content": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "integer",
+                                            "example": 4654
+                                        },
+                                        "tranDate": {
+                                            "type": "string",
+                                            "example": "20DEC2023"
+                                        },
+                                        "tranTime": {
+                                            "type": "string",
+                                            "example": "20DEC2023 16:22:42"
+                                        },
+                                        "walletAcctName": {
+                                            "type": "string",
+                                            "example": "JOHN DOE WALLET"
+                                        },
+                                        "amount": {
+                                            "type": "string",
+                                            "example": "50000.00"
+                                        },
+                                        "customerAcct": {
+                                            "type": "string",
+                                            "example": "5151515151"
+                                        },
+                                        "sourceAcctName": {
+                                            "type": "string",
+                                            "example": "Dummy Account Name"
+                                        },
+                                        "sourceAcctNumber": {
+                                            "type": "string",
+                                            "example": "********"
+                                        },
+                                        "sourceBankCode": {
+                                            "type": "string",
+                                            "example": "000015"
+                                        },
+                                        "clientNotificationReqId": {
+                                            "type": "string",
+                                            "example": "523227938"
+                                        },
+                                        "clientNotificationStatus": {
+                                            "type": "string",
+                                            "example": "PENDING"
+                                        },
+                                        "checksum": {
+                                            "type": "string",
+                                            "example": "FE38A0E02FUU87Y78E5EA82F5119C482B98BFF370DD14CBABDEC3DF8D6A346E0135A0BDE6D6E7D5328C61ED4B085222CA24C15A7D71FC1BF983FB2207D0D2A436BEC"
+                                        },
+                                        "sessionId": {
+                                            "type": "string",
+                                            "example": "000000000311151102464310031429"
+                                        }
+                                    }
+                                }
+                            },
+                            "pageNumber": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "size": {
+                                "type": "integer",
+                                "example": 50
+                            },
+                            "totalRecords": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "totalPages": {
+                                "type": "integer",
+                                "example": 1
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "responses": {
+            "41": {
+                "description": "Unauthorized",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "example": {
+                                "httpCode": "401",
+                                "httpMessage": "Unauthorized",
+                                "moreInformation": "Invalid client id or secret."
+                            }
+                        }
+                    }
+                }
+            },
+            "55": {
+                "description": "Service Unavailable",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "responsecode": "55",
+                            "responseMsg": "Service Currently Unavailable"
+                        }
+                    }
+                }
+            },
+            "99": {
+                "description": "Bad request",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "example": {
+                                "responseMsg": "Invalid date format",
+                                "responseCode": "99"
+                            }
+                        }
+                    }
+                }
+            },
+            "200": {
+                "description": "Success"
+            },
+            "400": {
+                "description": "Bad Request"
+            },
+            "401": {
+                "description": "Unauthorized"
+            },
+            "403": {
+                "description": "Forbidden"
+            },
+            "404": {
+                "description": "Not found"
+            },
+            "408": {
+                "description": "Request Timeout"
+            },
+            "500": {
+                "description": "Internal Server Error"
+            },
+            "502": {
+                "description": "Bad Gateway"
+            },
+            "503": {
+                "description": "Service Unavailable"
+            },
+            "00": {
+                "description": "Successful",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/ResponsePayload"
+                        }
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "OAuth": {
+                "type": "oauth2",
+                "flows": {
+                    "clientCredentials": {
+                        "tokenUrl": "https://testapi.stanbicibtc.com/test/sandbox/mynativeoauthprovider/oauth2/token",
+                        "scopes": {
+                            "access": "Branch details"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Confidential",
+            "description": "Business-sensitive transaction metadata requiring restricted access"
+        },
+        {
+            "name": "Transaction Data",
+            "description": "Involves transaction dates and identifiers for lookup or processing"
+        },
+        {
+            "name": "System Data",
+            "description": "Handles reference values such as prefix IDs for system-level processing"
+        },
+        {
+            "name": "Stable",
+            "description": "Production-ready API."
+        }
+    ],
+    "security": [
+        {
+            "OAuth": []
+        }
+    ]
+}
