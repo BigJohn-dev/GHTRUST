@@ -19,6 +19,8 @@ from app.integrations.payments.schemas import PaymentRailError, TransientRailErr
 from app.integrations.retry import transient_retry
 from app.integrations.stanbic.constants import (
     ACCOUNT_OPENING_SUCCESS_CODES,
+    FAILED_RESPONSE_CODES,
+    PENDING_RESPONSE_CODES,
     PATH_NPS_NAME_ENQUIRY,
     PATH_NPS_SINGLE_TRANSFER,
     PATH_NPS_TRANSFER_STATUS,
@@ -54,6 +56,11 @@ def _check_response_code(payload: dict[str, Any]) -> None:
     code = str(
         payload.get("responseCode") or payload.get("responsecode") or payload.get("rbxResponseCode") or ""
     ).strip()
+    message = str(payload.get("responseMsg") or payload.get("responseDesc") or "").upper()
+    # Pending (55/56) is not a failure, and nor is "duplicate": Stanbic doesn't reprocess a
+    # clientRefId it has seen, so the original may have gone through. The status check decides.
+    if code in PENDING_RESPONSE_CODES or "DUPLICATE" in message:
+        return
     if code and code not in ACCOUNT_OPENING_SUCCESS_CODES:
         raise PaymentRailError(
             str(payload.get("responseMsg") or payload.get("responseDesc") or "Stanbic request failed"),
@@ -62,17 +69,20 @@ def _check_response_code(payload: dict[str, Any]) -> None:
         )
 
 
-@transient_retry()  # StanbicPortalRetryable is a TransientRailError, so it is retried
-async def _portal_request(
+async def _portal_request_once(
     method: str,
     url: str,
     *,
     json: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
+    bearer: str | None = None,
 ) -> dict[str, Any]:
+    headers = _portal_headers()
+    if bearer:  # Fundable Virtual ID 3.0 wants the OAuth token AND the client keys
+        headers["Authorization"] = f"Bearer {bearer}"
     try:
         async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.request(method, url, headers=_portal_headers(), json=json, params=params)
+            response = await client.request(method, url, headers=headers, json=json, params=params)
     except httpx.HTTPError as exc:
         logger.warning("stanbic_portal_transport_error", url=url, error=str(exc))
         raise StanbicPortalRetryable("Stanbic portal API unreachable", status_code=502) from exc
@@ -105,15 +115,25 @@ async def _portal_request(
     return payload if isinstance(payload, dict) else {"raw": payload}
 
 
+# Reads and status checks are retried on network errors. Sending a transfer is NOT: if the
+# first attempt went through before the connection dropped, a retry with the same
+# clientRefId is refused as a duplicate, which would look like a failure and refund money
+# that already left. A failed send is "outcome unknown"; the status check settles it.
+_portal_request = transient_retry()(_portal_request_once)
+
+
 def map_nps_transfer_status(payload: dict[str, Any]) -> str:
     code = str(payload.get("responseCode") or "").strip()
     msg = str(payload.get("responseMsg") or "").upper()
     credited = str(payload.get("destAcctCredited") or "").upper()
-    if not code:
-        # No verdict: never treat as failed, or the customer is refunded for money that left.
+    if not code or code in PENDING_RESPONSE_CODES or "DUPLICATE" in msg:
+        # No verdict yet: never treat as failed, or the customer is refunded for money that left.
         return TRANSFER_STATUS_PENDING
-    if code != "00":
+    if code in FAILED_RESPONSE_CODES:
         return TRANSFER_STATUS_FAILED
+    if code != "00":
+        logger.warning("stanbic_unknown_transfer_code", code=code, message=msg[:120])
+        return TRANSFER_STATUS_PENDING  # unknown code: wait for the status check, don't refund
     if "PROCESS" in msg or credited in ("N", "NO", "FALSE"):
         return TRANSFER_STATUS_PENDING
     if credited in ("Y", "YES", "TRUE") or "SUCCESS" in msg:
@@ -134,7 +154,7 @@ async def name_enquiry(account_number: str, bank_code: str) -> dict[str, Any]:
 async def single_transfer(payload: dict[str, Any]) -> dict[str, Any]:
     base = settings.stanbic_nps_base_url.rstrip("/")
     url = f"{base}{PATH_NPS_SINGLE_TRANSFER}"
-    return await _portal_request("POST", url, json=payload)
+    return await _portal_request_once("POST", url, json=payload)  # never auto-retried
 
 
 async def transfer_status(payload: dict[str, Any]) -> dict[str, Any]:
@@ -221,17 +241,31 @@ def portal_history_date(dt: datetime) -> str:
 
 
 async def history_by_prefix(prefix: str, start: str, end: str, *, stanbic_to_stanbic: bool) -> list[dict[str, Any]]:
-    """Every payment into our virtual accounts in the date range (all pages)."""
+    """
+    Payments into our virtual accounts in the date range (all pages). Fundable Virtual ID 3.0:
+    GET {base}/history (from other banks) and {base}/stanbic-to-stanbic, token + client keys.
+
+    Records are filtered to OUR prefix here: Stanbic's sandbox was seen (Oct 2026) returning other
+    clients' payments regardless of prefixId on its VA history, so its filter isn't trusted.
+    """
     path = "stanbic-to-stanbic" if stanbic_to_stanbic else "history"
-    url = f"{settings.stanbic_fvid_base_url.rstrip('/')}/history/prefix-id/{path}"
+    url = f"{settings.stanbic_fvid_base_url.rstrip('/')}/{path}"
+    token = await _oauth_token()
     records: list[dict[str, Any]] = []
     page = 1
     while page <= 50:
         body = await _portal_request(
-            "GET", url, params={"prefixId": prefix, "startDate": start, "endDate": end, "page": page, "size": 100}
+            "GET",
+            url,
+            params={"prefixId": prefix, "startDate": start, "endDate": end, "page": page, "size": 100},
+            bearer=token,
         )
         details = body.get("responseDetails") or {}
-        records.extend(r for r in details.get("content") or [] if isinstance(r, dict))
+        records.extend(
+            r
+            for r in details.get("content") or []
+            if isinstance(r, dict) and str(r.get("customerAcct") or "").startswith(prefix)
+        )
         total_pages = int(details.get("totalPages") or 0)
         if page >= total_pages:
             break
@@ -241,6 +275,8 @@ async def history_by_prefix(prefix: str, start: str, end: str, *, stanbic_to_sta
 
 async def validate_checksum(checksum: str, session_id: str) -> dict[str, Any]:
     """Stanbic confirms a payment record is genuine; returns its details (with isValid)."""
-    url = f"{settings.stanbic_fvid_base_url.rstrip('/')}/checksum-validator/validator"
-    body = await _portal_request("POST", url, json={"checkSum": checksum, "sessionId": session_id})
+    url = f"{settings.stanbic_fvid_base_url.rstrip('/')}/validator"  # Fundable Virtual ID 3.0
+    body = await _portal_request(
+        "POST", url, json={"checkSum": checksum, "sessionId": session_id}, bearer=await _oauth_token()
+    )
     return body.get("responseDetails") or {}

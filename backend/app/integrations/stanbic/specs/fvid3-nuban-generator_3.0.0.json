@@ -1,0 +1,228 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "version": "3.0.0",
+        "title": "Nuban Generator",
+        "description": "Generates a check digit that makes a 10 digit NUBAN account number.",
+        "contact": {
+            "name": "Integration APIs Team",
+            "email": "Integrationsapis@stanbicibtc.com"
+        }
+    },
+    "paths": {
+        "/generate": {
+            "post": {
+                "description": "This API is used to generate NUBAN compliant account numbers.",
+                "requestBody": {
+                    "required": true,
+                    "description": "Sample request body.",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequestBody"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/00"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/99"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/41"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/55"
+                    }
+                },
+                "summary": "This API is used to generate NUBAN compliant account numbers."
+            },
+            "description": "This API is used to generate NUBAN compliant account numbers.",
+            "summary": "This API is used to generate NUBAN compliant account numbers."
+        }
+    },
+    "components": {
+        "schemas": {
+            "RequestBody": {
+                "type": "object",
+                "properties": {
+                    "reqId": {
+                        "type": "string",
+                        "maxLength": 10
+                    },
+                    "accountNo": {
+                        "type": "string",
+                        "minLength": 10,
+                        "maxLength": 10,
+                        "example": "123456789"
+                    },
+                    "bankCode": {
+                        "type": "string",
+                        "enum": [
+                            "221"
+                        ]
+                    }
+                },
+                "description": "Sample request payload"
+            },
+            "ResponsePayload": {
+                "type": "object",
+                "description": "Sample Response Payload",
+                "properties": {
+                    "transactionDetails": {
+                        "type": "object",
+                        "properties": {
+                            "reqId": {
+                                "type": "string",
+                                "example": "596387953639424"
+                            },
+                            "bankCode": {
+                                "type": "string",
+                                "example": "221"
+                            },
+                            "nubanGeneratedAccntNo": {
+                                "type": "string",
+                                "example": "5151515151"
+                            }
+                        }
+                    },
+                    "responseMsg": {
+                        "type": "string",
+                        "example": "Success"
+                    },
+                    "responseCode": {
+                        "type": "integer",
+                        "example": 200
+                    }
+                }
+            }
+        },
+        "responses": {
+            "41": {
+                "description": "Unauthorized",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "example": {
+                                "httpCode": "401",
+                                "httpMessage": "Unauthorized",
+                                "moreInformation": "Invalid client id or secret."
+                            }
+                        }
+                    }
+                }
+            },
+            "55": {
+                "description": "Service Currently Unavailable",
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "responsecode": "55",
+                            "responseMsg": "Service Currently Unavailable"
+                        }
+                    }
+                }
+            },
+            "99": {
+                "description": "Bad request",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "example": {
+                                "responseMsg": "invalid bank code",
+                                "responseCode": "99"
+                            }
+                        }
+                    }
+                }
+            },
+            "200": {
+                "description": "Success"
+            },
+            "400": {
+                "description": "Bad Request"
+            },
+            "401": {
+                "description": "Unauthorized"
+            },
+            "403": {
+                "description": "Forbidden"
+            },
+            "404": {
+                "description": "Not found"
+            },
+            "408": {
+                "description": "Request Timeout"
+            },
+            "500": {
+                "description": "Internal Server Error"
+            },
+            "502": {
+                "description": "Bad Gateway"
+            },
+            "503": {
+                "description": "Service Unavailable"
+            },
+            "00": {
+                "description": "Successful",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/ResponsePayload"
+                        }
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "OAuth": {
+                "type": "oauth2",
+                "flows": {
+                    "clientCredentials": {
+                        "tokenUrl": "https://testapi.stanbicibtc.com/test/sandbox/mynativeoauthprovider/oauth2/token",
+                        "scopes": {
+                            "access": "Branch details"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Confidential",
+            "description": "Business-sensitive request requiring restricted access"
+        },
+        {
+            "name": "PII",
+            "description": "Involves customer account numbers and identifiers"
+        },
+        {
+            "name": "Transaction Data",
+            "description": "Used to generate and validate account check digits for financial transactions"
+        },
+        {
+            "name": "Security",
+            "description": "Ensures accuracy and integrity of account details before processing"
+        },
+        {
+            "name": "Stable",
+            "description": "Production-ready API."
+        }
+    ],
+    "servers": [
+        {
+            "url": "https://testapi.stanbicibtc.com/test/sandbox"
+        }
+    ],
+    "security": [
+        {
+            "OAuth": []
+        }
+    ]
+}

@@ -4,10 +4,11 @@ Self-contained API for mobile / UI development: no Docker, Postgres or Redis.
     python scripts/dev_server.py                 # http://0.0.0.0:8000
     python scripts/dev_server.py --wallet        # also switch the wallet and investments on
     python scripts/dev_server.py --reset         # start from an empty database
+    python scripts/dev_server.py --stanbic       # payments on the real Stanbic sandbox (keys from .env)
 
 What you get:
 * SQLite file ``dev_local.db`` (kept between runs) + in-memory Redis;
-* every provider in mock mode (BVN lookup, SMS, payments);
+* every provider in mock mode (BVN lookup, SMS, payments), except Stanbic with --stanbic;
 * OTP codes are always 123456 (also printed in the log);
 * loan products and approval workflows seeded;
 * a staff login (phone 08000000001) for approving applications in the portal.
@@ -30,9 +31,11 @@ DB_FILE = ROOT / "dev_local.db"
 STAFF_PHONE = "08000000001"
 
 
-def _configure_env(wallet: bool) -> None:
+def _configure_env(wallet: bool, stanbic: bool = False) -> None:
     if os.environ.get("APP_ENV") == "production":
         sys.exit("dev_server.py is for development only (APP_ENV=production is set).")
+    if stanbic:
+        _load_stanbic_settings()
     os.environ.update(
         {
             "APP_ENV": "development",
@@ -40,17 +43,18 @@ def _configure_env(wallet: bool) -> None:
             "ENABLE_API_DOCS": "true",
             "DOJAH_MOCK": "true",
             "SMS_MOCK": "true",
-            "PAYMENT_PROVIDER": "monnify",
+            "PAYMENT_PROVIDER": "stanbic" if stanbic else "monnify",
             "MONNIFY_MOCK": "true",
             # Lets scripts/dev_credit_wallet.py sign a test "transfer received" webhook.
             "MONNIFY_SECRET_KEY": DEV_WEBHOOK_SECRET,
             "PAYSTACK_MOCK": "true",
-            "STANBIC_MOCK": "true",
+            # --stanbic: STANBIC_* (keys, prefix, settlement account) come from backend/.env.
+            "STANBIC_MOCK": "false" if stanbic else "true",
             "ZEST_MOCK": "true",
             "SENTRY_DSN": "",
             "UPLOAD_DIR": str(ROOT / "uploads"),
             "FEATURE_FLAGS": "wallet,investments"
-            if wallet
+            if wallet or stanbic
             else os.environ.get("FEATURE_FLAGS", ""),
             "CORS_ORIGINS": ",".join(
                 [
@@ -64,6 +68,17 @@ def _configure_env(wallet: bool) -> None:
             ),
         }
     )
+
+
+def _load_stanbic_settings() -> None:
+    """Only the STANBIC_* lines of backend/.env (wherever this is started from); the rest stays mocked."""
+    env_file = ROOT / ".env"
+    if not env_file.exists():
+        sys.exit("--stanbic needs the Stanbic sandbox keys in backend/.env (see docs/stanbic-api-checklist.md).")
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key.startswith("STANBIC_") and value.strip():
+            os.environ.setdefault(key, value.split(" #")[0].strip().strip('"').strip("'"))
 
 
 async def _prepare(engine) -> None:
@@ -128,9 +143,14 @@ def main() -> None:
     parser.add_argument(
         "--reset", action="store_true", help="delete the dev database first"
     )
+    parser.add_argument(
+        "--stanbic",
+        action="store_true",
+        help="use the real Stanbic sandbox for accounts and transfers (STANBIC_* from .env); implies --wallet",
+    )
     args = parser.parse_args()
 
-    _configure_env(args.wallet)
+    _configure_env(args.wallet, args.stanbic)
     if args.reset and DB_FILE.exists():
         DB_FILE.unlink()
     elif _schema_is_stale():

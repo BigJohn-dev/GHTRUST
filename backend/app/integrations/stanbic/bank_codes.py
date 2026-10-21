@@ -55,11 +55,13 @@ class BankDirectory:
 
     def __post_init__(self) -> None:
         self._by_code = {e.code: e for e in self.entries}
-        self._by_v1: dict[str, BankEntry] = {}
+        by_v1: dict[str, list[BankEntry]] = {}
         for e in self.entries:
             if e.v1_code:
-                # Keep the first; a duplicate v1 code would make conversion ambiguous.
-                self._by_v1.setdefault(e.v1_code, e)
+                by_v1.setdefault(e.v1_code, []).append(e)
+        # A 3-digit code Stanbic gives to several institutions (e.g. 559) is ambiguous: refuse
+        # it rather than pick one, or money could go to the wrong bank.
+        self._by_v1 = {code: group[0] for code, group in by_v1.items() if len(group) == 1}
 
     def to_institution_code(self, code: str) -> str:
         """The 6-digit code Stanbic routes on, for a 3- or 6-digit code. Raises if unknown."""
@@ -78,8 +80,10 @@ class BankDirectory:
 
 
 def _entry(item: dict[str, Any]) -> BankEntry | None:
-    code = "".join(ch for ch in str(item.get("institutionCode") or "") if ch.isdigit())
-    name = str(item.get("institutionName") or "").strip()
+    # The live sandbox sends bankCode/bankName/bankShortName; the spec says
+    # institutionCode/institutionName/v1InstitutionShortName. Accept both.
+    code = "".join(ch for ch in str(item.get("bankCode") or item.get("institutionCode") or "") if ch.isdigit())
+    name = str(item.get("bankName") or item.get("institutionName") or "").strip()
     if len(code) != 6 or not name:
         return None
     v1 = "".join(ch for ch in str(item.get("v1InstitutionCode") or "") if ch.isdigit()) or None
@@ -87,7 +91,7 @@ def _entry(item: dict[str, Any]) -> BankEntry | None:
         code=code,
         v1_code=v1,
         name=name,
-        short_name=str(item.get("v1InstitutionShortName") or "").strip() or None,
+        short_name=str(item.get("bankShortName") or item.get("v1InstitutionShortName") or "").strip() or None,
         category=str(item.get("category") or "").strip() or None,
     )
 
@@ -97,18 +101,22 @@ async def _page(page: int) -> dict[str, Any]:
 
     base = settings.stanbic_bank_list_base_url.rstrip("/")
     body = await _portal_request("GET", f"{base}/bank-list", params={"page": page, "size": PAGE_SIZE})
-    if str(body.get("code") or "00") != "00":
-        raise PaymentRailError(str(body.get("message") or "Stanbic bank list failed"), status_code=502)
-    return body.get("data") or {}
+    # Live sandbox: responseCode/responseMsg/responseDetails. Spec: code/message/data.
+    code = str(body.get("responseCode") or body.get("code") or "00")
+    if code != "00":
+        raise PaymentRailError(
+            str(body.get("responseMsg") or body.get("message") or "Stanbic bank list failed"), status_code=502
+        )
+    return body.get("responseDetails") or body.get("data") or {}
 
 
 async def fetch_bank_directory() -> BankDirectory:
     """Every page of Stanbic's bank list."""
-    # The spec doesn't say whether pages count from 0 or 1: ask for page 1 and read the
-    # page number echoed back. If it says 1, pages are 0-based and page 0 is fetched too.
+    # Pages: the live sandbox echoes a 1-based "pageNumber". The spec shows a Spring-style
+    # 0-based "number"; if page=1 comes back as number 1, page 0 exists and is fetched too.
     first = await _page(1)
     pages = [first]
-    zero_based = first.get("number") == 1
+    zero_based = "pageNumber" not in first and first.get("number") == 1
     if zero_based:
         pages.insert(0, await _page(0))
     total_pages = int(first.get("totalPages") or 1)

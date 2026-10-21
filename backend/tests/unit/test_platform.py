@@ -32,7 +32,14 @@ LIVE_PROD = dict(
     redis_url="redis://redis.internal:6379/0",
     celery_broker_url="redis://redis.internal:6379/1",
     celery_result_backend="redis://redis.internal:6379/2",
+    support_email="help@ghtrust.ng",
 )
+
+
+@pytest.fixture(autouse=True)
+def approved_legal_documents(monkeypatch):
+    """Stand in approved Terms and Privacy Policy (the real ones are drafts until legal signs off)."""
+    monkeypatch.setattr("app.modules.legal.documents.DRAFT", False)
 
 
 class TestProductionGuard:
@@ -46,6 +53,15 @@ class TestProductionGuard:
     def test_demo_numbers_with_a_strong_code_pass(self):
         s = Settings(_env_file=None, **{**LIVE_PROD, "demo_phones": "08011112222", "demo_otp": "482917"})
         assert s.production_config_errors() == []
+
+    def test_draft_legal_documents_are_refused(self, monkeypatch):
+        monkeypatch.setattr("app.modules.legal.documents.DRAFT", True)
+        errors = Settings(_env_file=None, **LIVE_PROD).production_config_errors()
+        assert any("DRAFT" in e for e in errors), errors
+
+    def test_support_contact_is_required(self):
+        errors = Settings(_env_file=None, **{**LIVE_PROD, "support_email": ""}).production_config_errors()
+        assert any("SUPPORT_EMAIL" in e for e in errors), errors
 
     def test_non_production_is_never_blocked(self):
         s = Settings(_env_file=None, app_env="staging", debug=True, sms_mock=True)
@@ -209,6 +225,8 @@ class TestStanbicProductionGuard:
         "stanbic_bank_list_base_url": "https://api.stanbicibtc.com",
         "stanbic_fvid_base_url": "https://api.stanbicibtc.com",
         "stanbic_fvid_prefix": "5151",
+        "stanbic_fvid_provider_id": "stanbic",
+        "stanbic_fvid_provider_secret": "s" * 40,
         "stanbic_transaction_history_base_url": "https://api.stanbicibtc.com/history",
         "stanbic_oauth_token_url": "https://api.stanbicibtc.com/oauth2/token",
     }
@@ -225,10 +243,14 @@ class TestStanbicProductionGuard:
         assert any("STANBIC_PORTAL_SANDBOX" in e for e in errors), errors
         assert any("STANBIC_NPS_BASE_URL" in e for e in errors), errors
 
+    def test_callers_need_credentials(self):
+        s = Settings(_env_file=None, **{**self.STANBIC_LIVE, "stanbic_fvid_provider_secret": "short"})
+        assert any("STANBIC_FVID_PROVIDER_SECRET" in e for e in s.production_config_errors())
+
 
 def test_stanbic_status_without_a_code_is_pending_not_failed():
     from app.integrations.stanbic.portal_sandbox import map_nps_transfer_status
 
     assert map_nps_transfer_status({}) == "PENDING"
     assert map_nps_transfer_status({"responseCode": "00", "destAcctCredited": "Y"}) == "SUCCESS"
-    assert map_nps_transfer_status({"responseCode": "91"}) == "FAILED"
+    assert map_nps_transfer_status({"responseCode": "99"}) == "FAILED"  # 99 = failed (Stanbic)

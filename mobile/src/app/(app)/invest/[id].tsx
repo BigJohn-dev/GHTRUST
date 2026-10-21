@@ -110,7 +110,7 @@ export default function InvestPlan() {
       edges={['bottom']}
       footer={
         !open ? (
-          <Button title="Investing opens soon" disabled />
+          <Button title="New investments are paused" disabled />
         ) : shortfall > 0 && !amountError ? (
           <Button
             title={`Add ${naira(shortfall)} to your wallet`}

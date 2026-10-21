@@ -119,5 +119,5 @@ secret, localhost CORS) and lists every problem. Behind a load balancer set
 | Dojah | BVN Advanced | Integrated; mock until credentials |
 | SMS (Termii / Africa's Talking) | OTP | **Not integrated** — `app/integrations/sms` |
 | Monnify | Default rail | Integrated; mock until credentials |
-| Stanbic IBTC | Bank partner | Adapter scaffolded against our requirements doc; every unconfirmed field marked `TODO(stanbic-spec)` |
+| Stanbic IBTC | Bank partner | Built against the Stanbic sandbox (virtual accounts, transfers, bank codes); UAT on staging: `docs/stanbic-api-checklist.md`, `docs/staging-stanbic.md` |
 | Paystack / Zest | Alternative rails | Integrated (Zest inbound only) |

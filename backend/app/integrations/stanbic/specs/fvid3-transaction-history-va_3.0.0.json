@@ -1,0 +1,325 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "version": "3.0.0",
+        "title": "Transaction History (VA)",
+        "contact": {
+            "name": "Integration APIs Team",
+            "email": "Integrationsapis@stanbicibtc.com"
+        },
+        "description": "This API gets the history of transactions carried out on a Virtual Account"
+    },
+    "servers": [
+        {
+            "url": "https://testapi.stanbicibtc.com/test/sandbox/va-transaction-history"
+        }
+    ],
+    "paths": {
+        "/": {
+            "get": {
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/00"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/99"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/41"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/55"
+                    }
+                },
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/startDate"
+                    },
+                    {
+                        "$ref": "#/components/parameters/endDate"
+                    },
+                    {
+                        "$ref": "#/components/parameters/prefixId"
+                    },
+                    {
+                        "$ref": "#/components/parameters/virtualAccount"
+                    },
+                    {
+                        "$ref": "#/components/parameters/sessionId"
+                    },
+                    {
+                        "$ref": "#/components/parameters/virtualAcctName"
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "OAuth": {
+                "type": "oauth2",
+                "flows": {
+                    "clientCredentials": {
+                        "tokenUrl": "https://testapi.stanbicibtc.com/test/sandbox/mynativeoauthprovider/oauth2/token",
+                        "scopes": {
+                            "access": "Branch details"
+                        }
+                    }
+                }
+            }
+        },
+        "schemas": {
+            "ResponseBody": {
+                "type": "object",
+                "properties": {
+                    "responseCode": {
+                        "type": "string",
+                        "example": 0
+                    },
+                    "responseMsg": {
+                        "type": "string",
+                        "example": "Successful"
+                    },
+                    "responseDetails": {
+                        "type": "object",
+                        "properties": {
+                            "content": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "example": 3000
+                                        },
+                                        "prefix": {
+                                            "type": "string",
+                                            "example": 1234
+                                        },
+                                        "tranDate": {
+                                            "type": "string",
+                                            "example": "1990-01-28T10:00:00.000Z"
+                                        },
+                                        "walletAcctName": {
+                                            "type": "string",
+                                            "example": "John Doe"
+                                        },
+                                        "amount": {
+                                            "type": "string",
+                                            "example": 1000
+                                        },
+                                        "customerAcct": {
+                                            "type": "string",
+                                            "example": 123456789
+                                        },
+                                        "sourceAcctname": {
+                                            "type": "string",
+                                            "example": "John Doe"
+                                        },
+                                        "sourceAcctNumber": {
+                                            "type": "string",
+                                            "example": 123456789
+                                        },
+                                        "sourceBankCode": {
+                                            "type": "string",
+                                            "example": 111
+                                        },
+                                        "clientNotificationReqId": {
+                                            "type": "string",
+                                            "example": "0000-1111"
+                                        },
+                                        "clientNotificationStatus": {
+                                            "type": "string",
+                                            "example": "SUCCESSFUL"
+                                        },
+                                        "checksum": {
+                                            "type": "string",
+                                            "example": "FE3ATYUIJHHGFD6789"
+                                        },
+                                        "sessionId": {
+                                            "type": "string",
+                                            "example": 111122224444444
+                                        },
+                                        "clientNotificationDate": {
+                                            "type": "string",
+                                            "example": "01-OCT-1990"
+                                        },
+                                        "clientNotificationTime": {
+                                            "type": "string",
+                                            "example": "01-OCT-1990"
+                                        },
+                                        "notificationRetryCount": {
+                                            "type": "string",
+                                            "example": 4
+                                        },
+                                        "transactionStatus": {
+                                            "type": "string",
+                                            "example": "SUCCESS"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "parameters": {
+            "startDate": {
+                "schema": {
+                    "type": "string"
+                },
+                "name": "startDate",
+                "in": "query",
+                "required": true
+            },
+            "endDate": {
+                "schema": {
+                    "type": "string"
+                },
+                "name": "endDate",
+                "in": "query",
+                "required": true
+            },
+            "prefixId": {
+                "schema": {
+                    "type": "string"
+                },
+                "name": "prefixId",
+                "in": "query",
+                "required": true
+            },
+            "virtualAccount": {
+                "schema": {
+                    "type": "string"
+                },
+                "name": "virtualAccount",
+                "in": "query"
+            },
+            "sessionId": {
+                "schema": {
+                    "type": "string"
+                },
+                "name": "sessionId",
+                "in": "query"
+            },
+            "virtualAcctName": {
+                "schema": {
+                    "type": "string"
+                },
+                "name": "virtualAcctName",
+                "in": "query"
+            }
+        },
+        "responses": {
+            "41": {
+                "description": "Unauthorized",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "title": "Unauthorized",
+                            "type": "object",
+                            "properties": {
+                                "httpCode": {
+                                    "type": "string",
+                                    "example": 402
+                                },
+                                "httpMessage": {
+                                    "type": "string",
+                                    "example": "Unauthorized"
+                                },
+                                "moreInformation": {
+                                    "type": "string",
+                                    "example": "Invalid client id or secret"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "55": {
+                "description": "Service Currently Unavailable",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "title": "Service Unavailable",
+                            "type": "object",
+                            "properties": {
+                                "responseCode": {
+                                    "type": "string",
+                                    "example": 55
+                                },
+                                "responseMsg": {
+                                    "type": "string",
+                                    "example": "Service Currently Unavailable"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "99": {
+                "description": "Bad Request",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "title": "Bad Request",
+                            "type": "object",
+                            "properties": {
+                                "responseCode": {
+                                    "type": "string",
+                                    "example": 99
+                                },
+                                "responseMsg": {
+                                    "type": "string",
+                                    "example": "Invalid date format"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "00": {
+                "description": "Successful",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/ResponseBody"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "security": [
+        {
+            "OAuth": []
+        }
+    ],
+    "tags": [
+        {
+            "name": "Confidential",
+            "description": "Business-sensitive financial history requiring restricted access"
+        },
+        {
+            "name": "PII",
+            "description": "Involves virtual account identifiers linked to customers"
+        },
+        {
+            "name": "Financial",
+            "description": "Handles account statement and transaction history data"
+        },
+        {
+            "name": "Transaction Data",
+            "description": "Provides debit, credit, and transfer records within a time range"
+        },
+        {
+            "name": "User Data",
+            "description": "Involves customer virtual account details associated with a customer."
+        },
+        {
+            "name": "Stable",
+            "description": "Production-ready API."
+        }
+    ]
+}

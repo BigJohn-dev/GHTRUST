@@ -37,6 +37,17 @@
       "port": 8000
     },
     {
+      "name": "api-dev-stanbic",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "backend/scripts/dev_server.py",
+        "--stanbic",
+        "--port",
+        "8001"
+      ],
+      "port": 8001
+    },
+    {
       "name": "mobile-web",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

@@ -31,7 +31,12 @@ def stanbic_rail(monkeypatch):
     monkeypatch.setenv("STANBIC_CLIENT_SECRET", "secret")
     monkeypatch.setenv("STANBIC_WEBHOOK_SECRET", "whsec")
     monkeypatch.setenv("STANBIC_FVID_PREFIX", "5151")
+    monkeypatch.setenv("STANBIC_FVID_PROVIDER_ID", "stanbic")
+    monkeypatch.setenv("STANBIC_FVID_PROVIDER_SECRET", "s" * 40)
     refresh_settings()
+
+
+STANBIC_CALLER = {"provider_id": "stanbic", "provider_secret": "s" * 40}
 
 
 async def _customer(db_session) -> Customer:
@@ -187,3 +192,193 @@ async def test_off_unless_stanbic_is_live_with_a_prefix(monkeypatch):
     monkeypatch.setenv("STANBIC_FVID_PREFIX", "5151")
     refresh_settings()
     assert stanbic_fvid.enabled()
+
+
+def _notified(account, *, amount="5000.00", session="000000000311151102464310031429", checksum="$2a$09$CS1"):
+    """One payment as Stanbic's Transaction Notification sends it (spec v1.0.4)."""
+    return {
+        "transactionReferenceId": "5151-5698709759",
+        "customerAccountNumber": account,
+        "accountName": "GH Trust / Ada Obi",
+        "amount": amount,
+        "checkSum": checksum,
+        "checkSumId": "5698709759",
+        "bankCharge": "40.31",
+        "adminFee": "53.75",
+        "amountNetChargesAndVat": "4725.49",
+        "srcAcct": "6021545607",
+        "srcAcctBankCode": "991228",
+        "srcAcctName": "ADA OBI",
+        "sessionId": session,
+        "tranDate": "29-APR-2026",
+        "tranTime": "14:25:10",
+    }
+
+
+async def _account(api_client, db_session) -> tuple[str, str]:
+    with patch(f"{PORTAL}.nuban_check_digit", AsyncMock(side_effect=_nuban)):
+        await _register(api_client)
+    customer = await _customer(db_session)
+    return customer.id, customer.paystack_dva_account_number
+
+
+class TestNotificationEndpoint:
+    """POST /webhooks/stanbic/virtual-id/transaction/notification: confirmed with Stanbic first."""
+
+    URL = "/api/v1/webhooks/stanbic/virtual-id/transaction/notification"
+
+    async def test_genuine_payment_is_credited_once(self, api_client, db_session, stanbic_rail):
+        customer_id, account = await _account(api_client, db_session)
+        with patch(f"{PORTAL}.validate_checksum", _valid(account)) as validator:
+            first = await api_client.post(self.URL, json=[_notified(account)], headers=STANBIC_CALLER)
+            again = await api_client.post(self.URL, json=[_notified(account)], headers=STANBIC_CALLER)
+        assert first.status_code == 200
+        assert first.json() == {
+            "responseDetails": [
+                {
+                    "requestId": "5151-5698709759",
+                    "accountNumber": account,
+                    "responseMessage": "Successful",
+                    "isSuccessful": True,
+                }
+            ],
+            "responseCode": "00",
+            "responseDescription": "Approved or completed successfully",
+        }
+        validator.assert_awaited_with("$2a$09$CS1", "000000000311151102464310031429")
+        assert again.json()["responseDetails"][0]["responseMessage"] == "Duplicate Transaction"
+        assert await _balance(db_session, customer_id) == Decimal("5000.00")
+        tx = (await db_session.execute(select(PaymentTransaction))).scalar_one()
+        assert tx.raw_payload["bankCharge"] == "40.31" and "checksum" not in tx.raw_payload
+
+    async def test_each_payment_gets_its_own_answer(self, api_client, db_session, stanbic_rail):
+        customer_id, account = await _account(api_client, db_session)
+
+        async def validator(checksum, session_id):
+            if checksum == "FAKE":
+                raise PaymentRailError("Checksum invalid", status_code=502, provider_code="99")
+            return {"isValid": "True", "customerAcct": account, "amount": "5000.00"}
+
+        batch = [
+            _notified(account, session="S1"),
+            _notified(account, session="S2", checksum="FAKE"),
+            _notified(account, session="S3", amount="50000.00"),  # claims more than Stanbic confirms
+            _notified("5151999997", session="S4"),
+            {"sessionId": "S5"},
+        ]
+        with patch(f"{PORTAL}.validate_checksum", AsyncMock(side_effect=validator)):
+            res = await api_client.post(self.URL, json=batch, headers=STANBIC_CALLER)
+        body = res.json()
+        assert res.status_code == 200 and body["responseCode"] == "02"
+        assert [(d["responseMessage"], d["isSuccessful"]) for d in body["responseDetails"]] == [
+            ("Successful", True),
+            ("Invalid Checksum", False),
+            ("Invalid Amount", False),
+            ("Invalid Account Number", False),
+            ("Invalid Request", False),
+        ]
+        assert await _balance(db_session, customer_id) == Decimal("5000.00")
+
+    async def test_nothing_credited_answers_99(self, api_client, db_session, stanbic_rail):
+        customer_id, account = await _account(api_client, db_session)
+        forged = AsyncMock(side_effect=PaymentRailError("Checksum invalid", status_code=502, provider_code="99"))
+        with patch(f"{PORTAL}.validate_checksum", forged):
+            res = await api_client.post(
+                self.URL, json=[_notified(account, amount="1000000.00")], headers=STANBIC_CALLER
+            )
+        assert res.json()["responseCode"] == "99"
+        assert await _balance(db_session, customer_id) == Decimal("0")
+
+    async def test_stanbic_unreachable_is_unsuccessful_and_retried_later(self, api_client, db_session, stanbic_rail):
+        customer_id, account = await _account(api_client, db_session)
+        down = AsyncMock(side_effect=PaymentRailError("unavailable", status_code=502))
+        with patch(f"{PORTAL}.validate_checksum", down):
+            res = await api_client.post(self.URL, json=[_notified(account)], headers=STANBIC_CALLER)
+        assert res.json()["responseDetails"][0] == {
+            "requestId": "5151-5698709759",
+            "accountNumber": account,
+            "responseMessage": "System malfunction",
+            "isSuccessful": False,
+        }
+        # A resend once Stanbic is back is credited.
+        with patch(f"{PORTAL}.validate_checksum", _valid(account)):
+            res = await api_client.post(self.URL, json=[_notified(account)], headers=STANBIC_CALLER)
+        assert res.json()["responseCode"] == "00"
+        assert await _balance(db_session, customer_id) == Decimal("5000.00")
+
+    async def test_invalid_payloads(self, api_client, stanbic_rail):
+        for content in (b"not json", b"[]", b'"text"'):
+            res = await api_client.post(self.URL, content=content, headers=STANBIC_CALLER)
+            assert res.status_code == 400 and res.json()["responseCode"] == "12"
+
+    @pytest.mark.parametrize(
+        "headers",
+        [{}, {"provider_id": "stanbic", "provider_secret": "wrong"}, {"provider_id": "x", "provider_secret": "s" * 40}],
+    )
+    async def test_wrong_or_missing_credentials_are_refused(self, api_client, db_session, stanbic_rail, headers):
+        customer_id, account = await _account(api_client, db_session)
+        with patch(f"{PORTAL}.validate_checksum", _valid(account)) as validator:
+            res = await api_client.post(self.URL, json=[_notified(account)], headers=headers)
+        assert res.status_code == 401
+        validator.assert_not_awaited()
+        assert await _balance(db_session, customer_id) == Decimal("0")
+
+    async def test_dashed_header_names_are_accepted(self, api_client, db_session, stanbic_rail):
+        _, account = await _account(api_client, db_session)
+        with patch(f"{PORTAL}.validate_checksum", _valid(account)):
+            res = await api_client.post(
+                self.URL, json=[_notified(account)], headers={"provider-id": "stanbic", "provider-secret": "s" * 40}
+            )
+        assert res.json()["responseCode"] == "00"
+
+    async def test_off_when_stanbic_is_not_the_rail(self, api_client):
+        res = await api_client.post(self.URL, json=[_notified("5151000017")], headers=STANBIC_CALLER)
+        assert res.status_code == 503
+
+
+class TestNameEnquiry:
+    """POST /webhooks/stanbic/virtual-id/name-enquiry."""
+
+    URL = "/api/v1/webhooks/stanbic/virtual-id/name-enquiry"
+
+    async def test_our_number_returns_the_customer(self, api_client, db_session, stanbic_rail):
+        _, account = await _account(api_client, db_session)
+        customer = await _customer(db_session)
+        res = await api_client.post(
+            self.URL, json={"requestId": "NE-1", "accountNumber": account}, headers=STANBIC_CALLER
+        )
+        assert res.status_code == 200
+        assert res.json() == {
+            "accountNumber": account,
+            "accountName": f"GH Trust / {customer.full_name}",
+            "bvn": TEST_BVN,
+            "responseCode": "00",
+            "responseDescription": "Operation Successful",
+        }
+
+    @pytest.mark.parametrize("number", ["5151999997", "", "not-a-number"])
+    async def test_unknown_number_is_invalid_account(self, api_client, db_session, stanbic_rail, number):
+        await _account(api_client, db_session)
+        res = await api_client.post(self.URL, json={"requestId": "NE-2", "accountNumber": number}, headers=STANBIC_CALLER)
+        assert res.json() == {
+            "accountNumber": "",
+            "accountName": "",
+            "bvn": "",
+            "responseCode": "07",
+            "responseDescription": "Invalid Account",
+        }
+
+    async def test_closed_account_is_invalid(self, api_client, db_session, stanbic_rail):
+        from app.modules.users.models import CustomerStatus
+
+        _, account = await _account(api_client, db_session)
+        customer = await _customer(db_session)
+        customer.status = CustomerStatus.DELETED
+        await db_session.commit()
+        res = await api_client.post(self.URL, json={"requestId": "NE-3", "accountNumber": account}, headers=STANBIC_CALLER)
+        assert res.json()["responseCode"] == "07"
+
+    async def test_needs_stanbic_credentials(self, api_client, db_session, stanbic_rail):
+        _, account = await _account(api_client, db_session)
+        res = await api_client.post(self.URL, json={"requestId": "NE-4", "accountNumber": account})
+        assert res.status_code == 401 and "bvn" not in res.json()

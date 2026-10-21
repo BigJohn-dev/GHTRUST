@@ -94,6 +94,8 @@ def _test_env(monkeypatch):
     monkeypatch.setenv("STANBIC_CLIENT_ID", "")
     monkeypatch.setenv("STANBIC_CLIENT_SECRET", "")
     monkeypatch.setenv("STANBIC_FVID_PREFIX", "")
+    monkeypatch.setenv("STANBIC_FVID_PROVIDER_ID", "")
+    monkeypatch.setenv("STANBIC_FVID_PROVIDER_SECRET", "")
     # Never inherit a developer's local test-mode phone from backend/.env.
     monkeypatch.setenv("DOJAH_MOCK_PHONE", "")
     # Optional modules off unless a test switches them on (backend/.env may enable them).

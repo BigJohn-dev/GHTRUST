@@ -10,9 +10,14 @@ How the product works (specs/fvid-*.json, nuban-generator_3.0.0.json):
   and from Stanbic accounts are separate lists). Every record carries a checksum; Stanbic's
   checksum validator confirms it is genuine before we credit anything.
 
-Crediting is by polling (credit_new_payments, run every 2 minutes by the worker), so it works
-before Stanbic's push notifications are set up. Each payment is credited once: its sessionId
-is the PaymentTransaction reference and the ledger idempotency key.
+Stanbic also calls two endpoints of ours (its "Fundable Wallet API Specification" v1.0.4):
+- Name Enquiry: the name (and BVN) behind one of our numbers, so a sender's bank can show it.
+- Transaction Notification: a list of payments, each answered Successful or with a reason.
+
+Wallets are credited from notifications (instant) and by polling (credit_new_payments, every
+2 minutes: the safety net for a missed notification). Either way Stanbic's checksum validator
+confirms the payment first, and each payment is credited once: its sessionId is the
+PaymentTransaction reference and the ledger idempotency key.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -36,13 +41,25 @@ from app.modules.payments.models import (
     PaymentTransaction,
     StanbicVirtualAccount,
 )
-from app.modules.users.models import Customer
+from app.modules.users.models import Customer, CustomerStatus
 
 logger = structlog.get_logger()
 
 BANK_NAME = "Stanbic IBTC Bank"
 BANK_CODE = "221"
 MAX_SERIAL = 99_999
+
+# Reasons sent back to Stanbic per notified payment (wording from its spec).
+SUCCESSFUL = "Successful"
+DUPLICATE = "Duplicate Transaction"
+INVALID_CHECKSUM = "Invalid Checksum"
+INVALID_AMOUNT = "Invalid Amount"
+INVALID_ACCOUNT = "Invalid Account Number"
+INVALID_REQUEST = "Invalid Request"
+TRY_AGAIN = "System malfunction"
+
+# Customers whose number can't receive money any more (name enquiry answers "Invalid Account").
+_CLOSED = (CustomerStatus.DELETED, CustomerStatus.INACTIVE)
 
 
 def enabled() -> bool:
@@ -69,7 +86,7 @@ class StanbicVirtualAccounts:
         return ReservedAccountResult(
             account_reference=f"fvid_{existing.account_number}",
             account_number=existing.account_number,
-            account_name=f"GH Trust / {customer.full_name}"[:100],
+            account_name=account_name(customer),
             bank_name=BANK_NAME,
             bank_code=BANK_CODE,
         )
@@ -104,6 +121,17 @@ class StanbicVirtualAccounts:
                     return taken  # the same customer was given one concurrently
         raise PaymentRailError("Couldn't allocate a Stanbic account number; will retry", status_code=503)
 
+    async def owner(self, account_number: str) -> Customer | None:
+        """The customer an account number belongs to, if it can still receive money."""
+        customer = await self.db.scalar(
+            select(Customer)
+            .join(StanbicVirtualAccount, StanbicVirtualAccount.customer_id == Customer.id)
+            .where(StanbicVirtualAccount.account_number == account_number.strip())
+        )
+        if customer is None or customer.status in _CLOSED:
+            return None
+        return customer
+
     # ── Incoming payments ───────────────────────────────────────────────────
 
     async def credit_new_payments(self, now: datetime | None = None) -> dict[str, int]:
@@ -118,20 +146,51 @@ class StanbicVirtualAccounts:
 
         counts = {"seen": len(records), "credited": 0, "already": 0, "rejected": 0, "unmatched": 0, "deferred": 0}
         for record in records:
-            outcome = await self._credit(record)
+            outcome, _ = await self._credit(record)
             counts[outcome] += 1
         if counts["credited"] or counts["rejected"] or counts["unmatched"]:
             logger.info("stanbic_fvid_poll", **counts)
         return counts
 
-    async def _credit(self, record: dict[str, Any]) -> str:
+    async def credit_notification(self, item: dict[str, Any]) -> tuple[str, str]:
+        """
+        One payment from Stanbic's Transaction Notification. Credited only if Stanbic's checksum
+        validator confirms it for the same account and amount, so a forged notification credits
+        nothing. Returns (outcome, the reason to send back to Stanbic).
+        """
+        record = {
+            "sessionId": item.get("sessionId"),
+            "checksum": item.get("checkSum"),
+            "customerAcct": item.get("customerAccountNumber"),
+            "amount": item.get("amount"),
+            "clientNotificationReqId": item.get("transactionReferenceId"),
+            "accountName": item.get("accountName"),
+            "sourceAcctName": item.get("srcAcctName"),
+            "sourceAcctNumber": item.get("srcAcct"),
+            "sourceBankCode": item.get("srcAcctBankCode"),
+            "tranDate": item.get("tranDate"),
+            "tranTime": item.get("tranTime"),
+            # Stanbic's charges on the payment, kept for reconciliation (the wallet gets `amount`).
+            "bankCharge": item.get("bankCharge"),
+            "adminFee": item.get("adminFee"),
+            "vatOnNetCharges": item.get("vatOnNetCharges"),
+            "amountNetChargesAndVat": item.get("amountNetChargesAndVat"),
+            "via": "notification",
+        }
+        return await self._credit({k: v for k, v in record.items() if v is not None})
+
+    async def _credit(self, record: dict[str, Any]) -> tuple[str, str]:
+        """Credit one payment record once Stanbic confirms it: (outcome, reason for Stanbic)."""
         session_id = str(record.get("sessionId") or "").strip()
         account = str(record.get("customerAcct") or "").strip()
         checksum = str(record.get("checksum") or "").strip()
         amount = _money(record.get("amount"))
-        if not session_id or not account or not checksum or amount is None or amount <= 0:
+        if not session_id or not account or not checksum:
             logger.warning("stanbic_fvid_record_incomplete", session_id=session_id, account=account)
-            return "rejected"
+            return "rejected", INVALID_REQUEST
+        if amount is None or amount <= 0:
+            logger.warning("stanbic_fvid_record_bad_amount", session_id=session_id, account=account)
+            return "rejected", INVALID_AMOUNT
 
         seen = await self.db.scalar(
             select(PaymentTransaction.id).where(
@@ -140,7 +199,7 @@ class StanbicVirtualAccounts:
             )
         )
         if seen:
-            return "already"
+            return "already", DUPLICATE
 
         # Stanbic must confirm the record before any money is credited.
         try:
@@ -148,22 +207,26 @@ class StanbicVirtualAccounts:
         except PaymentRailError as exc:
             if exc.provider_code == "99":  # Stanbic says the checksum is invalid
                 logger.warning("stanbic_fvid_checksum_invalid", session_id=session_id, account=account)
-                return "rejected"
+                return "rejected", INVALID_CHECKSUM
             logger.info("stanbic_fvid_checksum_unavailable", session_id=session_id, error=exc.message)
-            return "deferred"  # next poll tries again
-        confirmed_amount = _money(details.get("amount"))
-        if (
-            str(details.get("isValid") or "").lower() != "true"
-            or str(details.get("customerAcct") or "").strip() != account
-            or confirmed_amount != amount
-        ):
-            logger.warning("stanbic_fvid_checksum_mismatch", session_id=session_id, account=account)
-            return "rejected"
+            return "deferred", TRY_AGAIN  # Stanbic resends / the next poll tries again
+        if str(details.get("isValid") or "").lower() != "true":
+            logger.warning("stanbic_fvid_checksum_not_valid", session_id=session_id, account=account)
+            return "rejected", INVALID_CHECKSUM
+        if str(details.get("customerAcct") or "").strip() != account:
+            logger.warning("stanbic_fvid_checksum_account_mismatch", session_id=session_id, account=account)
+            return "rejected", INVALID_ACCOUNT
+        if _money(details.get("amount")) != amount:
+            logger.warning("stanbic_fvid_checksum_amount_mismatch", session_id=session_id, account=account)
+            return "rejected", INVALID_AMOUNT
 
+        if not account.startswith(get_settings().stanbic_fvid_prefix.strip()):
+            logger.warning("stanbic_fvid_foreign_prefix", session_id=session_id)
+            return "unmatched", INVALID_ACCOUNT  # another Stanbic client's payment; never ours
         va = await self.db.scalar(select(StanbicVirtualAccount).where(StanbicVirtualAccount.account_number == account))
         if va is None:
             logger.error("stanbic_fvid_unknown_account", session_id=session_id, account=account, amount=str(amount))
-            return "unmatched"
+            return "unmatched", INVALID_ACCOUNT
 
         ledger = LedgerService(self.db)
         wallet = await ledger.get_or_create_wallet(va.customer_id)
@@ -193,9 +256,14 @@ class StanbicVirtualAccounts:
                     description="Wallet funded by bank transfer (Stanbic)",
                 )
         except IntegrityError:
-            return "already"  # credited concurrently
+            return "already", DUPLICATE  # credited concurrently
         logger.info("stanbic_fvid_credited", session_id=session_id, customer_id=va.customer_id, amount=str(amount))
-        return "credited"
+        return "credited", SUCCESSFUL
+
+
+def account_name(customer: Customer) -> str:
+    """The name shown for a customer's number (in the app, and to senders via name enquiry)."""
+    return f"GH Trust / {customer.full_name}"[:100]
 
 
 def _money(value: Any) -> Decimal | None:
