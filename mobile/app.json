@@ -57,15 +57,15 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "GH Trust uses the camera to photograph documents for your loan application.",
-          "photosPermission": "GH Trust needs your photos to attach documents to your loan application.",
+          "cameraPermission": "GH Trust uses the camera to check it's really you when you open your account, to photograph documents for your loan application, and to take your profile photo.",
+          "photosPermission": "GH Trust uses your photos to attach documents to your loan application and to choose your profile photo.",
           "microphonePermission": false
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "GH Trust uses the camera to check it's really you when you open your account, and to photograph loan documents.",
+          "cameraPermission": "GH Trust uses the camera to check it's really you when you open your account, to photograph documents for your loan application, and to take your profile photo.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

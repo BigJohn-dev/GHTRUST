@@ -180,6 +180,23 @@ project's credentials once:
 
 In-app notifications work without any of this; push needs it.
 
+### Store review: links, demo account and loan rules
+
+- **URLs for App Store Connect / Play Console** (public pages on the admin site, text served by
+  the API so they match the app): Privacy Policy `https://<admin site>/privacy`, Terms
+  `https://<admin site>/terms`, Support URL `https://<admin site>/help`. The API refuses to start
+  in production while the documents are marked `DRAFT` or `SUPPORT_EMAIL` / `SUPPORT_PHONE` are
+  empty, so these pages are final and show a way to reach you.
+- **Review against the live server**, with real SMS: a build on a test server shows "Test mode"
+  sign-in codes, which review reads as unfinished.
+- **Demo account with something in it**: before submitting, sign in as the demo number and start
+  a loan application, so the reviewer doesn't open an empty account. Put the number, `DEMO_OTP`,
+  the PINs and a two-line walkthrough in Notes for Review.
+- **Personal loans (Apple 3.2.2(ix))**: the app must show the maximum APR and payment dates; Apple
+  refuses personal-loan apps above 36% APR including fees, or that require full repayment in 60
+  days or less. Google Play has its own personal-loan policy (Nigeria: lender licence documents and
+  the 60-day minimum). Check the products before submitting.
+
 ### Account deletion URL (Google Play)
 
 Play Console → App content → Data safety → account deletion: enter
@@ -213,11 +230,12 @@ On a real phone with the production build:
 
 ## Switching to Stanbic later
 
-The Stanbic adapter is built against our requirements document, not Stanbic's real API (it is
-only published after partner onboarding). Before `PAYMENT_PROVIDER=stanbic`: get sandbox
-access and their API spec, reconcile the paths and field names marked `TODO(stanbic-spec)` in
-`backend/app/integrations/stanbic/constants.py`, and run the full smoke test on their sandbox.
-Customers' wallet account numbers change on the switch; card top-ups stay on Monnify.
+Stanbic is built against its real sandbox (status and what's still needed:
+`docs/stanbic-api-checklist.md`). UAT runs on a separate staging server (`docs/staging-stanbic.md`).
+Before `PAYMENT_PROVIDER=stanbic` here: Stanbic's live prefix, URLs and keys, our own
+`STANBIC_FVID_PROVIDER_ID` / `_SECRET`, Stanbic calling our two endpoints on the live domain, and
+`python scripts/stanbic_check.py --api https://<api domain>` all PASS. Customers' wallet account
+numbers change on the switch; card top-ups stay on Monnify.
 
 ## 9. After launch
 

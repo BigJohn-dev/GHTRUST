@@ -168,6 +168,11 @@ class Settings(BaseSettings):
     # prefix from Stanbic + a 5-digit serial + Stanbic's check digit. See payments/stanbic_fvid.py.
     stanbic_fvid_prefix: str = ""
     stanbic_fvid_base_url: str = "https://testapi.stanbicibtc.com/test/sandbox"
+    # Credentials Stanbic sends when it calls our Name Enquiry and Transaction Notification
+    # endpoints (headers provider_id / provider_secret, per its Fundable Wallet spec). We choose
+    # them and give them to Stanbic privately.
+    stanbic_fvid_provider_id: str = ""
+    stanbic_fvid_provider_secret: str = ""
     stanbic_transaction_history_base_url: str = (
         "https://testapi.stanbicibtc.com/test/sandbox/transaction-history-service"
     )
@@ -310,6 +315,11 @@ class Settings(BaseSettings):
                 errors.append("STANBIC_PORTAL_SANDBOX must be false in production (it uses the developer-portal test APIs)")
             if not (self.stanbic_fvid_prefix.isdigit() and len(self.stanbic_fvid_prefix) == 4):
                 errors.append("STANBIC_FVID_PREFIX must be the 4-digit prefix Stanbic assigned (wallet top-ups)")
+            if not self.stanbic_fvid_provider_id or len(self.stanbic_fvid_provider_secret) < 32:
+                errors.append(
+                    "Set STANBIC_FVID_PROVIDER_ID and STANBIC_FVID_PROVIDER_SECRET (32+ characters): "
+                    "Stanbic's calls to our name enquiry and payment notification endpoints are refused without them"
+                )
             sandbox_urls = [
                 name
                 for name in (
@@ -371,6 +381,17 @@ class Settings(BaseSettings):
             errors.append(
                 f"FEATURE_FLAGS includes modules that aren't built yet: {', '.join(unbuilt)} "
                 f"(allowed: {', '.join(LIVE_FEATURES)})"
+            )
+        # App Store / Play review: the in-app and web Help pages need a way to reach us, and the
+        # Terms and Privacy Policy must be final (the app labels draft wording as a draft).
+        if not (self.support_email.strip() or self.support_phone.strip()):
+            errors.append("Set SUPPORT_EMAIL and/or SUPPORT_PHONE: the app's Help page and the /help web page show them")
+        from app.modules.legal.documents import DRAFT
+
+        if DRAFT:
+            errors.append(
+                "The Terms of Use and Privacy Policy are still marked DRAFT (app/modules/legal/documents.py): "
+                "get them approved, fill in the entity details and set DRAFT = False"
             )
         return errors
 

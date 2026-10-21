@@ -112,7 +112,9 @@ export default function Home() {
   const moreActions: SheetAction[] = [
     { label: 'Apply for a loan', icon: 'add-circle-outline', onPress: () => router.push('/apply') },
     { label: 'My loans', icon: 'document-text-outline', onPress: () => router.push('/loans') },
-    { label: 'Invest', icon: 'trending-up-outline', onPress: () => router.push('/invest') },
+    ...(features.investments
+      ? [{ label: 'Invest', icon: 'trending-up-outline' as const, onPress: () => router.push('/invest') }]
+      : []),
     ...(features.wallet
       ? [
           { label: 'Transactions', icon: 'receipt-outline' as const, onPress: () => router.push('/transactions') },

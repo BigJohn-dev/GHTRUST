@@ -31,7 +31,7 @@ export default function InvestTab() {
       }}
       refreshing={plans.isRefetching || mine.isRefetching}>
       <Text variant="title">Invest</Text>
-      {!open ? <Banner tone="info" message="Investing opens soon. You can already look through the plans." /> : null}
+      {!open ? <Banner tone="info" message="New investments are paused. Your investments below keep earning." /> : null}
 
       <View style={styles.summary}>
         <View pointerEvents="none" style={styles.glow} />
